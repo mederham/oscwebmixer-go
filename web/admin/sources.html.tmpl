@@ -1,0 +1,26 @@
+{{define "sources-section"}}
+<section id="section-sources"{{if .OOB}} hx-swap-oob="true"{{end}}>
+	<h2>Sources (channels &amp; groups)</h2>
+	<p class="hint">Drag the handle to reorder — applies live, no restart. Groups default to the bottom on a new session.</p>
+	<table>
+		<thead><tr><th></th><th>Type</th><th>#</th><th>Label</th><th>Enabled</th><th>Title</th><th>Icon</th><th></th></tr></thead>
+		<tbody id="sources-tbody">
+		{{range .Sources}}
+			<tr data-key="{{.Type}}:{{.Number}}">
+				<td class="drag-handle" title="Drag to reorder">&#8942;&#8942;</td>
+				<td>{{.Type}}</td>
+				<td>{{.Number}}</td>
+				<td>{{.Label}}</td>
+				<td><input type="checkbox" name="enabled" form="src-{{.Type}}-{{.Number}}" {{if .Enabled}}checked{{end}} /></td>
+				<td><input type="text" name="title" form="src-{{.Type}}-{{.Number}}" value="{{.Title}}" placeholder="Section title" /></td>
+				<td><input type="text" name="icon" form="src-{{.Type}}-{{.Number}}" value="{{.Icon}}" placeholder="Icon URL" /></td>
+				<td><button type="submit" form="src-{{.Type}}-{{.Number}}">Save</button></td>
+			</tr>
+		{{end}}
+		</tbody>
+	</table>
+	{{range .Sources}}
+	<form id="src-{{.Type}}-{{.Number}}" hx-post="/admin/sources/{{.Type}}/{{.Number}}" hx-target="#section-sources" hx-swap="outerHTML"></form>
+	{{end}}
+</section>
+{{end}}

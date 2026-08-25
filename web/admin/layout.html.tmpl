@@ -1,0 +1,25 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OSCWebMixer Admin</title>
+<link rel="stylesheet" href="/admin/admin.css" />
+<script src="/admin/htmx.min.js"></script>
+<script src="/admin/sortable.min.js"></script>
+</head>
+<body>
+<h1>OSCWebMixer Admin</h1>
+<div id="flash">{{if .Message}}<p class="flash">{{.Message}}</p>{{end}}</div>
+
+{{template "network-section" .Global}}
+{{template "external-devices-section" .Global}}
+{{template "sources-section" .SourcesData}}
+{{template "auxes-section" .AuxesData}}
+{{template "presets-section" .Presets}}
+
+<script src="/admin/admin.js"></script>
+</body>
+</html>
+{{end}}

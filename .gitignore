@@ -1,0 +1,4 @@
+/dist/
+/config/
+*.test
+.DS_STORE

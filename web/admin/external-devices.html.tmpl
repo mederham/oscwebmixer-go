@@ -1,0 +1,28 @@
+{{define "external-devices-section"}}
+<section id="section-external-devices">
+	<h2>External devices</h2>
+	<table>
+		<thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Broadcast</th><th>Loopback</th><th></th></tr></thead>
+		<tbody>
+		{{range .ExternalDevices}}
+			<tr>
+				<td>{{.Name}}</td><td>{{.IP}}</td><td>{{.Port}}</td>
+				<td>{{if .Broadcast}}yes{{else}}no{{end}}</td>
+				<td>{{if .Loopback}}yes{{else}}no{{end}}</td>
+				<td>
+					<button hx-post="/admin/external-devices/{{.Name}}/delete" hx-target="#section-external-devices" hx-swap="outerHTML">Remove</button>
+				</td>
+			</tr>
+		{{end}}
+		</tbody>
+	</table>
+	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="inline-form">
+		<input type="text" name="name" placeholder="Name" required />
+		<input type="text" name="ip" placeholder="IP" required />
+		<input type="number" name="port" placeholder="Port" required />
+		<label>Broadcast <input type="checkbox" name="broadcast" checked /></label>
+		<label>Loopback <input type="checkbox" name="loopback" /></label>
+		<button type="submit">Add device</button>
+	</form>
+</section>
+{{end}}

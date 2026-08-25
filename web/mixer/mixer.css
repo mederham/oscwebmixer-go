@@ -1,0 +1,81 @@
+* { box-sizing: border-box; }
+
+body {
+	font-family: -apple-system, system-ui, sans-serif;
+	margin: 0;
+	padding: 0 1rem 1rem;
+	background: #111;
+	color: #eee;
+}
+
+body.desk-offline::before {
+	content: "desk offline";
+	display: block;
+	background: #a80;
+	color: #fff;
+	padding: 0.25rem;
+	text-align: center;
+	margin: 0 -1rem;
+}
+
+/* Declared after desk-offline so it wins when both classes are set — the
+   socket being down outranks a possibly-stale desk-offline flag, since no
+   fresh status can arrive to clear it while disconnected. An element can
+   only render one ::before, so order here is a real priority decision, not
+   just source order. */
+body.disconnected::before {
+	content: "disconnected — reconnecting…";
+	display: block;
+	background: #a33;
+	color: #fff;
+	padding: 0.5rem;
+	text-align: center;
+	margin: 0 -1rem;
+}
+
+header {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 1rem 0;
+}
+
+#snapshot {
+	opacity: 0.7;
+	font-size: 0.9rem;
+}
+
+select {
+	font-size: 1rem;
+	padding: 0.35rem;
+	background: #222;
+	color: #eee;
+	border: 1px solid #444;
+	border-radius: 4px;
+}
+
+h2 {
+	font-size: 0.9rem;
+	opacity: 0.6;
+	margin: 1rem 0 0.25rem;
+}
+
+.source {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.5rem 0;
+	border-bottom: 1px solid #2a2a2a;
+}
+
+.source .label {
+	min-width: 8rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source input[type="range"] {
+	flex: 1;
+	accent-color: var(--tint, #4a90d9);
+}

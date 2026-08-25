@@ -1,0 +1,24 @@
+{{define "auxes-section"}}
+<section id="section-auxes"{{if .OOB}} hx-swap-oob="true"{{end}}>
+	<h2>Auxes</h2>
+	<table>
+		<thead><tr><th>#</th><th>Label</th><th>Stereo</th><th>Enabled</th><th>Colour</th><th>Icon</th><th></th></tr></thead>
+		<tbody>
+		{{range .Auxes}}
+			<tr>
+				<td>{{.Channel}}</td>
+				<td>{{.Label}}</td>
+				<td>{{if .Stereo}}yes{{else}}no{{end}}</td>
+				<td><input type="checkbox" name="enabled" form="aux-{{.Channel}}" {{if .Enabled}}checked{{end}} /></td>
+				<td><input type="color" name="colour" form="aux-{{.Channel}}" value="{{.Colour}}" /></td>
+				<td><input type="text" name="icon" form="aux-{{.Channel}}" value="{{.Icon}}" placeholder="Icon URL" /></td>
+				<td><button type="submit" form="aux-{{.Channel}}">Save</button></td>
+			</tr>
+		{{end}}
+		</tbody>
+	</table>
+	{{range .Auxes}}
+	<form id="aux-{{.Channel}}" hx-post="/admin/auxes/{{.Channel}}" hx-target="#section-auxes" hx-swap="outerHTML"></form>
+	{{end}}
+</section>
+{{end}}
