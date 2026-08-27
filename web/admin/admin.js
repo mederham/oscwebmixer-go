@@ -39,7 +39,6 @@ function collectLayout() {
 				type: el.dataset.type,
 				number: parseInt(el.dataset.number, 10),
 				enabled: el.querySelector(".enabled-field").checked,
-				icon: el.querySelector(".icon-field").value,
 			});
 		}
 	}
@@ -72,6 +71,36 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
 document.body.addEventListener("htmx:oobAfterSwap", function (e) {
 	if (e.detail.target && e.detail.target.id === "section-sources") {
 		initSourcesSortable();
+	}
+});
+
+// Aux icon picker: the <select> already lists every option server-side
+// (see auxes.html.tmpl), so this is just keeping the adjacent preview
+// image in sync with whatever's currently selected — event delegation on
+// document.body means it works after any htmx swap of the auxes section
+// too, no re-init needed.
+document.body.addEventListener("change", function (e) {
+	if (!e.target.classList.contains("icon-select")) return;
+	const img = e.target.parentElement.querySelector(".icon-preview");
+	if (img) img.src = e.target.value ? "/admin/icons/" + e.target.value : "";
+});
+
+// "Show/Hide all": a single smart toggle per tab — if everything in scope
+// is currently enabled, disable all; otherwise enable all. Client-side
+// only, like every other field edit here — takes effect on screen
+// immediately, persists once the section's own Save button is clicked.
+function toggleAllEnabled(scopeSelector, checkboxSelector) {
+	const boxes = document.querySelectorAll(scopeSelector + " " + checkboxSelector);
+	if (boxes.length === 0) return;
+	const allChecked = [...boxes].every((b) => b.checked);
+	for (const b of boxes) b.checked = !allChecked;
+}
+
+document.body.addEventListener("click", function (e) {
+	if (e.target.id === "sources-toggle-all") {
+		toggleAllEnabled("#sources-list", ".enabled-field");
+	} else if (e.target.id === "auxes-toggle-all") {
+		toggleAllEnabled("#section-auxes", "input[name^='enabled[']");
 	}
 });
 

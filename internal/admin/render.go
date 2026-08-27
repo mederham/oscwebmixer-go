@@ -18,7 +18,7 @@ func (h *Handler) renderSourcesSection(w io.Writer, layout []oscmsg.LayoutItem, 
 
 func (h *Handler) renderAuxesSection(w io.Writer, auxes []oscmsg.AuxConfig, oob bool) error {
 	return h.tmpl.ExecuteTemplate(w, "auxes-section", AuxesSectionData{
-		Auxes: toAuxRows(auxes), OOB: oob,
+		Auxes: toAuxRows(auxes), Icons: h.icons, OOB: oob,
 	})
 }
 

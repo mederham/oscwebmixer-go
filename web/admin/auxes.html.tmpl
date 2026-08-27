@@ -1,18 +1,28 @@
 {{define "auxes-section"}}
 <section id="section-auxes"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Auxes</h2>
+	<button type="button" id="auxes-toggle-all">Show/Hide all</button>
 	<form hx-post="/admin/auxes" hx-target="#section-auxes" hx-swap="outerHTML">
 		<table>
 			<thead><tr><th>#</th><th>Label</th><th>Stereo</th><th>Enabled</th><th>Colour</th><th>Icon</th></tr></thead>
 			<tbody>
 			{{range .Auxes}}
+				{{$aux := .}}
 				<tr>
 					<td>{{.Channel}}</td>
 					<td>{{.Label}}</td>
 					<td>{{if .Stereo}}yes{{else}}no{{end}}</td>
 					<td><input type="checkbox" name="enabled[{{.Channel}}]" {{if .Enabled}}checked{{end}} /></td>
 					<td><input type="color" name="colour[{{.Channel}}]" value="{{.Colour}}" /></td>
-					<td><input type="text" name="icon[{{.Channel}}]" value="{{.Icon}}" placeholder="Icon URL" /></td>
+					<td class="icon-picker">
+						<select name="icon[{{.Channel}}]" class="icon-select">
+							<option value="">None</option>
+							{{range $.Icons}}
+							<option value="{{.}}" {{if eq . $aux.Icon}}selected{{end}}>{{iconLabel .}}</option>
+							{{end}}
+						</select>
+						<img class="icon-preview" src="{{if .Icon}}/admin/icons/{{.Icon}}{{end}}" alt="" />
+					</td>
 				</tr>
 			{{end}}
 			</tbody>

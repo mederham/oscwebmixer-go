@@ -34,6 +34,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
@@ -49,16 +51,52 @@ type Handler struct {
 	adminEvents chan<- hub.AdminEvent
 	log         *log.Logger
 	tmpl        *template.Template
+
+	// icons is the aux icon picker's option list — read once at startup
+	// from web/admin/icons/*.svg (embedded alongside the templates), not
+	// hand-maintained as a list that could drift from the actual files.
+	icons []string
 }
 
-// templateFuncs backs network.html.tmpl's "status-dot" fragment — the only
-// template in this package that needs to turn hub.Status/a timestamp into
-// display text, so a small FuncMap is simpler than a Go-side view type just
-// for these three fields.
+// templateFuncs backs network.html.tmpl's "status-dot" fragment and the
+// aux icon picker's option labels — the only places in this package that
+// need to turn raw data (a hub.Status/timestamp, an icon filename) into
+// display text, so a small FuncMap is simpler than Go-side view types just
+// for these few fields.
 var templateFuncs = template.FuncMap{
 	"dotClass":     dotClass,
 	"dotLabel":     dotLabel,
 	"sinceRounded": func(t time.Time) string { return time.Since(t).Round(time.Second).String() },
+	"iconLabel":    iconLabel,
+}
+
+// iconLabel turns an icon filename ("acoustic-guitar.svg") into a
+// human-readable option label ("Acoustic Guitar").
+func iconLabel(filename string) string {
+	name := strings.TrimSuffix(filename, ".svg")
+	words := strings.FieldsFunc(name, func(r rune) bool { return r == '-' || r == '_' })
+	for i, w := range words {
+		if w != "" {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// listIcons enumerates the aux icon picker's available options.
+func listIcons(templatesFS fs.FS) ([]string, error) {
+	entries, err := fs.ReadDir(templatesFS, "icons")
+	if err != nil {
+		return nil, err
+	}
+	icons := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".svg") {
+			icons = append(icons, e.Name())
+		}
+	}
+	sort.Strings(icons)
+	return icons, nil
 }
 
 // dotClass maps a hub.Status string to the status-dot's CSS color class.
@@ -97,13 +135,18 @@ func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEve
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl}, nil
+	icons, err := listIcons(templatesFS)
+	if err != nil {
+		return nil, err
+	}
+	return &Handler{cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl, icons: icons}, nil
 }
 
 // Register mounts the admin routes onto mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin", h.handleIndex)
 	mux.HandleFunc("POST /admin/sources/save", h.handleSourcesSave)
+	mux.HandleFunc("POST /admin/sources/reset", h.handleSourcesReset)
 	mux.HandleFunc("POST /admin/sections", h.handleSectionAdd)
 	mux.HandleFunc("POST /admin/sections/{id}/delete", h.handleSectionDelete)
 	mux.HandleFunc("POST /admin/auxes", h.handleAuxesSave)
@@ -113,6 +156,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/external-devices/{id}", h.handleExternalDeviceUpdate)
 	mux.HandleFunc("POST /admin/external-devices/{id}/delete", h.handleExternalDeviceDelete)
 	mux.HandleFunc("POST /admin/presets/save", h.handlePresetSave)
+	mux.HandleFunc("POST /admin/presets/reset", h.handlePresetsReset)
 	mux.HandleFunc("POST /admin/presets/{uuid}/load", h.handlePresetLoad)
 	mux.HandleFunc("POST /admin/presets/{uuid}/delete", h.handlePresetDelete)
 }

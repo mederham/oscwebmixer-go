@@ -1,7 +1,17 @@
 {{define "sources-section"}}
 <section id="section-sources"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Sources (channels &amp; groups)</h2>
-	<p class="hint">Drag anything to reorder — a section can sit anywhere among channels/groups; everything after it belongs to it until the next section or the end. Field edits (enabled/icon/section name) need the Save button below; dragging persists immediately.</p>
+	<p class="hint">Drag anything to reorder — a section can sit anywhere among channels/groups; everything after it belongs to it until the next section or the end. Field edits (enabled/section name) need the Save button below; dragging persists immediately.</p>
+
+	<button
+		type="button"
+		class="danger"
+		hx-post="/admin/sources/reset"
+		hx-target="#section-sources"
+		hx-swap="outerHTML"
+		hx-confirm="Reset the layout to all channels then groups, ascending? This clears every section and customization."
+	>Reset layout</button>
+	<button type="button" id="sources-toggle-all">Show/Hide all</button>
 
 	<form id="sources-form" hx-post="/admin/sources/save" hx-target="#section-sources" hx-swap="outerHTML">
 		<div id="sources-list">
@@ -25,7 +35,6 @@
 	<span class="badge">{{.Badge}}</span>
 	<span class="label">{{.Label}}</span>
 	<label class="enabled"><input type="checkbox" class="enabled-field" {{if .Enabled}}checked{{end}} /> Enabled</label>
-	<input type="text" class="icon-field" value="{{.Icon}}" placeholder="Icon URL" />
 </div>
 {{end}}
 

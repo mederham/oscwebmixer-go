@@ -219,6 +219,36 @@ func TestSectionDeleteKeepsSourcesRemovesMarker(t *testing.T) {
 	}
 }
 
+// TestSourcesReset confirms resetting clears every customization/section
+// and falls back to buildConfig's own natural-order default — proving
+// reset really is just "persist an empty layout," not something that
+// needs to reconstruct "channels then groups, ascending" itself.
+func TestSourcesReset(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Drums"},
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
+	})
+
+	postForm(t, mux, "/admin/sources/reset", "")
+
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	for _, it := range cfg.MixerLayout {
+		if it.Kind == oscmsg.LayoutKindSection {
+			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayout)
+		}
+	}
+	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Number != 1 || !cfg.MixerLayout[0].Enabled || cfg.MixerLayout[0].Icon != "" {
+		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled, no icon)", cfg.MixerLayout)
+	}
+}
+
 func TestSourcesSaveRoundTrip(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -268,6 +298,59 @@ func TestAuxesSaveRoundTrip(t *testing.T) {
 	}
 	if a.Icon != "mic.svg" {
 		t.Fatalf("icon = %q, want mic.svg", a.Icon)
+	}
+}
+
+// TestIconsListedFromEmbeddedFS is a sanity check that the aux icon
+// picker's options actually come from web/admin/icons/*.svg — guards
+// against a silently-empty dropdown if that directory or its go:embed
+// wiring ever breaks.
+func TestIconsListedFromEmbeddedFS(t *testing.T) {
+	h := newTestHandler(t)
+	if len(h.icons) == 0 {
+		t.Fatal("icons list is empty, want the instrument SVG set from web/admin/icons/")
+	}
+	for _, name := range h.icons {
+		if !strings.HasSuffix(name, ".svg") {
+			t.Fatalf("icons list contains non-svg entry %q", name)
+		}
+	}
+}
+
+// TestPresetsReset confirms the Presets tab's reset button clears both the
+// mixer layout and aux overrides back to defaults, live — the same
+// "start over" action as loading a preset, just loading the zero-value
+// default instead of a saved one.
+func TestPresetsReset(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Drums"},
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
+	})
+	postForm(t, mux, "/admin/auxes", "colour[1]=%23ff0000&icon[1]=mic.svg") // enabled[1] omitted -> disabled
+
+	rec := postForm(t, mux, "/admin/presets/reset", "")
+	if strings.Contains(rec.Body.String(), "Drums") {
+		t.Fatalf("reset response still mentions the old section: %s", rec.Body.String())
+	}
+
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	for _, it := range cfg.MixerLayout {
+		if it.Kind == oscmsg.LayoutKindSection {
+			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayout)
+		}
+	}
+	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Number != 1 || !cfg.MixerLayout[0].Enabled {
+		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled)", cfg.MixerLayout)
+	}
+	if len(cfg.Auxes) != 1 || !cfg.Auxes[0].Enabled || cfg.Auxes[0].Icon != "" {
+		t.Fatalf("auxes after reset = %+v, want aux 1 back to defaults (enabled, no icon)", cfg.Auxes)
 	}
 }
 

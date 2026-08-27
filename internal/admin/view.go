@@ -57,6 +57,7 @@ type SectionRow struct {
 
 type AuxesSectionData struct {
 	Auxes []AuxRow
+	Icons []string // available aux icon picker options — see Handler.icons
 	OOB   bool
 }
 

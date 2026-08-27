@@ -47,7 +47,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Global:      global,
 		Network:     NetworkSectionData{Global: global, DeskStatus: status},
 		SourcesData: toSourcesSectionData(cfg.MixerLayout, false),
-		AuxesData:   AuxesSectionData{Auxes: toAuxRows(cfg.Auxes)},
+		AuxesData:   AuxesSectionData{Auxes: toAuxRows(cfg.Auxes), Icons: h.icons},
 		Presets:     toPresetRows(presets),
 		Message:     r.URL.Query().Get("msg"),
 	}
@@ -85,6 +85,37 @@ func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fresh, err := h.saveState(ctx, layoutFromPayload(wireLayout), configAuxesFromPayload(cfg.Auxes))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// handleSourcesReset clears the mixer layout entirely. buildConfig's own
+// fallback for anything not mentioned in the layout — walk channels 1..N
+// ascending, then groups 1..M ascending, in natural desk order — already
+// produces exactly "all channels then groups, ascending" once there's
+// nothing explicit to override it with, so resetting is just persisting
+// an empty layout; there's no default sequence to construct here.
+//
+// Deliberately a full clear, not a "drop only stale/out-of-range entries"
+// repair: after a real session change, the old layout usually doesn't
+// apply anymore anyway (different channel names/counts/purpose), so
+// starting over is faster than hunting down what's still relevant.
+func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	fresh, err := h.saveState(ctx, nil, configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -450,6 +481,39 @@ func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
 	cfg, err := h.queryConfig(ctx) // fresh labels post-apply
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderPresetsSection(w); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+	if err == nil {
+		if err := h.renderSourcesSection(w, cfg.MixerLayout, true); err != nil {
+			h.log.Printf("admin render: %v", err)
+		}
+		if err := h.renderAuxesSection(w, cfg.Auxes, true); err != nil {
+			h.log.Printf("admin render: %v", err)
+		}
+	}
+}
+
+// handlePresetsReset clears the current mixer layout and aux overrides
+// back to defaults and applies it live — the same "start over" action as
+// loading a preset, just loading the zero-value default instead of a
+// saved one (mirrors handlePresetLoad's OOB-update shape since it changes
+// sources and auxes too, not just the presets list). Deliberately scoped
+// to state.json only: saved presets, external devices, and network
+// settings are untouched, and the running process is not restarted.
+func (h *Handler) handlePresetsReset(w http.ResponseWriter, r *http.Request) {
+	def := config.State{Name: "Default"}
+	if err := h.cfg.SaveState(def); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.applyState(def)
+
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.renderPresetsSection(w); err != nil {

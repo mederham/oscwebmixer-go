@@ -20,5 +20,14 @@
 		<input type="text" name="name" placeholder="New preset name" required />
 		<button type="submit">Save current state as preset</button>
 	</form>
+
+	<button
+		type="button"
+		class="danger"
+		hx-post="/admin/presets/reset"
+		hx-target="#section-presets"
+		hx-swap="outerHTML"
+		hx-confirm="Reset EVERYTHING — all sources, sections, and aux settings — to defaults? Saved presets, external devices, and network settings are not affected. This cannot be undone."
+	>Reset to defaults</button>
 </section>
 {{end}}
