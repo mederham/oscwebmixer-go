@@ -1,28 +1,49 @@
 * { box-sizing: border-box; }
 
+:root {
+	--tint: 74, 144, 217; /* r,g,b triplet — CSS custom properties can't hold a hex string usable by rgb()/rgba(), so this is set/read as three numbers throughout */
+}
+
 body {
 	font-family: -apple-system, system-ui, sans-serif;
 	margin: 0;
-	padding: 0 1rem 1rem;
+	padding: 0;
 	background: #111;
 	color: #eee;
+	min-height: 100vh;
 }
 
-body.desk-offline::before {
+/* Status banners: only one ::before renders per element, so declaration
+   order below is a real priority decision, not just source order — most-
+   certain-problem-wins. A starting/reloading or degraded desk state can
+   still be the last thing known while the socket itself later drops, so
+   "disconnected" (no live connection at all, nothing else can be trusted)
+   is declared last and always wins over a possibly-stale desk-status
+   class. */
+body.status-starting::before {
+	content: "connecting to desk…";
+	display: block;
+	background: #336699;
+	color: #fff;
+	padding: 0.5rem;
+	text-align: center;
+}
+body.status-reloading::before {
+	content: "reloading session…";
+	display: block;
+	background: #336699;
+	color: #fff;
+	padding: 0.5rem;
+	text-align: center;
+}
+body.status-degraded::before {
 	content: "desk offline";
 	display: block;
 	background: #a80;
 	color: #fff;
-	padding: 0.25rem;
+	padding: 0.5rem;
 	text-align: center;
-	margin: 0 -1rem;
 }
-
-/* Declared after desk-offline so it wins when both classes are set — the
-   socket being down outranks a possibly-stale desk-offline flag, since no
-   fresh status can arrive to clear it while disconnected. An element can
-   only render one ::before, so order here is a real priority decision, not
-   just source order. */
 body.disconnected::before {
 	content: "disconnected — reconnecting…";
 	display: block;
@@ -30,52 +51,233 @@ body.disconnected::before {
 	color: #fff;
 	padding: 0.5rem;
 	text-align: center;
-	margin: 0 -1rem;
 }
 
 header {
 	display: flex;
 	align-items: center;
-	gap: 1rem;
-	padding: 1rem 0;
+	gap: 0.75rem;
+	padding: 0.75rem 1rem;
 }
+
+#aux-trigger {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	background: rgb(var(--tint));
+	color: #fff;
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	border-radius: 6px;
+	padding: 0.4rem 0.75rem;
+	font-size: 1rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+#aux-icon {
+	width: 1.4rem;
+	height: 1.4rem;
+	filter: invert(1); /* icons are dark-on-transparent; the button is tinted/dark */
+}
+#aux-icon[src=""] { display: none; }
 
 #snapshot {
 	opacity: 0.7;
 	font-size: 0.9rem;
+	flex: 1;
 }
 
-select {
-	font-size: 1rem;
-	padding: 0.35rem;
-	background: #222;
-	color: #eee;
-	border: 1px solid #444;
-	border-radius: 4px;
+/* :not([hidden]) — an ID selector otherwise outranks the UA stylesheet's
+   own [hidden] { display: none }, so without this the toggle would stay
+   visible even mono auxes, where mixer.js sets the hidden attribute. */
+#pan-toggle-wrap:not([hidden]) {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	cursor: pointer;
+	user-select: none;
+	font-size: 0.9rem;
+}
+
+/* Aux picker: the landing screen for a client with no valid saved aux (a
+   new device, or one whose saved aux no longer exists), and reachable any
+   time via the header button. Full-screen overlay with one big tappable,
+   tinted, icon+label button per aux — not a native <select>, matching the
+   legacy app's picker rather than a dropdown. */
+#aux-picker {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.9);
+	z-index: 20;
+	overflow-y: auto;
+	padding: 2rem 1rem;
+	flex-direction: column;
+	gap: 0.75rem;
+	align-items: center;
+}
+body.picking-aux #aux-picker { display: flex; }
+
+.aux-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 1rem;
+	width: 100%;
+	max-width: 24rem;
+	padding: 1.1rem;
+	background: rgb(var(--tint));
+	color: #fff;
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	border-radius: 6px;
+	font-size: 1.1rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+.aux-button img {
+	width: 1.8rem;
+	height: 1.8rem;
+	filter: invert(1);
+}
+
+/* Channels/faders only ever show once the desk is confirmed healthy, the
+   socket is actually open, and the aux picker isn't covering them — a
+   starting/reloading/degraded/disconnected client has nothing meaningful
+   (or nothing at all) to fade, so there's no slider UI to misread as live. */
+#channels { display: none; padding: 0 1rem 1rem; }
+body.status-healthy:not(.disconnected):not(.picking-aux) #channels {
+	display: block;
 }
 
 h2 {
 	font-size: 0.9rem;
 	opacity: 0.6;
-	margin: 1rem 0 0.25rem;
+	margin: 1.25rem 0 0.5rem;
 }
 
-.source {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	padding: 0.5rem 0;
-	border-bottom: 1px solid #2a2a2a;
-}
-
+.source { padding: 0.5rem 0; }
 .source .label {
-	min-width: 8rem;
+	display: block;
+	font-size: 0.85rem;
+	opacity: 0.85;
+	margin-bottom: 0.2rem;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.source input[type="range"] {
-	flex: 1;
-	accent-color: var(--tint, #4a90d9);
+/* Big faders: a tall, filled touch target rather than the browser's
+   default thin track. The fill is a pseudo-element on the wrapping row
+   (not the input itself, whose own pseudo-elements are limited to
+   thumb/track), sized from --value the same "set a CSS custom property on
+   input" input events already do — see sliderChange/onMessage in
+   mixer.js. Positioned with a negative z-index so it sits behind the
+   input, which stays fully clickable/draggable across the whole row. */
+.fader-row {
+	position: relative;
+	height: 3.5rem;
+	margin-bottom: 0.2rem;
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	overflow: hidden;
 }
+.fader-row input[type="range"] {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	display: block;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	background: transparent;
+	cursor: pointer;
+	/* Without this, a touch-drag along this horizontal slider is ambiguous
+	   to the browser inside a vertically-scrolling page: it applies the
+	   initial tap-to-value jump, then hands subsequent touchmove events to
+	   page-scroll instead of continuing to track the thumb — the exact
+	   "tap jumps, drag doesn't work" symptom on mobile. This tells the
+	   browser the slider owns all touch gestures on itself; the page still
+	   scrolls normally everywhere else. */
+	touch-action: none;
+}
+/* Thumb height is a fixed rem, not 100%: percentage heights on a slider
+   thumb pseudo-element aren't reliably resolved on mobile WebKit/Blink —
+   worst case it silently collapses to an effectively zero-height hit
+   target, so touch always lands on the bare track (the browser's default
+   tap-to-jump) and there's no real thumb left for a touchmove to keep
+   tracking, matching exactly the "tap jumps, drag doesn't work" symptom.
+   3.5rem duplicates .fader-row's own height above (no shared custom
+   property — the two are simple enough that one would be more ceremony
+   than the duplication it avoids). Width bumped from the original 0.6rem
+   too, for a more reliably grabbable touch target. */
+.fader-row input[type="range"]::-webkit-slider-thumb {
+	appearance: none;
+	-webkit-appearance: none;
+	width: 1.75rem;
+	height: 3.5rem;
+	background: #fff;
+	border-radius: 2px;
+	cursor: pointer;
+}
+.fader-row input[type="range"]::-moz-range-thumb {
+	width: 1.75rem;
+	height: 3.5rem;
+	background: #fff;
+	border: none;
+	border-radius: 2px;
+	cursor: pointer;
+}
+.fader-row input[type="range"]::-moz-range-track {
+	background: transparent;
+	border: none;
+}
+
+.volume-row::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	width: var(--value, 0%);
+	background: rgba(var(--tint), 0.85);
+	z-index: -1;
+}
+
+/* A fixed reference line at center (balanced pan) — a background-image on
+   the row itself, not another pseudo-element (::before/::after are both
+   already the left/right fill above), so it's unaffected by their z-index
+   stacking and always paints as part of the row's own background,
+   visible right through the input's transparent background. */
+.pan-row {
+	background-image: linear-gradient(to right, transparent calc(50% - 1px), rgba(255, 255, 255, 0.5) calc(50% - 1px), rgba(255, 255, 255, 0.5) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+/* Pan fills from the center toward whichever side the value leans — two
+   pseudo-elements, one anchored each side of 50%, since exactly one of
+   the two calc()s below is ever positive (the other collapses to 0 width,
+   which CSS clamps rather than rendering negative) depending on
+   direction. */
+.pan-row::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: calc(var(--value, 50%) - 50%);
+	background: rgba(var(--tint), 0.85);
+	z-index: -1;
+}
+.pan-row::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 50%;
+	width: calc((var(--value, 50%) - 50%) * -1);
+	background: rgba(var(--tint), 0.85);
+	z-index: -1;
+}
+
+/* Pan toggle switches which row is visible per source — both always exist
+   in the DOM (see buildSources in mixer.js) so flipping the toggle never
+   needs a rebuild, just this. */
+.pan-row { display: none; }
+body.panning .volume-row { display: none; }
+body.panning .pan-row { display: block; }

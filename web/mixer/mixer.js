@@ -3,13 +3,19 @@
 (() => {
 
 const channelsDiv = document.getElementById('channels'),
-auxSelect = document.getElementById('aux'),
+auxPickerDiv = document.getElementById('aux-picker'),
+auxTrigger = document.getElementById('aux-trigger'),
+auxIcon = document.getElementById('aux-icon'),
+auxLabel = document.getElementById('aux-label'),
+panToggleWrap = document.getElementById('pan-toggle-wrap'),
+panToggle = document.getElementById('pan-toggle'),
 snapshotSpan = document.getElementById('snapshot');
 
 let ws = null,
 reconnectTimer = null,
 sources = [],
-auxes = [];
+auxes = [],
+selectedAux = null; // the full aux object (channel/label/colour/icon/stereo), not just an id
 
 function sliderToDb(value) {
 	const val = ((Math.log(value * 100) / Math.log(100)) * 100) - 90;
@@ -32,6 +38,20 @@ function addressRoot(type) {
 	return type === "group" ? "/Group_Outputs" : "/Input_Channels";
 }
 
+// hexToRgb turns admin's "#rrggbb" colour picker output into the "r,g,b"
+// triplet CSS custom properties need (rgb()/rgba() don't accept a hex
+// string through var()) — null on anything unparseable, so callers fall
+// back to the CSS default instead of setting a broken custom property.
+function hexToRgb(hex) {
+	const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+	if (!m) return null;
+	return parseInt(m[1], 16) + "," + parseInt(m[2], 16) + "," + parseInt(m[3], 16);
+}
+
+function iconSrc(icon) {
+	return icon ? "/admin/icons/" + encodeURIComponent(icon) : "";
+}
+
 function sendOSC(address, args) {
 	if (!ws || ws.readyState !== WebSocket.OPEN) return;
 	ws.send(JSON.stringify({
@@ -41,8 +61,8 @@ function sendOSC(address, args) {
 }
 
 function requestValues() {
-	const auxChannel = auxSelect.value;
-	if (!auxChannel) return;
+	if (!selectedAux) return;
+	const auxChannel = selectedAux.channel;
 	for (const src of sources) {
 		if (!src.enabled) continue;
 		const root = addressRoot(src.type);
@@ -55,17 +75,14 @@ function sliderChange() {
 	const el = this;
 	const value = parseFloat(el.value);
 	el.parentNode.style.setProperty('--value', (value * 100) + "%");
-	if (!ws) return;
+	if (!ws || !selectedAux) return;
 
 	const type = el.dataset.type, number = el.dataset.number;
 	const root = addressRoot(type);
-	const auxChannel = auxSelect.value;
-	if (!auxChannel) return;
-
 	if (el.classList.contains("volumeInput")) {
-		sendOSC(root + "/" + number + "/Aux_Send/" + auxChannel + "/send_level", [sliderToDb(value)]);
+		sendOSC(root + "/" + number + "/Aux_Send/" + selectedAux.channel + "/send_level", [sliderToDb(value)]);
 	} else {
-		sendOSC(root + "/" + number + "/Aux_Send/" + auxChannel + "/send_pan", [value]);
+		sendOSC(root + "/" + number + "/Aux_Send/" + selectedAux.channel + "/send_pan", [value]);
 	}
 }
 
@@ -75,18 +92,68 @@ function escapeHtml(s) {
 	return d.innerHTML;
 }
 
+// resetSliders zeroes every fader's on-screen position (not a live OSC
+// send) — called right before requestValues() on an aux switch so stale
+// values from the previous aux aren't briefly shown while fresh ones are
+// in flight.
+function resetSliders() {
+	for (const el of channelsDiv.querySelectorAll(".volumeInput")) {
+		el.value = 0;
+		el.parentNode.style.setProperty('--value', '0%');
+	}
+	for (const el of channelsDiv.querySelectorAll(".panInput")) {
+		el.value = 0.5;
+		el.parentNode.style.setProperty('--value', '50%');
+	}
+}
+
+// selectAux commits an aux as the active mix destination: persists it (per
+// device, via localStorage — never synced elsewhere) so a returning client
+// on this device skips straight past the picker next time, tints the page
+// to the aux's colour, and shows the pan toggle only when this aux bus is
+// itself stereo (panning within a mono bus is meaningless).
+function selectAux(channel) {
+	const aux = auxes.find((a) => String(a.channel) === String(channel));
+	if (!aux) return;
+	selectedAux = aux;
+	localStorage.setItem("aux", String(channel));
+	document.body.classList.remove("picking-aux");
+	document.body.style.setProperty("--tint", hexToRgb(aux.colour) || "74,144,217");
+	auxIcon.src = iconSrc(aux.icon);
+	auxLabel.textContent = aux.label || ("Aux " + aux.channel);
+	panToggleWrap.hidden = !aux.stereo;
+	panToggle.checked = false;
+	document.body.classList.remove("panning");
+	resetSliders();
+	requestValues();
+}
+
+// buildAux renders the fullscreen aux picker and decides whether the
+// client should land on it at all: a new client (or one whose saved aux no
+// longer exists/is disabled — e.g. after a session change) has no valid
+// saved choice and lands on the picker, mirroring the legacy app; a
+// returning client on this device skips straight to its saved aux.
 function buildAux(list) {
 	auxes = list || [];
 	let html = "";
 	for (const a of auxes) {
 		if (!a.enabled) continue;
-		html += '<option value="' + a.channel + '" style="--tint:' + (a.colour || '#666') + '">' +
-			escapeHtml(a.label || ("Aux " + a.channel)) + '</option>';
+		html += '<button type="button" class="aux-button" data-channel="' + a.channel + '" style="--tint:' + (hexToRgb(a.colour) || '74,144,217') + '">';
+		if (a.icon) html += '<img src="' + iconSrc(a.icon) + '" alt="" />';
+		html += '<span>' + escapeHtml(a.label || ("Aux " + a.channel)) + '</span></button>';
 	}
-	auxSelect.innerHTML = html;
+	auxPickerDiv.innerHTML = html;
+
 	const saved = localStorage.getItem("aux");
-	if (saved && auxes.some(a => String(a.channel) === saved)) {
-		auxSelect.value = saved;
+	const stillValid = saved && auxes.some((a) => a.enabled && String(a.channel) === saved);
+	if (stillValid) {
+		selectAux(saved);
+	} else {
+		selectedAux = null;
+		auxIcon.src = "";
+		auxLabel.textContent = "Select aux…";
+		panToggleWrap.hidden = true;
+		document.body.classList.add("picking-aux");
 	}
 }
 
@@ -97,6 +164,10 @@ function buildAux(list) {
 // the markers are only meaningful here, for inline headers at their exact
 // position in the sequence — no separate lookup or sorting needed, the
 // server already delivers this in final display order.
+//
+// Each source gets both a volume and a pan fader row, always present in the
+// DOM — the pan-toggle just switches which one is visible (see mixer.css),
+// so neither ever needs rebuilding when the toggle flips.
 function buildSources(layout) {
 	layout = layout || [];
 	sources = layout.filter((it) => it.kind === "source");
@@ -110,18 +181,33 @@ function buildSources(layout) {
 		if (!src.enabled) continue;
 		html += '<div class="source" data-key="' + sourceKey(src.type, src.number) + '">';
 		html += '<span class="label">' + escapeHtml(src.label || (src.type + " " + src.number)) + '</span>';
-		html += '<input type="range" class="volumeInput" min="0" max="1" step="0.001" value="0" data-type="' + src.type + '" data-number="' + src.number + '" />';
-		html += '<input type="range" class="panInput" min="0" max="1" step="0.001" value="0.5" data-type="' + src.type + '" data-number="' + src.number + '" />';
+		html += '<div class="fader-row volume-row"><input type="range" class="volumeInput" min="0" max="1" step="0.001" value="0" data-type="' + src.type + '" data-number="' + src.number + '" /></div>';
+		html += '<div class="fader-row pan-row"><input type="range" class="panInput" min="0" max="1" step="0.001" value="0.5" data-type="' + src.type + '" data-number="' + src.number + '" /></div>';
 		html += '</div>';
 	}
 	channelsDiv.innerHTML = html;
 	for (const el of channelsDiv.querySelectorAll(".volumeInput, .panInput")) {
 		el.addEventListener("input", sliderChange);
+		el.parentNode.style.setProperty('--value', (parseFloat(el.value) * 100) + "%");
 	}
 }
 
 function findSlider(type, number, cls) {
 	return channelsDiv.querySelector('.' + cls + '[data-type="' + type + '"][data-number="' + number + '"]');
+}
+
+// applyStatus reflects the desk connectivity state machine (hub.Status) as
+// one of four mutually exclusive body classes — kept distinct rather than
+// collapsed into a single "offline" flag so starting/reloading (desk is
+// fine, hub is mid-sequence) never gets confused with degraded (desk
+// actually unreachable) in the UI, matching how the backend already
+// distinguishes them. See mixer.css for what each class shows/hides.
+function applyStatus(status) {
+	const desk = (status && status.desk) || "";
+	document.body.classList.toggle("status-starting", desk === "starting");
+	document.body.classList.toggle("status-reloading", desk === "reloading");
+	document.body.classList.toggle("status-degraded", desk === "degraded");
+	document.body.classList.toggle("status-healthy", desk === "healthy");
 }
 
 const sendLevelPanRe = /^\/(Input_Channels|Group_Outputs)\/(\d+)\/Aux_Send\/(\d+)\/send_(level|pan)$/;
@@ -139,7 +225,7 @@ function onMessage(e) {
 	}
 
 	if (env.kind === "status") {
-		document.body.classList.toggle("desk-offline", env.status && env.status.desk !== "healthy");
+		applyStatus(env.status);
 		return;
 	}
 
@@ -155,7 +241,7 @@ function onMessage(e) {
 	if (m) {
 		const type = m[1] === "Group_Outputs" ? "group" : "channel";
 		const number = m[2], auxChannel = m[3], kind = m[4];
-		if (auxChannel !== auxSelect.value) return;
+		if (!selectedAux || auxChannel !== String(selectedAux.channel)) return;
 		const cls = kind === "level" ? "volumeInput" : "panInput";
 		const el = findSlider(type, number, cls);
 		if (!el) return;
@@ -195,17 +281,17 @@ function startWebsocket() {
 document.addEventListener("DOMContentLoaded", function () {
 	startWebsocket();
 
-	auxSelect.addEventListener("change", function () {
-		localStorage.setItem("aux", this.value);
-		for (const el of channelsDiv.querySelectorAll(".volumeInput")) {
-			el.value = 0;
-			el.parentNode.style.setProperty('--value', '0%');
-		}
-		for (const el of channelsDiv.querySelectorAll(".panInput")) {
-			el.value = 0.5;
-			el.parentNode.style.setProperty('--value', '50%');
-		}
-		requestValues();
+	auxTrigger.addEventListener("click", function () {
+		document.body.classList.add("picking-aux");
+	});
+
+	auxPickerDiv.addEventListener("click", function (e) {
+		const btn = e.target.closest(".aux-button");
+		if (btn) selectAux(btn.dataset.channel);
+	});
+
+	panToggle.addEventListener("change", function () {
+		document.body.classList.toggle("panning", this.checked);
 	});
 });
 

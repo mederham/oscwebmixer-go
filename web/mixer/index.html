@@ -8,10 +8,18 @@
 </head>
 <body class="disconnected">
 	<header>
+		<button type="button" id="aux-trigger">
+			<img id="aux-icon" alt="" />
+			<span id="aux-label">Select aux…</span>
+		</button>
 		<span id="snapshot"></span>
-		<select id="aux"></select>
+		<label id="pan-toggle-wrap" hidden>
+			<input type="checkbox" id="pan-toggle" />
+			<span>Pan</span>
+		</label>
 	</header>
 	<div id="channels"></div>
+	<div id="aux-picker"></div>
 	<script src="mixer.js"></script>
 </body>
 </html>
