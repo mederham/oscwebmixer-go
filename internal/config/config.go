@@ -135,7 +135,7 @@ func (m *Manager) SaveCurrentStateAsPreset(state State, name string) (Preset, er
 		}
 	}
 
-	id, err := newUUID()
+	id, err := NewID()
 	if err != nil {
 		return Preset{}, err
 	}
@@ -197,9 +197,10 @@ func atomicWriteJSON(path string, v any) error {
 	return os.Rename(tmpPath, path)
 }
 
-// newUUID generates a random UUIDv4 without pulling in an external
-// dependency for something this small.
-func newUUID() (string, error) {
+// NewID generates a random UUIDv4 without pulling in an external
+// dependency for something this small — used for preset, section, and
+// external-device identity alike.
+func NewID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", err

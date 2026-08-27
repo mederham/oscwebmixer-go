@@ -152,15 +152,17 @@ type Hub struct {
 	clients         map[string]chan<- oscmsg.Envelope
 	externalDevices []ExternalDevice
 
-	// sourceOverrides/auxOverrides are the admin-editable overlay loaded
-	// from config/state.json (see plan: "Group buses" for why sources is
-	// keyed by type+number rather than array position) — layered onto the
-	// live desk-reported data in buildConfig(). Updated live via
-	// AdminEvent, no restart required (see Phase 3 scope note: only
-	// network settings need a restart, everything here applies
-	// immediately and re-broadcasts to connected clients).
-	sourceOverrides map[string]config.Source
-	auxOverrides    []config.Aux
+	// layout/auxOverrides are the admin-editable overlay loaded from
+	// config/state.json — layered onto the live desk-reported data in
+	// buildConfig(). layout is the ordered mixer layout (sources +
+	// section markers — see config.LayoutItem's doc comment for why
+	// array position is the single source of truth for both display
+	// order and section membership). Updated live via AdminEvent, no
+	// restart required (see Phase 3 scope note: only network settings
+	// need a restart, everything here applies immediately and
+	// re-broadcasts to connected clients).
+	layout       []config.LayoutItem
+	auxOverrides []config.Aux
 
 	// startupRetryInterval: UDP is unreliable and a lost packet — our query
 	// or the desk's reply — otherwise stalls the startup sequence forever,
@@ -227,12 +229,12 @@ type Options struct {
 	// stay fast.
 	HealthCheckInterval time.Duration
 
-	// InitialSources/InitialAuxes seed the admin overlay from
+	// InitialLayout/InitialAuxes seed the admin overlay from
 	// config/state.json at startup, so the very first buildConfig() call
 	// already reflects persisted admin edits — not just messages arriving
 	// after the first AdminEvent.
-	InitialSources []config.Source
-	InitialAuxes   []config.Aux
+	InitialLayout []config.LayoutItem
+	InitialAuxes  []config.Aux
 
 	// ExternalDevices seeds the relay list from config/global.json.
 	ExternalDevices []ExternalDevice
@@ -265,7 +267,7 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		status:               StatusStarting,
 		ready:                make(chan Snapshot, 1),
 		clients:              make(map[string]chan<- oscmsg.Envelope),
-		sourceOverrides:      indexSources(opts.InitialSources),
+		layout:               opts.InitialLayout,
 		auxOverrides:         opts.InitialAuxes,
 		externalDevices:      opts.ExternalDevices,
 		startupRetryInterval: opts.StartupRetryInterval,

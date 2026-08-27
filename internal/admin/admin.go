@@ -1,21 +1,30 @@
-// Package admin is the htmx-driven, server-rendered admin panel: GET
-// /admin renders the full page (web/admin/layout.html.tmpl composing five
-// section partials); every POST responds with just its own section's
-// re-rendered fragment, swapped in place by htmx (hx-post/hx-target/
-// hx-swap on each form/button — see web/admin/*.html.tmpl). Sources are
-// reordered by real drag-and-drop (SortableJS, vendored — see
-// web/admin/admin.js), which POSTs the full new ordering to
-// /admin/sources/reorder rather than going through htmx's own form
-// machinery, since the drag gesture isn't a form submission.
+// Package admin is the htmx-driven, server-rendered admin panel, organized
+// into tabs (web/admin/layout.html.tmpl) over five section partials — GET
+// /admin renders the full page; every POST responds with just its own
+// section's re-rendered fragment, swapped in place by htmx (hx-post/
+// hx-target/hx-swap on each form/button — see web/admin/*.html.tmpl).
 //
-// A preset load changes both the sources and auxes sections at once, but
-// only one can be the request's actual hx-target — the other two updates
-// ride along as htmx out-of-band swaps in the same response (see
-// SourcesSectionData/AuxesSectionData's OOB field and handlePresetLoad).
+// Sources is one flat, drag-and-drop-reorderable list of cards mixing
+// sources and admin-created section markers (see oscmsg.LayoutItem's doc
+// comment: display order and a source's section membership both come from
+// list position, not a stored field). The Sources tab's Save button and
+// drag-drop's auto-persist-on-drop both submit the same htmx form
+// (#sources-form, POST /admin/sources/save) — the form's one payload field
+// is a JSON-encoded array built fresh from the live DOM by admin.js's
+// htmx:configRequest listener (see admin.js), since the browser's native
+// form-field serialization has no way to preserve an ordered, mixed-kind
+// list — everything else about the request/response/swap lifecycle is
+// still plain htmx, not a hand-rolled fetch.
+//
+// A preset load changes both the mixer layout and auxes at once, but only
+// one can be the request's actual hx-target — the other rides along as an
+// htmx out-of-band swap in the same response (see SourcesSectionData/
+// AuxesSectionData's OOB field and handlePresetLoad).
 //
 // SCOPE NOTE: per the earlier explicit decision, desk/server/OSC network
-// settings are save-to-disk-and-require-restart. Source/aux edits and
-// presets apply live via hub.AdminEvent — no restart, no client disconnect.
+// settings are save-to-disk-and-require-restart. Layout/aux edits and
+// presets apply live via hub.AdminEvent — no restart, no client
+// disconnect.
 package admin
 
 import (
@@ -42,10 +51,49 @@ type Handler struct {
 	tmpl        *template.Template
 }
 
+// templateFuncs backs network.html.tmpl's "status-dot" fragment — the only
+// template in this package that needs to turn hub.Status/a timestamp into
+// display text, so a small FuncMap is simpler than a Go-side view type just
+// for these three fields.
+var templateFuncs = template.FuncMap{
+	"dotClass":     dotClass,
+	"dotLabel":     dotLabel,
+	"sinceRounded": func(t time.Time) string { return time.Since(t).Round(time.Second).String() },
+}
+
+// dotClass maps a hub.Status string to the status-dot's CSS color class.
+// starting/reloading share yellow — both mean "desk is responding, hub is
+// mid-sequence," not "desk is unreachable."
+func dotClass(status string) string {
+	switch status {
+	case "healthy":
+		return "green"
+	case "degraded":
+		return "red"
+	default:
+		return "yellow"
+	}
+}
+
+func dotLabel(status string) string {
+	switch status {
+	case "healthy":
+		return "Online"
+	case "degraded":
+		return "Offline"
+	case "starting":
+		return "Starting…"
+	case "reloading":
+		return "Reloading…"
+	default:
+		return status
+	}
+}
+
 // New builds a Handler, parsing admin templates from the given filesystem
 // (web.AdminFS, rooted at "admin" via fs.Sub — see web/assets.go).
 func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger) (*Handler, error) {
-	tmpl, err := template.ParseFS(templatesFS, "*.html.tmpl")
+	tmpl, err := template.New("admin").Funcs(templateFuncs).ParseFS(templatesFS, "*.html.tmpl")
 	if err != nil {
 		return nil, err
 	}
@@ -55,12 +103,15 @@ func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEve
 // Register mounts the admin routes onto mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin", h.handleIndex)
-	mux.HandleFunc("POST /admin/sources/{type}/{number}", h.handleSourceUpdate)
-	mux.HandleFunc("POST /admin/sources/reorder", h.handleSourcesReorder)
-	mux.HandleFunc("POST /admin/auxes/{number}", h.handleAuxUpdate)
+	mux.HandleFunc("POST /admin/sources/save", h.handleSourcesSave)
+	mux.HandleFunc("POST /admin/sections", h.handleSectionAdd)
+	mux.HandleFunc("POST /admin/sections/{id}/delete", h.handleSectionDelete)
+	mux.HandleFunc("POST /admin/auxes", h.handleAuxesSave)
 	mux.HandleFunc("POST /admin/network", h.handleNetworkUpdate)
+	mux.HandleFunc("GET /admin/network/status", h.handleNetworkStatus)
 	mux.HandleFunc("POST /admin/external-devices", h.handleExternalDeviceAdd)
-	mux.HandleFunc("POST /admin/external-devices/{name}/delete", h.handleExternalDeviceDelete)
+	mux.HandleFunc("POST /admin/external-devices/{id}", h.handleExternalDeviceUpdate)
+	mux.HandleFunc("POST /admin/external-devices/{id}/delete", h.handleExternalDeviceDelete)
 	mux.HandleFunc("POST /admin/presets/save", h.handlePresetSave)
 	mux.HandleFunc("POST /admin/presets/{uuid}/load", h.handlePresetLoad)
 	mux.HandleFunc("POST /admin/presets/{uuid}/delete", h.handlePresetDelete)
@@ -84,6 +135,43 @@ func (h *Handler) queryConfig(ctx context.Context) (oscmsg.ConfigPayload, error)
 	}
 }
 
+// queryStatus asks hub for the live desk-connectivity snapshot the Network
+// tab's status dot renders — same request/response-over-channel pattern as
+// queryConfig, deliberately a separate query (see hub.DeskStatusInfo's doc
+// comment for why this doesn't just ride along on ConfigPayload).
+func (h *Handler) queryStatus(ctx context.Context) (hub.DeskStatusInfo, error) {
+	reply := make(chan hub.DeskStatusInfo, 1)
+	select {
+	case h.adminEvents <- hub.AdminEvent{Kind: hub.AdminStatusQuery, StatusReply: reply}:
+	case <-ctx.Done():
+		return hub.DeskStatusInfo{}, ctx.Err()
+	}
+	select {
+	case status := <-reply:
+		return status, nil
+	case <-ctx.Done():
+		return hub.DeskStatusInfo{}, ctx.Err()
+	}
+}
+
+// saveState persists the mixer layout/auxes (each already reflecting
+// whatever edit the caller made) in one atomic write, applies it live to
+// hub, and returns a fresh post-apply ConfigPayload to render from — the
+// same sequence every Sources/Auxes/Sections mutation follows.
+func (h *Handler) saveState(ctx context.Context, layout []config.LayoutItem, auxes []config.Aux) (oscmsg.ConfigPayload, error) {
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		return oscmsg.ConfigPayload{}, err
+	}
+	state.MixerLayout = layout
+	state.Auxes = auxes
+	if err := h.cfg.SaveState(state); err != nil {
+		return oscmsg.ConfigPayload{}, err
+	}
+	h.applyState(state)
+	return h.queryConfig(ctx)
+}
+
 // applyState pushes a freshly-saved state live into hub (no restart, no
 // disconnect — see package doc). Re-reads global.json itself so external
 // device edits and source/aux edits both flow through the same apply path.
@@ -98,7 +186,7 @@ func (h *Handler) applyState(state config.State) {
 
 	select {
 	case h.adminEvents <- hub.AdminEvent{
-		Kind: hub.AdminApply, Sources: state.Sources, Auxes: state.Auxes, ExternalDevices: devices,
+		Kind: hub.AdminApply, Layout: state.MixerLayout, Auxes: state.Auxes, ExternalDevices: devices,
 	}:
 	default:
 		// The saved file is already correct regardless — this only means
@@ -129,4 +217,25 @@ func ResolveExternalDevices(devices []config.ExternalDevice, logger *log.Logger)
 			d.Name, ip, d.Port, d.Broadcast, d.Loopback)
 	}
 	return out
+}
+
+// backfillExternalDeviceIDs assigns a fresh ID to any device saved before
+// ExternalDevice gained one (a pre-upgrade global.json) — a one-time
+// normalization, not a dedicated migration step, so every device is
+// guaranteed to have a stable ID before handleExternalDeviceUpdate/Delete
+// ever try to look one up. Reports whether it changed anything, so the
+// caller only re-saves when needed.
+func backfillExternalDeviceIDs(global *config.Global) bool {
+	changed := false
+	for i := range global.ExternalDevices {
+		if global.ExternalDevices[i].ID == "" {
+			id, err := config.NewID()
+			if err != nil {
+				continue
+			}
+			global.ExternalDevices[i].ID = id
+			changed = true
+		}
+	}
+	return changed
 }

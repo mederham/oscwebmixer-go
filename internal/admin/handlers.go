@@ -2,10 +2,10 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -22,10 +22,20 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	status, err := h.queryStatus(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 	global, err := h.cfg.LoadGlobalOrDefault()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if backfillExternalDeviceIDs(&global) {
+		if err := h.cfg.SaveGlobal(global); err != nil {
+			h.log.Printf("admin: backfill external device IDs: %v", err)
+		}
 	}
 	presets, err := h.cfg.LoadPresets()
 	if err != nil {
@@ -35,7 +45,8 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	data := ViewData{
 		Global:      global,
-		SourcesData: SourcesSectionData{Sources: toSourceRows(cfg.Sources)},
+		Network:     NetworkSectionData{Global: global, DeskStatus: status},
+		SourcesData: toSourcesSectionData(cfg.MixerLayout, false),
 		AuxesData:   AuxesSectionData{Auxes: toAuxRows(cfg.Auxes)},
 		Presets:     toPresetRows(presets),
 		Message:     r.URL.Query().Get("msg"),
@@ -46,17 +57,22 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSourceUpdate saves one source's enabled/title/icon. Order is
-// untouched here — see handleSourceMove/handleSourcesReorder.
-func (h *Handler) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
-	sourceType := r.PathValue("type")
-	number, err := strconv.Atoi(r.PathValue("number"))
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
+// handleSourcesSave is the single endpoint for everything the Sources
+// tab's one <form> can produce: field edits (enabled/icon/section name,
+// from the Save button) and drag-drop persistence (new item order,
+// auto-submitted by admin.js's onEnd on every drop) alike — both are just
+// "the Sources form was submitted." The posted "layout" field is a JSON
+// array (built by admin.js's collectLayout, injected via htmx:configRequest
+// — see this package's doc comment for why a plain named-field form can't
+// represent an ordered, mixed-kind list) mirroring oscmsg.LayoutItem.
+func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var wireLayout []oscmsg.LayoutItem
+	if err := json.Unmarshal([]byte(r.FormValue("layout")), &wireLayout); err != nil {
+		http.Error(w, "invalid layout: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -68,54 +84,30 @@ func (h *Handler) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sources := configSourcesFromPayload(cfg.Sources)
-	found := false
-	for i := range sources {
-		if sources[i].Type == sourceType && sources[i].Number == number {
-			sources[i].Enabled = r.Form.Has("enabled")
-			sources[i].Title = r.FormValue("title")
-			sources[i].Icon = r.FormValue("icon")
-			found = true
-			break
-		}
-	}
-	if !found {
-		http.NotFound(w, r)
-		return
-	}
-
-	state, err := h.cfg.LoadStateOrDefault()
+	fresh, err := h.saveState(ctx, layoutFromPayload(wireLayout), configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	state.Sources = sources
-	state.Auxes = configAuxesFromPayload(cfg.Auxes)
-	if err := h.cfg.SaveState(state); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.applyState(state)
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderSourcesSection(w, sourcesToPayload(sources, cfg.Sources), false); err != nil {
+	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
 
-// handleSourcesReorder is driven by the drag-and-drop UI (see
-// web/admin/admin.js): it receives the full new ordering as a
-// comma-separated "type:number" list and rewrites every source's
-// DisplayOrder to match position in that list.
-func (h *Handler) handleSourcesReorder(w http.ResponseWriter, r *http.Request) {
+// handleSectionAdd creates a new section marker at the end of the layout —
+// dragged into position afterward via the Sources form (handleSourcesSave),
+// same as any other item in that list.
+func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	orderParam := r.FormValue("order")
-	var keys []string
-	if orderParam != "" {
-		keys = strings.Split(orderParam, ",")
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">Section name is required.</p>`)
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
@@ -126,66 +118,66 @@ func (h *Handler) handleSourcesReorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sources := configSourcesFromPayload(cfg.Sources)
-	byKey := make(map[string]*config.Source, len(sources))
-	for i := range sources {
-		byKey[sourceKeyStr(sources[i])] = &sources[i]
-	}
-	for i, k := range keys {
-		if s, ok := byKey[k]; ok {
-			s.DisplayOrder = i
-		}
-	}
-	sort.SliceStable(sources, func(a, b int) bool { return sources[a].DisplayOrder < sources[b].DisplayOrder })
-
-	state, err := h.cfg.LoadStateOrDefault()
+	id, err := config.NewID()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	state.Sources = sources
-	state.Auxes = configAuxesFromPayload(cfg.Auxes)
-	if err := h.cfg.SaveState(state); err != nil {
+	layout := append(layoutFromPayload(cfg.MixerLayout), config.LayoutItem{
+		Kind: config.LayoutKindSection, SectionID: id, SectionName: name,
+	})
+
+	fresh, err := h.saveState(ctx, layout, configAuxesFromPayload(cfg.Auxes))
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.applyState(state)
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderSourcesSection(w, sourcesToPayload(sources, cfg.Sources), false); err != nil {
+	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
 
-func sourceKeyStr(s config.Source) string {
-	return fmt.Sprintf("%s:%d", s.Type, s.Number)
-}
+// handleSectionDelete removes one section marker; nothing else needs
+// adjusting — the sources that were "in" it were only ever derived from
+// their position relative to this marker, not linked to it by a stored
+// field, so removing the marker alone is the whole operation.
+func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
 
-// sourcesToPayload re-attaches the live/desk-derived Label and Stereo back
-// onto the just-edited config.Source list, using the last-known values from
-// cfg — avoids a second hub round trip purely to re-render.
-func sourcesToPayload(sources []config.Source, labeled []oscmsg.SourceConfig) []oscmsg.SourceConfig {
-	byKey := make(map[string]oscmsg.SourceConfig, len(labeled))
-	for _, s := range labeled {
-		byKey[fmt.Sprintf("%s:%d", s.Type, s.Number)] = s
-	}
-	out := make([]oscmsg.SourceConfig, len(sources))
-	for i, s := range sources {
-		live := byKey[fmt.Sprintf("%s:%d", s.Type, s.Number)]
-		out[i] = oscmsg.SourceConfig{
-			Type: s.Type, Number: s.Number, Label: live.Label, Stereo: live.Stereo,
-			Enabled: s.Enabled, Order: s.DisplayOrder, Title: s.Title, Icon: s.Icon,
-		}
-	}
-	return out
-}
-
-func (h *Handler) handleAuxUpdate(w http.ResponseWriter, r *http.Request) {
-	number, err := strconv.Atoi(r.PathValue("number"))
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
 	if err != nil {
-		http.NotFound(w, r)
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+
+	layout := layoutFromPayload(cfg.MixerLayout)
+	filtered := layout[:0]
+	for _, it := range layout {
+		if it.Kind == config.LayoutKindSection && it.SectionID == id {
+			continue
+		}
+		filtered = append(filtered, it)
+	}
+
+	fresh, err := h.saveState(ctx, filtered, configAuxesFromPayload(cfg.Auxes))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// handleAuxesSave replaces per-row saving with one batch save for the
+// whole Auxes table — array position is already the channel identity
+// (configAuxesFromPayload's existing Auxes[i].Channel == i+1 convention),
+// so no hidden tracking fields are needed here at all, unlike Sources.
+func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -200,43 +192,20 @@ func (h *Handler) handleAuxUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	auxes := configAuxesFromPayload(cfg.Auxes)
-	idx := number - 1
-	if idx < 0 || idx >= len(auxes) {
-		http.NotFound(w, r)
-		return
-	}
-	auxes[idx] = config.Aux{
-		Enabled: r.Form.Has("enabled"),
-		Colour:  r.FormValue("colour"),
-		Icon:    r.FormValue("icon"),
+	for i := range auxes {
+		n := i + 1
+		auxes[i].Enabled = r.Form.Has(fmt.Sprintf("enabled[%d]", n))
+		auxes[i].Colour = r.FormValue(fmt.Sprintf("colour[%d]", n))
+		auxes[i].Icon = r.FormValue(fmt.Sprintf("icon[%d]", n))
 	}
 
-	state, err := h.cfg.LoadStateOrDefault()
+	fresh, err := h.saveState(ctx, layoutFromPayload(cfg.MixerLayout), auxes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	state.Sources = configSourcesFromPayload(cfg.Sources)
-	state.Auxes = auxes
-	if err := h.cfg.SaveState(state); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.applyState(state)
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	auxPayload := make([]oscmsg.AuxConfig, len(auxes))
-	for i, a := range auxes {
-		label := ""
-		if i < len(cfg.Auxes) {
-			label = cfg.Auxes[i].Label
-		}
-		auxPayload[i] = oscmsg.AuxConfig{
-			Channel: i + 1, Label: label, Enabled: a.Enabled,
-			Stereo: i < len(cfg.Auxes) && cfg.Auxes[i].Stereo, Colour: a.Colour, Icon: a.Icon,
-		}
-	}
-	if err := h.renderAuxesSection(w, auxPayload, false); err != nil {
+	if err := h.renderAuxesSection(w, fresh.Auxes, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -265,8 +234,33 @@ func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	status, err := h.queryStatus(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.tmpl.ExecuteTemplate(w, "network-section", global); err != nil {
+	if err := h.tmpl.ExecuteTemplate(w, "network-section", NetworkSectionData{Global: global, DeskStatus: status}); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// handleNetworkStatus renders just the status-dot fragment — polled by
+// network.html.tmpl every 5s (hx-trigger="load, every 5s") so the
+// indicator stays live without disturbing the rest of the form.
+func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	status, err := h.queryStatus(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "status-dot", status); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -283,12 +277,18 @@ func (h *Handler) handleExternalDeviceAdd(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	id, err := config.NewID()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	global, err := h.cfg.LoadGlobalOrDefault()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	global.ExternalDevices = append(global.ExternalDevices, config.ExternalDevice{
+		ID:        id,
 		Name:      name,
 		IP:        strings.TrimSpace(r.FormValue("ip")),
 		Port:      formInt(r.FormValue("port"), 0),
@@ -310,8 +310,54 @@ func (h *Handler) handleExternalDeviceAdd(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// handleExternalDeviceUpdate saves one row's edited fields in place —
+// keyed by ID (not Name) so renaming a device doesn't invalidate its own
+// edit URL mid-edit.
+func (h *Handler) handleExternalDeviceUpdate(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	found := false
+	for i := range global.ExternalDevices {
+		if global.ExternalDevices[i].ID == id {
+			global.ExternalDevices[i].Name = strings.TrimSpace(r.FormValue("name"))
+			global.ExternalDevices[i].IP = strings.TrimSpace(r.FormValue("ip"))
+			global.ExternalDevices[i].Port = formInt(r.FormValue("port"), global.ExternalDevices[i].Port)
+			global.ExternalDevices[i].Broadcast = r.Form.Has("broadcast")
+			global.ExternalDevices[i].Loopback = r.Form.Has("loopback")
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.cfg.SaveGlobal(global); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if state, err := h.cfg.LoadStateOrDefault(); err == nil {
+		h.applyState(state)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "external-devices-section", global); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
 func (h *Handler) handleExternalDeviceDelete(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
+	id := r.PathValue("id")
 	global, err := h.cfg.LoadGlobalOrDefault()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -319,7 +365,7 @@ func (h *Handler) handleExternalDeviceDelete(w http.ResponseWriter, r *http.Requ
 	}
 	filtered := global.ExternalDevices[:0]
 	for _, d := range global.ExternalDevices {
-		if d.Name != name {
+		if d.ID != id {
 			filtered = append(filtered, d)
 		}
 	}
@@ -360,8 +406,8 @@ func (h *Handler) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := config.State{
-		Sources: configSourcesFromPayload(cfg.Sources),
-		Auxes:   configAuxesFromPayload(cfg.Auxes),
+		MixerLayout: layoutFromPayload(cfg.MixerLayout),
+		Auxes:       configAuxesFromPayload(cfg.Auxes),
 	}
 	if _, err := h.cfg.SaveCurrentStateAsPreset(state, name); err != nil {
 		if errors.Is(err, config.ErrPresetExists) {
@@ -379,10 +425,10 @@ func (h *Handler) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePresetLoad changes sources AND auxes at once, but only the
-// presets section is the actual hx-target — the other two are pushed as
-// out-of-band swaps in the same response (see SourcesSectionData/
-// AuxesSectionData's OOB field).
+// handlePresetLoad changes both the mixer layout and auxes at once, but
+// only the presets section is the actual hx-target — the other rides
+// along as an htmx out-of-band swap in the same response (see
+// SourcesSectionData/AuxesSectionData's OOB field).
 func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	preset, err := h.cfg.GetPresetByID(uuid)
@@ -410,7 +456,7 @@ func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 		h.log.Printf("admin render: %v", err)
 	}
 	if err == nil {
-		if err := h.renderSourcesSection(w, cfg.Sources, true); err != nil {
+		if err := h.renderSourcesSection(w, cfg.MixerLayout, true); err != nil {
 			h.log.Printf("admin render: %v", err)
 		}
 		if err := h.renderAuxesSection(w, cfg.Auxes, true); err != nil {

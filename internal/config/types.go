@@ -1,8 +1,9 @@
 // Package config loads/saves the JSON files under ./config/: global.json
 // (server/OSC/desk network settings, external devices), state.json (the
-// live admin-editable source/aux overrides — see plan: "Group buses" for
-// why sources is a single ordered, typed list rather than the old
-// channels[]/auxes[] split), and presets.json (named saved states).
+// live admin-editable mixer layout/aux overrides — see LayoutItem for why
+// sources and admin-created sections share one ordered list rather than
+// separate channels[]/auxes[] arrays or a stored per-source section field),
+// and presets.json (named saved states).
 package config
 
 // Global mirrors config/global.json.
@@ -29,10 +30,15 @@ type DeskConfig struct {
 
 // ExternalDevice is one relay target — TouchOSC, Reaper, StreamDeck, or
 // similar — see the plan's external-device relay section. Broadcast gates
-// whether it receives fan-out at all; Loopback controls whether it also
-// receives messages that originated from itself (not yet meaningfully
-// exercised — see hub's broadcastSource doc comment).
+// whether it receives fan-out at all (it's effectively this device's
+// enable/disable — see admin's per-row edit UI); Loopback controls whether
+// it also receives messages that originated from itself (not yet
+// meaningfully exercised — see hub's broadcastSource doc comment). ID is a
+// stable admin-only identity (not used by hub, which only needs
+// Name/Addr/Broadcast/Loopback for relay) so renaming a device in the admin
+// UI doesn't invalidate its edit/delete URL.
 type ExternalDevice struct {
+	ID        string `json:"id"`
 	Name      string `json:"name"`
 	IP        string `json:"ip"`
 	Port      int    `json:"port"`
@@ -40,39 +46,65 @@ type ExternalDevice struct {
 	Loopback  bool   `json:"loopback"`
 }
 
+// LayoutKindSource/LayoutKindSection are LayoutItem.Kind's two values.
+const (
+	LayoutKindSource  = "source"
+	LayoutKindSection = "section"
+)
+
+// LayoutItem is one entry in State.MixerLayout — the single ordered
+// sequence mixing sources and admin-created section markers, exactly as
+// arranged in the admin UI's Sources tab. A source's section membership is
+// derived from whichever marker precedes it in this same sequence, not
+// stored as a field on the source — the old Title-on-a-source convention
+// worked the same way (a header derived from position), just as a real
+// named object now instead of a string glued onto whichever source
+// happened to carry it.
+//
+// Array position IS display order: there is no separate Order field to
+// keep in sync with it. That matters because two independently-numbered
+// lists sharing an "order" axis by convention can silently drift apart
+// (a bug, a hand-edit, two code paths assigning colliding values); a
+// single ordered sequence structurally cannot, since there's only one
+// thing recording order.
+//
+// Sparse, like the old Source overlay was: only a source the admin has
+// actually customized (disabled, given an icon) or a section marker needs
+// an entry here. Any channel/group the desk reports that isn't mentioned
+// anywhere in MixerLayout is appended at the end, in natural desk order,
+// by hub.buildConfig — same fallback this had before Sections existed.
+type LayoutItem struct {
+	Kind string `json:"kind"` // LayoutKindSource | LayoutKindSection
+
+	// Set when Kind == LayoutKindSource.
+	Type    string `json:"type"` // "channel" | "group"
+	Number  int    `json:"number"`
+	Enabled bool   `json:"enabled"`
+	Icon    string `json:"icon"`
+
+	// Set when Kind == LayoutKindSection.
+	SectionID   string `json:"sectionId"`
+	SectionName string `json:"sectionName"`
+}
+
 // State mirrors config/state.json — the admin-editable overlay merged onto
-// live desk data by hub.buildConfig(). Sources is a single ordered,
-// type-tagged list (not separate channels[]/auxes[] arrays) so a group can
-// sit between two channels in display order — see plan: "Group buses".
+// live desk data by hub.buildConfig().
 type State struct {
-	UUID        string   `json:"uuid"`
-	Name        string   `json:"name"`
-	SessionName string   `json:"sessionName"`
-	Auxes       []Aux    `json:"auxes"`
-	Sources     []Source `json:"sources"`
+	UUID        string       `json:"uuid"`
+	Name        string       `json:"name"`
+	SessionName string       `json:"sessionName"`
+	Auxes       []Aux        `json:"auxes"`
+	MixerLayout []LayoutItem `json:"mixerLayout"`
 }
 
 // Aux is the admin-editable overlay for one aux bus, indexed 1:1 by
 // position (aux N is Auxes[N-1]) since auxes stay the fixed destination
-// concept — only Sources needs identity-by-value (type+number) since it's
-// reorderable/interleavable.
+// concept — unlike sources/sections, which are reorderable/interleavable
+// (see LayoutItem).
 type Aux struct {
 	Enabled bool   `json:"enabled"`
 	Colour  string `json:"colour"`
 	Icon    string `json:"icon"`
-}
-
-// Source is the admin-editable overlay for one mixable source (a channel
-// or a group bus — see plan). Type+Number is its identity; DisplayOrder is
-// an explicit field (not array position) so drag-and-drop reordering in
-// the admin UI is a plain field update.
-type Source struct {
-	Type         string `json:"type"` // "channel" | "group"
-	Number       int    `json:"number"`
-	Enabled      bool   `json:"enabled"`
-	DisplayOrder int    `json:"displayOrder"`
-	Title        string `json:"title"`
-	Icon         string `json:"icon"`
 }
 
 // Preset is a named, saved snapshot of State — mirrors JS's

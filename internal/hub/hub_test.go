@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 	"github.com/mederham/oscwebmixer-go/internal/pipeline"
@@ -551,11 +552,11 @@ func TestClientConnectReceivesStatusAndConfig(t *testing.T) {
 	if configEnv.Kind != oscmsg.KindConfig || configEnv.Config == nil {
 		t.Fatalf("config envelope = %+v", configEnv)
 	}
-	if len(configEnv.Config.Sources) != 2 {
-		t.Fatalf("sources = %+v, want 2 (1 channel + 1 group)", configEnv.Config.Sources)
+	if len(configEnv.Config.MixerLayout) != 2 {
+		t.Fatalf("mixer layout = %+v, want 2 (1 channel + 1 group)", configEnv.Config.MixerLayout)
 	}
-	if configEnv.Config.Sources[0].Type != "channel" || configEnv.Config.Sources[1].Type != "group" {
-		t.Fatalf("source order = %+v, want channel then group (see plan: groups appended after channels)", configEnv.Config.Sources)
+	if configEnv.Config.MixerLayout[0].Type != "channel" || configEnv.Config.MixerLayout[1].Type != "group" {
+		t.Fatalf("layout order = %+v, want channel then group (natural desk order fallback)", configEnv.Config.MixerLayout)
 	}
 	if len(configEnv.Config.Auxes) != 1 || configEnv.Config.Auxes[0].Label != "Mon 1" {
 		t.Fatalf("auxes = %+v", configEnv.Config.Auxes)
@@ -939,11 +940,11 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 		t.Fatalf("post-reload envelope = %+v, want config", configEnv)
 	}
 
-	sources := configEnv.Config.Sources
+	sources := configEnv.Config.MixerLayout
 	if len(sources) != 3 { // 2 channels + 1 group
-		t.Fatalf("sources = %+v, want 3 (2 channels + 1 group, session 2's counts)", sources)
+		t.Fatalf("mixer layout = %+v, want 3 (2 channels + 1 group, session 2's counts)", sources)
 	}
-	byNumber := map[int]oscmsg.SourceConfig{}
+	byNumber := map[int]oscmsg.LayoutItem{}
 	for _, s := range sources {
 		if s.Type == "channel" {
 			byNumber[s.Number] = s
@@ -1214,5 +1215,73 @@ drain:
 		case <-deadline:
 			return
 		}
+	}
+}
+
+// TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned proves
+// AdminApply's Layout field actually reaches buildConfig(): explicitly
+// laid-out items (a source, a section marker, another source) come back
+// in exactly that order with the marker sitting inline between them, and
+// a channel the layout never mentions (channel 1) is appended at the end
+// in natural desk order rather than silently dropped — see
+// config.LayoutItem's doc comment for why membership/order both come from
+// this one sequence, not a separately-stored field.
+func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		channelCount: 3, auxCount: 1, groupCount: 0,
+		channelNames: map[int]string{1: "One", 2: "Two", 3: "Three"},
+		auxNames:     map[int]string{1: "Mon 1"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	adminEvents := make(chan AdminEvent, 4)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, nil, adminEvents)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	// Channel 1 is deliberately never mentioned — proving the natural-
+	// order fallback for anything the layout doesn't reference.
+	adminEvents <- AdminEvent{
+		Kind: AdminApply,
+		Layout: []config.LayoutItem{
+			{Kind: config.LayoutKindSource, Type: "channel", Number: 2, Enabled: true},
+			{Kind: config.LayoutKindSection, SectionID: "b", SectionName: "Section B"},
+			{Kind: config.LayoutKindSource, Type: "channel", Number: 3, Enabled: false},
+		},
+	}
+
+	// Same channel as the AdminApply above — FIFO within one channel
+	// guarantees the query is processed after the apply lands.
+	reply := make(chan oscmsg.ConfigPayload, 1)
+	adminEvents <- AdminEvent{Kind: AdminQuery, Reply: reply}
+
+	var cfg oscmsg.ConfigPayload
+	select {
+	case cfg = <-reply:
+	case <-time.After(time.Second):
+		t.Fatal("did not receive AdminQuery reply")
+	}
+
+	if len(cfg.MixerLayout) != 4 {
+		t.Fatalf("mixer layout = %+v, want 4 (channel 2, section marker, channel 3, channel 1 appended)", cfg.MixerLayout)
+	}
+	if cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[0].Number != 2 || !cfg.MixerLayout[0].Enabled {
+		t.Fatalf("item 0 = %+v, want enabled channel 2", cfg.MixerLayout[0])
+	}
+	if cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[1].SectionName != "Section B" {
+		t.Fatalf("item 1 = %+v, want the Section B marker, in position between channels 2 and 3", cfg.MixerLayout[1])
+	}
+	if cfg.MixerLayout[2].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[2].Number != 3 || cfg.MixerLayout[2].Enabled {
+		t.Fatalf("item 2 = %+v, want disabled channel 3", cfg.MixerLayout[2])
+	}
+	if cfg.MixerLayout[3].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[3].Number != 1 || !cfg.MixerLayout[3].Enabled {
+		t.Fatalf("item 3 = %+v, want channel 1 appended at the end (never mentioned in the applied layout), enabled by default", cfg.MixerLayout[3])
 	}
 }

@@ -2,19 +2,18 @@ package hub
 
 import (
 	"fmt"
-	"sort"
 
+	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
 // buildConfig assembles what a mixer client needs to render itself: live
 // desk-reported data (names, aux stereo/mono, counts) as the base, with the
-// admin-editable overlay (sourceOverrides/auxOverrides, from
-// config/state.json) layered on top for enabled/order/title/icon/colour.
-// A source or aux with no override yet defaults to enabled, natural
-// desk-reported order, no title/icon. Groups default to appearing after
-// all channels — per the plan's "Group buses" section — but an override's
-// DisplayOrder can interleave them anywhere.
+// admin-editable overlay (h.layout/h.auxOverrides, from config/state.json)
+// layered on top for enabled/icon/colour and — for h.layout — the actual
+// display sequence itself. A source not otherwise mentioned in h.layout
+// defaults to enabled, no icon, and is appended at the end in natural
+// desk-reported order (channels then groups) — see the loop below.
 func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 	var auxes []oscmsg.AuxConfig
 	if modes, ok := h.cache["/Console/Aux_Outputs/modes"]; ok {
@@ -51,60 +50,77 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 
 	groupModes, haveGroupModes := h.cache["/Console/Group_Outputs/modes"]
 
-	sources := make([]oscmsg.SourceConfig, 0, h.channelCount+h.groupCount)
-	order := 0
-	for i := 1; i <= h.channelCount; i++ {
-		label := ""
-		if nameMsg, ok := h.cache[fmt.Sprintf("/Input_Channels/%d/Channel_Input/name", i)]; ok && len(nameMsg.Args) > 0 {
+	// liveSource looks up live desk-reported label/stereo for one
+	// channel/group — shared by both the laid-out walk below and the
+	// natural-order fallback for anything h.layout doesn't mention.
+	liveSource := func(sourceType string, number int) (label string, stereo bool) {
+		if sourceType == "group" {
+			if nameMsg, ok := h.cache[fmt.Sprintf("/Group_Outputs/%d/Buss_Trim/name", number)]; ok && len(nameMsg.Args) > 0 {
+				label = argAsString(nameMsg.Args[0])
+			}
+			if haveGroupModes && number-1 < len(groupModes.Args) {
+				stereo = argAsInt(groupModes.Args[number-1]) == 2
+			}
+			return
+		}
+		if nameMsg, ok := h.cache[fmt.Sprintf("/Input_Channels/%d/Channel_Input/name", number)]; ok && len(nameMsg.Args) > 0 {
 			label = argAsString(nameMsg.Args[0])
 		}
-		stereo := false
-		if modeMsg, ok := h.cache[fmt.Sprintf("/Input_Channels/%d/Channel_Input/stereo_mode", i)]; ok && len(modeMsg.Args) > 0 {
+		if modeMsg, ok := h.cache[fmt.Sprintf("/Input_Channels/%d/Channel_Input/stereo_mode", number)]; ok && len(modeMsg.Args) > 0 {
 			stereo = argAsInt(modeMsg.Args[0]) == 2
 		}
-		sources = append(sources, h.sourceConfigFor("channel", i, label, stereo, order))
-		order++
+		return
+	}
+
+	exists := func(sourceType string, number int) bool {
+		if sourceType == "group" {
+			return number >= 1 && number <= h.groupCount
+		}
+		return number >= 1 && number <= h.channelCount
+	}
+
+	layout := make([]oscmsg.LayoutItem, 0, len(h.layout)+h.channelCount+h.groupCount)
+	placed := make(map[string]bool, len(h.layout))
+	for _, item := range h.layout {
+		if item.Kind == config.LayoutKindSection {
+			layout = append(layout, oscmsg.LayoutItem{
+				Kind: oscmsg.LayoutKindSection, SectionID: item.SectionID, SectionName: item.SectionName,
+			})
+			continue
+		}
+		if !exists(item.Type, item.Number) {
+			// Session changed to fewer channels/groups than this entry
+			// references (confirmed live: sessions can differ in channel
+			// count) — drop it rather than render a source that no longer
+			// exists on the desk. It simply reappears if a future session
+			// has that channel again and the admin re-adds it.
+			continue
+		}
+		label, stereo := liveSource(item.Type, item.Number)
+		layout = append(layout, oscmsg.LayoutItem{
+			Kind: oscmsg.LayoutKindSource, Type: item.Type, Number: item.Number,
+			Label: label, Enabled: item.Enabled, Stereo: stereo, Icon: item.Icon,
+		})
+		placed[sourceKey(item.Type, item.Number)] = true
+	}
+	for i := 1; i <= h.channelCount; i++ {
+		if placed[sourceKey("channel", i)] {
+			continue
+		}
+		label, stereo := liveSource("channel", i)
+		layout = append(layout, oscmsg.LayoutItem{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: i, Label: label, Enabled: true, Stereo: stereo})
 	}
 	for i := 1; i <= h.groupCount; i++ {
-		label := ""
-		if nameMsg, ok := h.cache[fmt.Sprintf("/Group_Outputs/%d/Buss_Trim/name", i)]; ok && len(nameMsg.Args) > 0 {
-			label = argAsString(nameMsg.Args[0])
+		if placed[sourceKey("group", i)] {
+			continue
 		}
-		stereo := false
-		if haveGroupModes && i-1 < len(groupModes.Args) {
-			stereo = argAsInt(groupModes.Args[i-1]) == 2
-		}
-		sources = append(sources, h.sourceConfigFor("group", i, label, stereo, order))
-		order++
+		label, stereo := liveSource("group", i)
+		layout = append(layout, oscmsg.LayoutItem{Kind: oscmsg.LayoutKindSource, Type: "group", Number: i, Label: label, Enabled: true, Stereo: stereo})
 	}
-
-	// An override's DisplayOrder can place a group between two channels
-	// (or anywhere else) — the loops above just establish a stable default
-	// order for anything not yet overridden, so a final sort by the actual
-	// Order field is what determines display order, not insertion order.
-	sort.SliceStable(sources, func(a, b int) bool { return sources[a].Order < sources[b].Order })
 
 	return oscmsg.ConfigPayload{
-		Sources:  sources,
-		Auxes:    auxes,
-		Snapshot: h.snapshotName,
+		MixerLayout: layout,
+		Auxes:       auxes,
+		Snapshot:    h.snapshotName,
 	}
-}
-
-func (h *Hub) sourceConfigFor(sourceType string, number int, label string, stereo bool, defaultOrder int) oscmsg.SourceConfig {
-	cfg := oscmsg.SourceConfig{
-		Type:    sourceType,
-		Number:  number,
-		Label:   label,
-		Enabled: true,
-		Stereo:  stereo,
-		Order:   defaultOrder,
-	}
-	if ov, ok := h.sourceOverrides[sourceKey(sourceType, number)]; ok {
-		cfg.Enabled = ov.Enabled
-		cfg.Order = ov.DisplayOrder
-		cfg.Title = ov.Title
-		cfg.Icon = ov.Icon
-	}
-	return cfg
 }

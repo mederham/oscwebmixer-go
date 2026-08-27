@@ -13,11 +13,19 @@
 <h1>OSCWebMixer Admin</h1>
 <div id="flash">{{if .Message}}<p class="flash">{{.Message}}</p>{{end}}</div>
 
-{{template "network-section" .Global}}
-{{template "external-devices-section" .Global}}
-{{template "sources-section" .SourcesData}}
-{{template "auxes-section" .AuxesData}}
-{{template "presets-section" .Presets}}
+<nav class="tabs">
+	<a href="#network" class="selected">Network</a>
+	<a href="#external-devices">External devices</a>
+	<a href="#sources">Sources</a>
+	<a href="#auxes">Auxes</a>
+	<a href="#presets">Presets</a>
+</nav>
+
+<div class="tab-panel show" id="tab-network">{{template "network-section" .Network}}</div>
+<div class="tab-panel" id="tab-external-devices">{{template "external-devices-section" .Global}}</div>
+<div class="tab-panel" id="tab-sources">{{template "sources-section" .SourcesData}}</div>
+<div class="tab-panel" id="tab-auxes">{{template "auxes-section" .AuxesData}}</div>
+<div class="tab-panel" id="tab-presets">{{template "presets-section" .Presets}}</div>
 
 <script src="/admin/admin.js"></script>
 </body>

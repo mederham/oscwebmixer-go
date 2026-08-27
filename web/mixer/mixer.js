@@ -90,14 +90,24 @@ function buildAux(list) {
 	}
 }
 
-function buildSources(list) {
-	sources = (list || []).slice().sort((a, b) => a.order - b.order);
+// buildSources renders the mixer layout — a single ordered sequence mixing
+// sources and admin-created section markers (see internal/oscmsg.LayoutItem's
+// doc comment). sources (the module-level var) is filtered down to just the
+// source-kind entries, since that's what requestValues()/sliderChange() need;
+// the markers are only meaningful here, for inline headers at their exact
+// position in the sequence — no separate lookup or sorting needed, the
+// server already delivers this in final display order.
+function buildSources(layout) {
+	layout = layout || [];
+	sources = layout.filter((it) => it.kind === "source");
 	let html = "";
-	for (const src of sources) {
-		if (!src.enabled) continue;
-		if (src.title) {
-			html += '<h2>' + escapeHtml(src.title) + '</h2>';
+	for (const it of layout) {
+		if (it.kind === "section") {
+			html += '<h2>' + escapeHtml(it.sectionName) + '</h2>';
+			continue;
 		}
+		const src = it;
+		if (!src.enabled) continue;
 		html += '<div class="source" data-key="' + sourceKey(src.type, src.number) + '">';
 		html += '<span class="label">' + escapeHtml(src.label || (src.type + " " + src.number)) + '</span>';
 		html += '<input type="range" class="volumeInput" min="0" max="1" step="0.001" value="0" data-type="' + src.type + '" data-number="' + src.number + '" />';
@@ -123,7 +133,7 @@ function onMessage(e) {
 	if (env.kind === "config") {
 		snapshotSpan.textContent = (env.config && env.config.snapshot) || "";
 		buildAux(env.config && env.config.auxes);
-		buildSources(env.config && env.config.sources);
+		buildSources(env.config && env.config.mixerLayout);
 		requestValues();
 		return;
 	}

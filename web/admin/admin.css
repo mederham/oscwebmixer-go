@@ -9,7 +9,27 @@ body {
 }
 
 h1 { font-size: 1.3rem; }
-h2 { font-size: 1.05rem; margin-top: 2rem; border-bottom: 1px solid #333; padding-bottom: 0.25rem; }
+h2 { font-size: 1.05rem; margin-top: 1.5rem; border-bottom: 1px solid #333; padding-bottom: 0.25rem; }
+h3 { font-size: 0.95rem; opacity: 0.8; margin: 1rem 0 0.4rem; }
+
+.tabs {
+	display: flex;
+	gap: 0.25rem;
+	border-bottom: 1px solid #333;
+	margin-top: 0.5rem;
+}
+.tabs a {
+	color: #aaa;
+	text-decoration: none;
+	padding: 0.5rem 0.9rem;
+	border-radius: 4px 4px 0 0;
+	font-size: 0.9rem;
+}
+.tabs a:hover { background: #1c1c1c; }
+.tabs a.selected { color: #eee; background: #1c2a3a; border-bottom: 2px solid #4a90d9; }
+
+.tab-panel { display: none; }
+.tab-panel.show { display: block; }
 
 .hint { opacity: 0.6; font-size: 0.85rem; margin: 0.25rem 0 0.75rem; }
 
@@ -69,12 +89,103 @@ button:hover { background: #3a5a7a; }
 	cursor: grab;
 	opacity: 0.5;
 	text-align: center;
-	width: 1.5rem;
+	width: 1.2rem;
 	user-select: none;
 }
 .drag-handle:hover { opacity: 0.9; }
-#sources-tbody tr.sortable-ghost { opacity: 0.3; background: #2a4a6a; }
-#sources-tbody tr.sortable-chosen { background: #1c2a3a; }
+
+/* #sources-form wraps #sources-list (a vertical stack) + the Save button —
+   opts out of the generic "section > form" flex-wrap rule below, which is
+   meant for the simpler label-per-field forms (Network, add-device). */
+#sources-form { display: block; }
+
+#sources-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-height: 2.5rem; /* an empty list still accepts a drop */
+	padding: 0.25rem;
+	border-radius: 4px;
+	background: #161616;
+	margin-bottom: 0.5rem;
+}
+
+.source-card {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.35rem 0.6rem;
+	background: #1c1c1c;
+	border: 1px solid #2a2a2a;
+	border-left: 3px solid #666;
+	border-radius: 3px;
+	font-size: 0.9rem;
+}
+.source-card.channel { border-left-color: #4a90d9; } /* DiGiCo input-channel blue */
+.source-card.group { border-left-color: #c0392b; }   /* DiGiCo group-bus red */
+.source-card .badge {
+	font-size: 0.75rem;
+	opacity: 0.6;
+	min-width: 3.2rem;
+}
+.source-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-card .enabled { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; white-space: nowrap; }
+.source-card input[type="text"] { width: 8rem; }
+
+.section-marker {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.4rem 0.6rem;
+	margin: 0.3rem 0;
+	background: #22282f;
+	border: 1px solid #333;
+	border-radius: 3px;
+}
+.section-marker .section-name-field { flex: 1; font-weight: 600; }
+
+.source-card.sortable-ghost, .section-marker.sortable-ghost { opacity: 0.3; background: #2a4a6a; }
+.source-card.sortable-chosen, .section-marker.sortable-chosen { background: #1c2a3a; }
+
+/* Broadcast toggle switch — plain checkbox visually, standard CSS-only
+   thumb-and-track technique, no JS/library needed. */
+input.toggle {
+	appearance: none;
+	width: 2.2rem;
+	height: 1.2rem;
+	background: #3a3a3a;
+	border-radius: 1rem;
+	position: relative;
+	cursor: pointer;
+	vertical-align: middle;
+}
+input.toggle::before {
+	content: "";
+	position: absolute;
+	top: 0.15rem;
+	left: 0.15rem;
+	width: 0.9rem;
+	height: 0.9rem;
+	background: #eee;
+	border-radius: 50%;
+	transition: left 0.1s;
+}
+input.toggle:checked { background: #2a6a3a; }
+input.toggle:checked::before { left: 1.15rem; }
+
+.status-dot {
+	display: inline-block;
+	width: 0.7rem;
+	height: 0.7rem;
+	border-radius: 50%;
+	margin-right: 0.4rem;
+}
+.status-dot.green { background: #2ecc40; }
+.status-dot.yellow { background: #e8a33d; }
+.status-dot.red { background: #e74c3c; }
+.status-label { font-weight: 600; }
+.status-lastseen { opacity: 0.6; font-size: 0.85rem; margin-left: 0.5rem; }
+#desk-status { margin: 0.5rem 0 1rem; }
 
 .inline-form {
 	display: inline-flex;

@@ -1,14 +1,23 @@
 {{define "network-section"}}
 <section id="section-network">
 	<h2>Network</h2>
+	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s" hx-swap="innerHTML">
+		{{template "status-dot" .DeskStatus}}
+	</div>
 	<p class="hint">Changes here are saved but require a manual restart to take effect.</p>
 	<form hx-post="/admin/network" hx-target="#section-network" hx-swap="outerHTML">
-		<label>Debug logging <input type="checkbox" name="debug" {{if .Debug}}checked{{end}} /></label>
-		<label>Desk IP <input type="text" name="deskIP" value="{{.Desk.IP}}" /></label>
-		<label>Desk port <input type="number" name="deskPort" value="{{.Desk.Port}}" /></label>
-		<label>OSC listen port <input type="number" name="oscPort" value="{{.OSC.Port}}" /></label>
-		<label>HTTP server port <input type="number" name="serverPort" value="{{.Server.Port}}" /></label>
+		<label>Debug logging <input type="checkbox" name="debug" {{if .Global.Debug}}checked{{end}} /></label>
+		<label>Desk IP <input type="text" name="deskIP" value="{{.Global.Desk.IP}}" /></label>
+		<label>Desk port <input type="number" name="deskPort" value="{{.Global.Desk.Port}}" /></label>
+		<label>OSC listen port <input type="number" name="oscPort" value="{{.Global.OSC.Port}}" /></label>
+		<label>HTTP server port <input type="number" name="serverPort" value="{{.Global.Server.Port}}" /></label>
 		<button type="submit">Save</button>
 	</form>
 </section>
+{{end}}
+
+{{define "status-dot"}}
+<span class="status-dot {{.Status | dotClass}}"></span>
+<span class="status-label">{{.Status | dotLabel}}</span>
+<span class="status-lastseen">last seen {{.LastSeen | sinceRounded}} ago</span>
 {{end}}

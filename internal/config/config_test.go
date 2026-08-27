@@ -46,9 +46,10 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 		Auxes: []Aux{
 			{Enabled: true, Colour: "#993333"},
 		},
-		Sources: []Source{
-			{Type: "channel", Number: 1, Enabled: true, DisplayOrder: 0},
-			{Type: "group", Number: 3, Enabled: true, DisplayOrder: 1, Title: "Groups"},
+		MixerLayout: []LayoutItem{
+			{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true},
+			{Kind: LayoutKindSection, SectionID: "sec-1", SectionName: "Groups"},
+			{Kind: LayoutKindSource, Type: "group", Number: 3, Enabled: true},
 		},
 	}
 	if err := m.SaveState(want); err != nil {
@@ -58,14 +59,20 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadStateOrDefault: %v", err)
 	}
-	if len(got.Sources) != 2 || got.Sources[1].Type != "group" || got.Sources[1].Title != "Groups" {
-		t.Fatalf("round trip = %+v, want %+v", got, want)
+	if len(got.MixerLayout) != 3 {
+		t.Fatalf("round trip = %+v, want 3 items", got.MixerLayout)
+	}
+	if got.MixerLayout[1].Kind != LayoutKindSection || got.MixerLayout[1].SectionName != "Groups" {
+		t.Fatalf("section marker round trip = %+v, want kind=%q name=Groups", got.MixerLayout[1], LayoutKindSection)
+	}
+	if got.MixerLayout[2].Type != "group" || got.MixerLayout[2].Number != 3 {
+		t.Fatalf("source after marker round trip = %+v, want group 3 (position preserved)", got.MixerLayout[2])
 	}
 }
 
 func TestPresetLifecycle(t *testing.T) {
 	m := New(t.TempDir())
-	state := State{Sources: []Source{{Type: "channel", Number: 1, Enabled: true}}}
+	state := State{MixerLayout: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}}
 
 	preset, err := m.SaveCurrentStateAsPreset(state, "Show 1")
 	if err != nil {

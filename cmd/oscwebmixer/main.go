@@ -103,7 +103,7 @@ func main() {
 		DeskIP:               global.Desk.IP,
 		StartupRetryInterval: 2 * time.Second,
 		HealthCheckInterval:  3 * time.Second,
-		InitialSources:       state.Sources,
+		InitialLayout:        state.MixerLayout,
 		InitialAuxes:         state.Auxes,
 		ExternalDevices:      admin.ResolveExternalDevices(global.ExternalDevices, logger),
 		Debug:                global.Debug,
