@@ -17,6 +17,8 @@ sources = [],
 auxes = [],
 selectedAux = null; // the full aux object (channel/label/colour/icon/stereo), not just an id
 
+const panSnapThreshold = 0.03; // +/- around 0.5 (center) that snaps to exact center — see sliderChange
+
 function sliderToDb(value) {
 	const val = ((Math.log(value * 100) / Math.log(100)) * 100) - 90;
 	if (val === -Infinity) return -150;
@@ -73,7 +75,16 @@ function requestValues() {
 
 function sliderChange() {
 	const el = this;
-	const value = parseFloat(el.value);
+	let value = parseFloat(el.value);
+	// Pan snaps to true center once close — a finger/mouse can drag near
+	// 0.5 but rarely land exactly on it, and "almost centered" is a much
+	// worse mix state than "not quite centered" would suggest, so this
+	// rewrites both the input's own value (the thumb visibly jumps to
+	// center) and what gets sent, not just the displayed fill.
+	if (el.classList.contains("panInput") && Math.abs(value - 0.5) < panSnapThreshold) {
+		value = 0.5;
+		el.value = value;
+	}
 	el.parentNode.style.setProperty('--value', (value * 100) + "%");
 	if (!ws || !selectedAux) return;
 
