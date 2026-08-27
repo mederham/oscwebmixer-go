@@ -30,7 +30,7 @@ type scriptedDesk struct {
 
 	channelCount, auxCount, groupCount int
 	channelNames, auxNames, groupNames map[int]string // missing key = unnamed
-	channelStereo                      map[int]bool    // missing key = mono
+	channelStereo                      map[int]bool   // missing key = mono
 
 	mu       sync.Mutex
 	dropOnce map[string]bool // query address -> drop the next reply to it once, simulating lost UDP
@@ -1283,5 +1283,80 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 	}
 	if cfg.MixerLayout[3].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[3].Number != 1 || !cfg.MixerLayout[3].Enabled {
 		t.Fatalf("item 3 = %+v, want channel 1 appended at the end (never mentioned in the applied layout), enabled by default", cfg.MixerLayout[3])
+	}
+}
+
+// TestAutoHidePatternsHideUnmentionedMatches proves config.Global's
+// AutoHideChannelPatterns/AutoHideGroupPatterns/AutoHideAuxPatterns (see
+// their doc comment) only change the natural-order fallback's default,
+// scoped strictly per source type: a group whose name matches but is
+// explicitly laid out with Enabled: true stays enabled (explicit beats the
+// pattern), and an aux named "Hall" being hidden must not also hide a
+// channel named "Hall Ret" even though it contains the same substring —
+// the exact false-positive this per-type scoping exists to prevent.
+func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		channelCount: 2, auxCount: 1, groupCount: 2,
+		channelNames: map[int]string{1: "Kick", 2: "Hall Ret"},
+		auxNames:     map[int]string{1: "Hall"},
+		groupNames:   map[int]string{1: "Master", 2: "Drums"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	adminEvents := make(chan AdminEvent, 4)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, nil, adminEvents)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	// Group 1 ("Master") is explicitly laid out and enabled, despite
+	// matching the group pattern below — explicit always wins. Group 2
+	// ("Drums"), both channels, and the aux ("Hall") are all left to the
+	// fallback.
+	adminEvents <- AdminEvent{
+		Kind: AdminApply,
+		Layout: []config.LayoutItem{
+			{Kind: config.LayoutKindSource, Type: "group", Number: 1, Enabled: true},
+		},
+		AutoHideGroupPatterns: []string{"master"},
+		AutoHideAuxPatterns:   []string{"hall"},
+	}
+
+	reply := make(chan oscmsg.ConfigPayload, 1)
+	adminEvents <- AdminEvent{Kind: AdminQuery, Reply: reply}
+
+	var cfg oscmsg.ConfigPayload
+	select {
+	case cfg = <-reply:
+	case <-time.After(time.Second):
+		t.Fatal("did not receive AdminQuery reply")
+	}
+
+	bySource := map[string]oscmsg.LayoutItem{}
+	for _, it := range cfg.MixerLayout {
+		if it.Kind == oscmsg.LayoutKindSource {
+			bySource[sourceKey(it.Type, it.Number)] = it
+		}
+	}
+	if it := bySource[sourceKey("group", 1)]; !it.Enabled {
+		t.Errorf("group 1 (Master, explicitly enabled in layout) = %+v, want enabled — explicit overrides should beat a later pattern match", it)
+	}
+	if it := bySource[sourceKey("group", 2)]; !it.Enabled {
+		t.Errorf("group 2 (Drums, unmentioned) = %+v, want enabled — name doesn't match the group pattern", it)
+	}
+	if it := bySource[sourceKey("channel", 1)]; !it.Enabled {
+		t.Errorf("channel 1 (Kick, unmentioned) = %+v, want enabled — name doesn't match the channel pattern (there is none)", it)
+	}
+	if it := bySource[sourceKey("channel", 2)]; !it.Enabled {
+		t.Errorf("channel 2 (Hall Ret, unmentioned) = %+v, want enabled — the aux pattern \"hall\" must not bleed into channels", it)
+	}
+	if len(cfg.Auxes) != 1 || cfg.Auxes[0].Enabled {
+		t.Errorf("aux 1 (Hall, unmentioned, no aux overrides) = %+v, want hidden by the aux auto-hide pattern", cfg.Auxes)
 	}
 }

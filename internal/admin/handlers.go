@@ -296,6 +296,51 @@ func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleSettingsUpdate saves the auto-hide name patterns (see
+// config.Global.AutoHidePatterns) and applies them live — unlike the
+// Network tab's desk/server/OSC fields, this only affects in-hub logic, no
+// socket rebinding, so it follows the same live-apply path as external
+// devices rather than requiring a restart.
+func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	global.AutoHideChannelPatterns = parsePatterns(r.FormValue("autoHideChannelPatterns"))
+	global.AutoHideGroupPatterns = parsePatterns(r.FormValue("autoHideGroupPatterns"))
+	global.AutoHideAuxPatterns = parsePatterns(r.FormValue("autoHideAuxPatterns"))
+	if err := h.cfg.SaveGlobal(global); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if state, err := h.cfg.LoadStateOrDefault(); err == nil {
+		h.applyState(state)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "settings-section", global); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// parsePatterns splits a comma-separated form field into trimmed,
+// non-empty patterns.
+func parsePatterns(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func (h *Handler) handleExternalDeviceAdd(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

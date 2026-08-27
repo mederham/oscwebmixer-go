@@ -100,13 +100,16 @@ func main() {
 	}
 
 	h := hub.New(conn, nil, logger, hub.Options{
-		DeskIP:               global.Desk.IP,
-		StartupRetryInterval: 2 * time.Second,
-		HealthCheckInterval:  3 * time.Second,
-		InitialLayout:        state.MixerLayout,
-		InitialAuxes:         state.Auxes,
-		ExternalDevices:      admin.ResolveExternalDevices(global.ExternalDevices, logger),
-		Debug:                global.Debug,
+		DeskIP:                  global.Desk.IP,
+		StartupRetryInterval:    2 * time.Second,
+		HealthCheckInterval:     3 * time.Second,
+		InitialLayout:           state.MixerLayout,
+		InitialAuxes:            state.Auxes,
+		ExternalDevices:         admin.ResolveExternalDevices(global.ExternalDevices, logger),
+		AutoHideChannelPatterns: global.AutoHideChannelPatterns,
+		AutoHideGroupPatterns:   global.AutoHideGroupPatterns,
+		AutoHideAuxPatterns:     global.AutoHideAuxPatterns,
+		Debug:                   global.Debug,
 	})
 
 	clientEvents := make(chan hub.ClientEvent, 64)

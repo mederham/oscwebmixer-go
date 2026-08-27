@@ -13,6 +13,29 @@ type Global struct {
 	OSC             OSCConfig        `json:"osc"`
 	Desk            DeskConfig       `json:"desk"`
 	ExternalDevices []ExternalDevice `json:"externalDevices"`
+
+	// AutoHideChannelPatterns/AutoHideGroupPatterns/AutoHideAuxPatterns
+	// each list case-insensitive substrings matched against that type's
+	// live desk-reported name only — kept separate per type (not one
+	// shared list) because names collide by convention across types: an
+	// effect aux bus named "Hall" and its return channel "Hall Ret" both
+	// contain "Hall", but only one of them should actually be hidden.
+	//
+	// A source not yet mentioned anywhere in the saved layout
+	// (hub.buildConfig's natural-order fallback — same case LayoutItem's
+	// doc comment describes) starts hidden instead of the usual
+	// default-enabled if its name matches its type's pattern list — e.g.
+	// "Master" in AutoHideGroupPatterns to keep a desk's Master/Main group
+	// off the mixer page by default in every session, without re-hiding it
+	// by hand each time. Applies only to that fallback default: a source
+	// the admin has explicitly enabled stays enabled regardless of a later
+	// pattern match, same as every other explicit-beats-default rule in
+	// this admin UI. Global (applies across all sessions), not per-session
+	// state, since the desk's channel-naming convention doesn't change
+	// session to session.
+	AutoHideChannelPatterns []string `json:"autoHideChannelPatterns"`
+	AutoHideGroupPatterns   []string `json:"autoHideGroupPatterns"`
+	AutoHideAuxPatterns     []string `json:"autoHideAuxPatterns"`
 }
 
 type ServerConfig struct {

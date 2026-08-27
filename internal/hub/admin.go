@@ -42,9 +42,12 @@ type AdminEvent struct {
 	StatusReply chan<- DeskStatusInfo       // set for AdminStatusQuery
 
 	// The following are set for AdminApply.
-	Layout          []config.LayoutItem
-	Auxes           []config.Aux
-	ExternalDevices []ExternalDevice
+	Layout                  []config.LayoutItem
+	Auxes                   []config.Aux
+	ExternalDevices         []ExternalDevice
+	AutoHideChannelPatterns []string
+	AutoHideGroupPatterns   []string
+	AutoHideAuxPatterns     []string
 }
 
 // sourceKey identifies a source by its stable identity (type+number) —
@@ -66,6 +69,9 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.layout = ev.Layout
 		h.auxOverrides = ev.Auxes
 		h.externalDevices = ev.ExternalDevices
+		h.autoHideChannelPatterns = ev.AutoHideChannelPatterns
+		h.autoHideGroupPatterns = ev.AutoHideGroupPatterns
+		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns
 
 		h.log.Printf("admin config applied: %d layout item(s), %d aux override(s), %d external device(s)",
 			len(ev.Layout), len(ev.Auxes), len(ev.ExternalDevices))

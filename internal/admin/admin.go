@@ -69,6 +69,7 @@ var templateFuncs = template.FuncMap{
 	"sinceRounded": func(t time.Time) string { return time.Since(t).Round(time.Second).String() },
 	"iconLabel":    iconLabel,
 	"badge":        badge, // "Ch 01" / "Grp 01" — derived from Type+Number, not stored (see SourceRow)
+	"join":         strings.Join,
 }
 
 // iconLabel turns an icon filename ("acoustic-guitar.svg") into a
@@ -153,6 +154,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/auxes", h.handleAuxesSave)
 	mux.HandleFunc("POST /admin/network", h.handleNetworkUpdate)
 	mux.HandleFunc("GET /admin/network/status", h.handleNetworkStatus)
+	mux.HandleFunc("POST /admin/settings", h.handleSettingsUpdate)
 	mux.HandleFunc("POST /admin/external-devices", h.handleExternalDeviceAdd)
 	mux.HandleFunc("POST /admin/external-devices/{id}", h.handleExternalDeviceUpdate)
 	mux.HandleFunc("POST /admin/external-devices/{id}/delete", h.handleExternalDeviceDelete)
@@ -223,15 +225,23 @@ func (h *Handler) saveState(ctx context.Context, layout []config.LayoutItem, aux
 func (h *Handler) applyState(state config.State) {
 	global, err := h.cfg.LoadGlobalOrDefault()
 	var devices []hub.ExternalDevice
+	var autoHideChannel, autoHideGroup, autoHideAux []string
 	if err != nil {
 		h.log.Printf("admin apply: reload global config: %v", err)
 	} else {
 		devices = ResolveExternalDevices(global.ExternalDevices, h.log)
+		autoHideChannel = global.AutoHideChannelPatterns
+		autoHideGroup = global.AutoHideGroupPatterns
+		autoHideAux = global.AutoHideAuxPatterns
 	}
 
 	select {
 	case h.adminEvents <- hub.AdminEvent{
-		Kind: hub.AdminApply, Layout: state.MixerLayout, Auxes: state.Auxes, ExternalDevices: devices,
+		Kind: hub.AdminApply, Layout: state.MixerLayout, Auxes: state.Auxes,
+		ExternalDevices:         devices,
+		AutoHideChannelPatterns: autoHideChannel,
+		AutoHideGroupPatterns:   autoHideGroup,
+		AutoHideAuxPatterns:     autoHideAux,
 	}:
 	default:
 		// The saved file is already correct regardless — this only means

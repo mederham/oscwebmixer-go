@@ -13,7 +13,7 @@ import (
 // hub-side cost (cache lookup, broadcast fan-out), not desk round-trip time.
 type noopDesk struct{}
 
-func (noopDesk) Send(oscmsg.Message) error                    { return nil }
+func (noopDesk) Send(oscmsg.Message) error                 { return nil }
 func (noopDesk) SendTo(oscmsg.Message, *net.UDPAddr) error { return nil }
 
 // benchHub builds an already-Healthy hub (bypassing the startup sequence

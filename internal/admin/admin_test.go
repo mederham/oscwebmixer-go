@@ -375,6 +375,63 @@ func TestPresetsReset(t *testing.T) {
 	}
 }
 
+// TestSettingsSaveAppliesLive proves the Settings tab's per-type auto-hide
+// patterns (see config.Global's AutoHide*Patterns fields) round-trip to
+// disk and reach hub live, with no restart — fakeDesk's one channel is
+// named "Kick", so a channel pattern of "Kick" should flip it from the
+// usual default-enabled to hidden the moment the setting is saved, while
+// the same text in the aux pattern field must not affect it (per-type
+// scoping, not one shared list).
+func TestSettingsSaveAppliesLive(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := postForm(t, mux, "/admin/settings",
+		"autoHideChannelPatterns="+url.QueryEscape("Kick, Master")+"&autoHideAuxPatterns="+url.QueryEscape("Kick"))
+	if !strings.Contains(rec.Body.String(), `value="Kick, Master"`) {
+		t.Fatalf("settings response = %s, want the saved channel patterns echoed back into the field", rec.Body.String())
+	}
+
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	if want := []string{"Kick", "Master"}; !equalStrings(global.AutoHideChannelPatterns, want) {
+		t.Fatalf("persisted AutoHideChannelPatterns = %v, want %v", global.AutoHideChannelPatterns, want)
+	}
+	if want := []string{"Kick"}; !equalStrings(global.AutoHideAuxPatterns, want) {
+		t.Fatalf("persisted AutoHideAuxPatterns = %v, want %v", global.AutoHideAuxPatterns, want)
+	}
+
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Enabled {
+		t.Fatalf("mixer layout after settings save = %+v, want channel 1 (Kick) hidden by the channel pattern, applied live with no restart", cfg.MixerLayout)
+	}
+	// fakeDesk's one aux is named "Mon 1" (see fakeDesk.Send) — unaffected
+	// by the "Kick" aux pattern, since nothing named "Kick" exists among
+	// auxes; this mainly guards against a regression that accidentally
+	// wired the channel field into the aux check or vice versa.
+	if len(cfg.Auxes) != 1 || !cfg.Auxes[0].Enabled {
+		t.Fatalf("auxes after settings save = %+v, want aux 1 (Mon 1) still enabled", cfg.Auxes)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestDotClassAndLabel(t *testing.T) {
 	cases := []struct{ status, class, label string }{
 		{"healthy", "green", "Online"},

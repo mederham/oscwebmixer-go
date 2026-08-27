@@ -2,6 +2,7 @@ package hub
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
@@ -12,9 +13,32 @@ import (
 // admin-editable overlay (h.layout/h.auxOverrides, from config/state.json)
 // layered on top for enabled/icon/colour and — for h.layout — the actual
 // display sequence itself. A source not otherwise mentioned in h.layout
-// defaults to enabled, no icon, and is appended at the end in natural
-// desk-reported order (channels then groups) — see the loop below.
+// defaults to enabled (unless its live name matches that type's auto-hide
+// patterns — see matchesAny and config.Global's AutoHide*Patterns fields),
+// no icon, and is appended at the end in natural desk-reported order
+// (channels then groups) — see the loop below.
 func (h *Hub) buildConfig() oscmsg.ConfigPayload {
+	// matchesAny is the fallback-only "should a not-yet-customized entry
+	// start visible" check — see config.Global's AutoHide*Patterns doc
+	// comment. Never consulted for an entry already present in
+	// h.layout/h.auxOverrides; those always keep their stored Enabled.
+	// Patterns are checked per source type (not one shared list) because
+	// names collide by convention across types — an aux bus "Hall" and its
+	// return channel "Hall Ret" both contain "Hall", but only one should
+	// actually be hidden.
+	matchesAny := func(label string, patterns []string) bool {
+		if label == "" {
+			return false
+		}
+		lower := strings.ToLower(label)
+		for _, p := range patterns {
+			if p != "" && strings.Contains(lower, strings.ToLower(p)) {
+				return true
+			}
+		}
+		return false
+	}
+
 	var auxes []oscmsg.AuxConfig
 	if modes, ok := h.cache["/Console/Aux_Outputs/modes"]; ok {
 		auxes = make([]oscmsg.AuxConfig, 0, len(modes.Args))
@@ -25,7 +49,7 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 				label = argAsString(nameMsg.Args[0])
 			}
 
-			enabled := true
+			enabled := !matchesAny(label, h.autoHideAuxPatterns)
 			colour := generateColour(len(modes.Args), i)
 			icon := ""
 			if i < len(h.auxOverrides) {
@@ -108,14 +132,14 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 			continue
 		}
 		label, stereo := liveSource("channel", i)
-		layout = append(layout, oscmsg.LayoutItem{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: i, Label: label, Enabled: true, Stereo: stereo})
+		layout = append(layout, oscmsg.LayoutItem{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: i, Label: label, Enabled: !matchesAny(label, h.autoHideChannelPatterns), Stereo: stereo})
 	}
 	for i := 1; i <= h.groupCount; i++ {
 		if placed[sourceKey("group", i)] {
 			continue
 		}
 		label, stereo := liveSource("group", i)
-		layout = append(layout, oscmsg.LayoutItem{Kind: oscmsg.LayoutKindSource, Type: "group", Number: i, Label: label, Enabled: true, Stereo: stereo})
+		layout = append(layout, oscmsg.LayoutItem{Kind: oscmsg.LayoutKindSource, Type: "group", Number: i, Label: label, Enabled: !matchesAny(label, h.autoHideGroupPatterns), Stereo: stereo})
 	}
 
 	return oscmsg.ConfigPayload{

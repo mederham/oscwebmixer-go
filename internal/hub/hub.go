@@ -164,6 +164,13 @@ type Hub struct {
 	layout       []config.LayoutItem
 	auxOverrides []config.Aux
 
+	// autoHide{Channel,Group,Aux}Patterns mirror config.Global's fields of
+	// the same name — see their doc comment. Updated live via AdminEvent,
+	// same as layout/auxOverrides.
+	autoHideChannelPatterns []string
+	autoHideGroupPatterns   []string
+	autoHideAuxPatterns     []string
+
 	// startupRetryInterval: UDP is unreliable and a lost packet — our query
 	// or the desk's reply — otherwise stalls the startup sequence forever,
 	// since advanceStartup only re-runs reactively when another message
@@ -239,6 +246,13 @@ type Options struct {
 	// ExternalDevices seeds the relay list from config/global.json.
 	ExternalDevices []ExternalDevice
 
+	// AutoHideChannelPatterns/AutoHideGroupPatterns/AutoHideAuxPatterns
+	// seed the default-hide name patterns from config/global.json — see
+	// config.Global's fields of the same name.
+	AutoHideChannelPatterns []string
+	AutoHideGroupPatterns   []string
+	AutoHideAuxPatterns     []string
+
 	// Debug enables per-hop tracing (every inbound message's source, the
 	// fromDesk/loopback relay decisions, and each relay attempt's outcome)
 	// — mirrors config/global.json's "debug" field (see admin's Network
@@ -259,21 +273,24 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		healthCheckInterval = 24 * time.Hour
 	}
 	return &Hub{
-		desk:                 d,
-		pipeline:             pipe,
-		log:                  logger,
-		deskIP:               opts.DeskIP,
-		cache:                make(map[string]oscmsg.Message),
-		status:               StatusStarting,
-		ready:                make(chan Snapshot, 1),
-		clients:              make(map[string]chan<- oscmsg.Envelope),
-		layout:               opts.InitialLayout,
-		auxOverrides:         opts.InitialAuxes,
-		externalDevices:      opts.ExternalDevices,
-		startupRetryInterval: opts.StartupRetryInterval,
-		lastDeskSeen:         time.Now(),
-		healthCheckInterval:  healthCheckInterval,
-		debug:                opts.Debug,
+		desk:                    d,
+		pipeline:                pipe,
+		log:                     logger,
+		deskIP:                  opts.DeskIP,
+		cache:                   make(map[string]oscmsg.Message),
+		status:                  StatusStarting,
+		ready:                   make(chan Snapshot, 1),
+		clients:                 make(map[string]chan<- oscmsg.Envelope),
+		layout:                  opts.InitialLayout,
+		auxOverrides:            opts.InitialAuxes,
+		autoHideChannelPatterns: opts.AutoHideChannelPatterns,
+		autoHideGroupPatterns:   opts.AutoHideGroupPatterns,
+		autoHideAuxPatterns:     opts.AutoHideAuxPatterns,
+		externalDevices:         opts.ExternalDevices,
+		startupRetryInterval:    opts.StartupRetryInterval,
+		lastDeskSeen:            time.Now(),
+		healthCheckInterval:     healthCheckInterval,
+		debug:                   opts.Debug,
 	}
 }
 

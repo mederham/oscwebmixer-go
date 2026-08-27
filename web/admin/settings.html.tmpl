@@ -1,0 +1,21 @@
+{{define "settings-section"}}
+<section id="section-settings">
+	<h2>Settings</h2>
+	<p class="hint">Comma-separated, case-insensitive. A channel/group/aux whose desk name contains one of its type's patterns starts hidden the first time it appears — a manually re-enabled source always stays enabled regardless. Kept separate per type since names collide by convention (an effect aux "Hall" and its return channel "Hall Ret" both contain "Hall"). Applies to every session.</p>
+	<form class="field-grid" hx-post="/admin/settings" hx-target="#section-settings" hx-swap="outerHTML">
+		<label>
+			Auto-hide channels
+			<input type="text" name="autoHideChannelPatterns" value="{{join .AutoHideChannelPatterns ", "}}" placeholder="e.g. Talkback" />
+		</label>
+		<label>
+			Auto-hide groups
+			<input type="text" name="autoHideGroupPatterns" value="{{join .AutoHideGroupPatterns ", "}}" placeholder="e.g. Master, Main" />
+		</label>
+		<label>
+			Auto-hide auxes
+			<input type="text" name="autoHideAuxPatterns" value="{{join .AutoHideAuxPatterns ", "}}" placeholder="e.g. Talkback" />
+		</label>
+		<button type="submit">Save</button>
+	</form>
+</section>
+{{end}}
