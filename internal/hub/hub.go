@@ -442,8 +442,8 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 
 	h.handleSnapshotMessage(msg)
 
-	if h.maybeCache(msg) {
-		h.log.Printf("cached %s %v", msg.Address, msg.Args)
+	if h.maybeCache(msg) && h.debug {
+		h.debugf("cached %s %v", msg.Address, msg.Args)
 	}
 
 	if h.status == StatusStarting || h.status == StatusReloading {

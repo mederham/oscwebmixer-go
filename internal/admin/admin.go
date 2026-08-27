@@ -229,7 +229,7 @@ func (h *Handler) applyState(state config.State) {
 	if err != nil {
 		h.log.Printf("admin apply: reload global config: %v", err)
 	} else {
-		devices = ResolveExternalDevices(global.ExternalDevices, h.log)
+		devices = ResolveExternalDevices(global.ExternalDevices, h.log, global.Debug)
 		autoHideChannel = global.AutoHideChannelPatterns
 		autoHideGroup = global.AutoHideGroupPatterns
 		autoHideAux = global.AutoHideAuxPatterns
@@ -255,8 +255,13 @@ func (h *Handler) applyState(state config.State) {
 // ResolveExternalDevices converts persisted config entries (IP as a
 // string) into hub's runtime representation (a resolved *net.UDPAddr) —
 // exported so main.go can reuse it for the initial hub.Options at startup,
-// not just from applyState.
-func ResolveExternalDevices(devices []config.ExternalDevice, logger *log.Logger) []hub.ExternalDevice {
+// not just from applyState. debug gates the per-device "relaying to" line:
+// applyState calls this on every admin save (Sources, Auxes, Settings,
+// preset load — not just external-device edits), so logging it
+// unconditionally would reprint the whole device list on saves that have
+// nothing to do with external devices. The invalid-IP warning below is a
+// real problem, not routine confirmation, so it always logs regardless.
+func ResolveExternalDevices(devices []config.ExternalDevice, logger *log.Logger, debug bool) []hub.ExternalDevice {
 	out := make([]hub.ExternalDevice, 0, len(devices))
 	for _, d := range devices {
 		ip := net.ParseIP(d.IP)
@@ -268,8 +273,10 @@ func ResolveExternalDevices(devices []config.ExternalDevice, logger *log.Logger)
 			Name: d.Name, Addr: &net.UDPAddr{IP: ip, Port: d.Port},
 			Broadcast: d.Broadcast, Loopback: d.Loopback,
 		})
-		logger.Printf("external device %q: relaying to %s:%d (broadcast=%v loopback=%v)",
-			d.Name, ip, d.Port, d.Broadcast, d.Loopback)
+		if debug {
+			logger.Printf("external device %q: relaying to %s:%d (broadcast=%v loopback=%v)",
+				d.Name, ip, d.Port, d.Broadcast, d.Loopback)
+		}
 	}
 	return out
 }

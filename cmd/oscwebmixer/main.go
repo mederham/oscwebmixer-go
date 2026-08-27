@@ -105,7 +105,7 @@ func main() {
 		HealthCheckInterval:     3 * time.Second,
 		InitialLayout:           state.MixerLayout,
 		InitialAuxes:            state.Auxes,
-		ExternalDevices:         admin.ResolveExternalDevices(global.ExternalDevices, logger),
+		ExternalDevices:         admin.ResolveExternalDevices(global.ExternalDevices, logger, global.Debug),
 		AutoHideChannelPatterns: global.AutoHideChannelPatterns,
 		AutoHideGroupPatterns:   global.AutoHideGroupPatterns,
 		AutoHideAuxPatterns:     global.AutoHideAuxPatterns,
@@ -151,14 +151,6 @@ func main() {
 	go func() {
 		<-ctx.Done()
 		_ = httpServer.Close()
-	}()
-
-	go func() {
-		select {
-		case snap := <-h.Ready():
-			logger.Printf("READY: %d channels, %d auxes, %d groups", snap.Channels, snap.Auxes, snap.Groups)
-		case <-ctx.Done():
-		}
 	}()
 
 	deskErr := make(chan error, 1)
