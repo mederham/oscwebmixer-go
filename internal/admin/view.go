@@ -61,13 +61,17 @@ type AuxesSectionData struct {
 	OOB   bool
 }
 
-// SourceRow is one card.
+// SourceRow is one card. No Badge field — "Ch 01"/"Grp 01" is derived from
+// Type+Number by the badge template func at render time (see admin.go),
+// not stored here where it could drift out of sync with them. Stereo
+// drives the card's double-line border (see admin.css) — the same visual
+// system as the type-color border, not a separate text indicator.
 type SourceRow struct {
 	Type    string
 	Number  int
-	Badge   string // "Ch 01" / "Grp 01"
 	Label   string
 	Enabled bool
+	Stereo  bool
 	Icon    string
 }
 
@@ -77,6 +81,9 @@ type SourceRow struct {
 // item's current field values are read fresh from the DOM on submit).
 func (r SourceRow) Key() string { return fmt.Sprintf("%s:%d", r.Type, r.Number) }
 
+// AuxRow is one card. Stereo mirrors SourceRow's treatment (double-line
+// border) for a consistent look across tabs. No Badge field — "Aux N" is
+// just Channel, rendered directly in the template (auxes.html.tmpl).
 type AuxRow struct {
 	Channel int
 	Label   string
@@ -112,8 +119,8 @@ func toSourcesSectionData(layout []oscmsg.LayoutItem, oob bool) SourcesSectionDa
 			continue
 		}
 		items[i] = SourceListItem{Source: SourceRow{
-			Type: it.Type, Number: it.Number, Badge: badge(it.Type, it.Number),
-			Label: it.Label, Enabled: it.Enabled, Icon: it.Icon,
+			Type: it.Type, Number: it.Number,
+			Label: it.Label, Enabled: it.Enabled, Stereo: it.Stereo, Icon: it.Icon,
 		}}
 	}
 	return SourcesSectionData{Items: items, OOB: oob}

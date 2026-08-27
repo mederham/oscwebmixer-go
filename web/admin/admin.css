@@ -7,16 +7,29 @@ body {
 	background: #111;
 	color: #eee;
 }
+@media (max-width: 30rem) {
+	body { padding: 0.75rem 0.75rem 2rem; }
+}
 
-h1 { font-size: 1.3rem; }
+h1 { font-size: 1.3rem; margin: 0; }
 h2 { font-size: 1.05rem; margin-top: 1.5rem; border-bottom: 1px solid #333; padding-bottom: 0.25rem; }
 h3 { font-size: 0.95rem; opacity: 0.8; margin: 1rem 0 0.4rem; }
+
+.topbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding-top: 0.25rem;
+}
 
 .tabs {
 	display: flex;
 	gap: 0.25rem;
 	border-bottom: 1px solid #333;
 	margin-top: 0.5rem;
+	overflow-x: auto; /* 5 tabs on a phone: scroll rather than wrap/squeeze */
 }
 .tabs a {
 	color: #aaa;
@@ -107,22 +120,26 @@ button.danger:hover { background: #7a3a3a; }
 .drag-handle:hover { opacity: 0.9; }
 
 /* #sources-form wraps #sources-list (a vertical stack) + the Save button —
-   opts out of the generic "section > form" flex-wrap rule below, which is
-   meant for the simpler label-per-field forms (Network, add-device). */
+   forms are block-level by default, this just says so explicitly since
+   the old blanket "section > form" flex-wrap rule is gone (replaced by
+   .field-grid/.cards/.device-card, each scoped to what actually needs it). */
 #sources-form { display: block; }
 
-#sources-list {
+/* Shared vertical-list container — #sources-list (the Sortable drag
+   target), auxes' and external-devices' card lists all use this same box
+   treatment. */
+.cards, #sources-list {
 	display: flex;
 	flex-direction: column;
-	gap: 0.3rem;
-	min-height: 2.5rem; /* an empty list still accepts a drop */
+	gap: 0.4rem;
 	padding: 0.25rem;
 	border-radius: 4px;
 	background: #161616;
 	margin-bottom: 0.5rem;
 }
+#sources-list { min-height: 2.5rem; } /* an empty list still accepts a drop */
 
-.source-card {
+.source-card, .aux-card, .device-card {
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
@@ -132,16 +149,32 @@ button.danger:hover { background: #7a3a3a; }
 	border-left: 3px solid #666;
 	border-radius: 3px;
 	font-size: 0.9rem;
+	flex-wrap: wrap; /* narrow viewports: fields wrap rather than squeeze/scroll */
 }
 .source-card.channel { border-left-color: #4a90d9; } /* DiGiCo input-channel blue */
 .source-card.group { border-left-color: #c0392b; }   /* DiGiCo group-bus red */
-.source-card .badge {
+.aux-card { border-left-color: #9b59b6; }             /* purple, distinct from channel/group */
+
+/* Whole card dims when its own eye toggle is off — a live CSS relationship
+   via :has(), not a class baked in at render time, so it updates the
+   instant the checkbox is clicked (including via Show/Hide all), before
+   any Save round trip. */
+.source-card:has(.eye:not(:checked)), .aux-card:has(.eye:not(:checked)) {
+	opacity: 0.5;
+	transition: opacity 0.15s;
+}
+
+/* Stereo: a doubled border line instead of a text label — the same visual
+   system as the type-color border (color = type, line count = channels),
+   not a second, text-based indicator next to it. */
+.source-card.stereo, .aux-card.stereo { border-left-width: 6px; border-left-style: double; }
+
+.source-card .badge, .aux-card .badge {
 	font-size: 0.75rem;
 	opacity: 0.6;
 	min-width: 3.2rem;
 }
-.source-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-card .enabled { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; white-space: nowrap; }
+.source-card .label, .aux-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-card input[type="text"] { width: 8rem; }
 
 .section-marker {
@@ -159,8 +192,37 @@ button.danger:hover { background: #7a3a3a; }
 .source-card.sortable-ghost, .section-marker.sortable-ghost { opacity: 0.3; background: #2a4a6a; }
 .source-card.sortable-chosen, .section-marker.sortable-chosen { background: #1c2a3a; }
 
+/* Enabled: styled as an eye — open when on, slashed when off. Real
+   checkbox throughout (keyboard/screen-reader accessible via its title),
+   just re-skinned — same appearance:none technique as the Broadcast
+   toggle below, different metaphor since Enabled genuinely does control
+   whether this source/aux is visible on the mixer page at all (see
+   mixer.js). Flat inline-SVG icons via background-image, not an emoji
+   (inconsistent glyph across platforms/fonts) and not ::before (undefined
+   by spec on replaced elements like <input> — background-image has no
+   such ambiguity, works the same everywhere). */
+input.eye {
+	appearance: none;
+	width: 1.6rem;
+	height: 1.6rem;
+	background-color: transparent;
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 1.3rem;
+	border: none;
+	cursor: pointer;
+	flex-shrink: 0;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cline x1='2' y1='2' x2='22' y2='22'/%3E%3C/svg%3E");
+}
+input.eye:checked {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23eee' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
+
 /* Broadcast toggle switch — plain checkbox visually, standard CSS-only
-   thumb-and-track technique, no JS/library needed. */
+   thumb-and-track technique, no JS/library needed. Kept distinct from the
+   eye icon above: Broadcast gates desk-relay traffic, a different concept
+   from Enabled's mixer-page visibility, even though both are effectively
+   an on/off for the row. */
 input.toggle {
 	appearance: none;
 	width: 2.2rem;
@@ -170,6 +232,7 @@ input.toggle {
 	position: relative;
 	cursor: pointer;
 	vertical-align: middle;
+	flex-shrink: 0;
 }
 input.toggle::before {
 	content: "";
@@ -185,6 +248,14 @@ input.toggle::before {
 input.toggle:checked { background: #2a6a3a; }
 input.toggle:checked::before { left: 1.15rem; }
 
+/* External devices: each card is itself the auto-save form (hx-post on
+   the .device-card div/form — see external-devices.html.tmpl), fields
+   stacked rather than a fixed-width row so it holds up on a phone screen. */
+.device-card .device-fields { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 8rem; }
+.device-card .device-address { display: flex; gap: 0.4rem; }
+.device-card .loopback { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; }
+.device-card.add-device { border-left-color: #3a6a9a; }
+
 .status-dot {
 	display: inline-block;
 	width: 0.7rem;
@@ -197,7 +268,10 @@ input.toggle:checked::before { left: 1.15rem; }
 .status-dot.red { background: #e74c3c; }
 .status-label { font-weight: 600; }
 .status-lastseen { opacity: 0.6; font-size: 0.85rem; margin-left: 0.5rem; }
-#desk-status { margin: 0.5rem 0 1rem; }
+#desk-status { display: flex; align-items: center; white-space: nowrap; }
+@media (max-width: 30rem) {
+	.status-lastseen { display: none; } /* dot + label is enough in the cramped top bar on a phone */
+}
 
 .inline-form {
 	display: inline-flex;
@@ -206,16 +280,20 @@ input.toggle:checked::before { left: 1.15rem; }
 	margin-top: 0.25rem;
 }
 
-section > form:not(.inline-form) {
-	display: flex;
-	flex-wrap: wrap;
+/* Network's settings form — a responsive grid instead of the ragged
+   flex-wrap this used to be: fields snap into however many columns fit
+   (2 on a typical desktop admin window, 1 on a phone), rather than
+   wrapping mid-row wherever the viewport happens to cut them off. */
+.field-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
 	gap: 0.75rem;
 	align-items: end;
 }
-
-section > form label {
+.field-grid label {
 	display: flex;
 	flex-direction: column;
 	gap: 0.2rem;
 	font-size: 0.85rem;
 }
+.field-grid button { grid-column: 1 / -1; justify-self: start; }

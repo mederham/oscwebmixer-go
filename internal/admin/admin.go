@@ -68,6 +68,7 @@ var templateFuncs = template.FuncMap{
 	"dotLabel":     dotLabel,
 	"sinceRounded": func(t time.Time) string { return time.Since(t).Round(time.Second).String() },
 	"iconLabel":    iconLabel,
+	"badge":        badge, // "Ch 01" / "Grp 01" — derived from Type+Number, not stored (see SourceRow)
 }
 
 // iconLabel turns an icon filename ("acoustic-guitar.svg") into a

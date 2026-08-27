@@ -254,9 +254,19 @@ func TestSourcesSaveRoundTrip(t *testing.T) {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+	rec := postSourcesSave(t, mux, []oscmsg.LayoutItem{
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "https://example.com/icon.svg"},
 	})
+
+	// The redesigned source-card markup (badge derived via the template
+	// func, not a stored field — see SourceRow) renders correctly with a
+	// real, populated card.
+	respBody := rec.Body.String()
+	for _, want := range []string{`class="source-card channel`, `class="enabled-field eye"`, "Ch 01"} {
+		if !strings.Contains(respBody, want) {
+			t.Errorf("source card response missing %q: %s", want, respBody)
+		}
+	}
 
 	cfg, err := h.queryConfig(context.Background())
 	if err != nil {
@@ -280,7 +290,18 @@ func TestAuxesSaveRoundTrip(t *testing.T) {
 	h.Register(mux)
 
 	body := "colour[1]=%23ff0000&icon[1]=mic.svg" // enabled[1] omitted -> disabled
-	postForm(t, mux, "/admin/auxes", body)
+	rec := postForm(t, mux, "/admin/auxes", body)
+
+	// The redesigned aux-card markup renders correctly with a real,
+	// populated row — not just an empty list — since ExecuteTemplate
+	// writes to the response as it goes and a mid-render error wouldn't
+	// change the HTTP status this test already checks in postForm.
+	respBody := rec.Body.String()
+	for _, want := range []string{`class="aux-card`, `class="eye"`, "Aux 1"} {
+		if !strings.Contains(respBody, want) {
+			t.Errorf("aux card response missing %q: %s", want, respBody)
+		}
+	}
 
 	cfg, err := h.queryConfig(context.Background())
 	if err != nil {

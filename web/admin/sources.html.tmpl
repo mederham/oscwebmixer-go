@@ -30,11 +30,11 @@
 {{end}}
 
 {{define "source-card"}}
-<div class="source-card {{.Type}}" data-kind="source" data-type="{{.Type}}" data-number="{{.Number}}">
+<div class="source-card {{.Type}}{{if .Stereo}} stereo{{end}}" data-kind="source" data-type="{{.Type}}" data-number="{{.Number}}">
 	<span class="drag-handle" title="Drag to reorder">&#8942;&#8942;</span>
-	<span class="badge">{{.Badge}}</span>
+	<span class="badge">{{badge .Type .Number}}</span>
 	<span class="label">{{.Label}}</span>
-	<label class="enabled"><input type="checkbox" class="enabled-field" {{if .Enabled}}checked{{end}} /> Enabled</label>
+	<input type="checkbox" class="enabled-field eye" title="Enabled" {{if .Enabled}}checked{{end}} />
 </div>
 {{end}}
 

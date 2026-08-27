@@ -2,27 +2,32 @@
 <section id="section-external-devices">
 	<h2>External devices</h2>
 	<p class="hint">Broadcast doubles as this device's enable/disable — off means it never receives relayed traffic. Edits save as soon as you change a field.</p>
-	<table>
-		<thead><tr><th>On</th><th>Name</th><th>IP</th><th>Port</th><th>Loopback</th><th></th></tr></thead>
-		<tbody>
+	<div class="cards">
 		{{range .ExternalDevices}}
-			<tr hx-post="/admin/external-devices/{{.ID}}" hx-trigger="change" hx-include="closest tr" hx-target="#section-external-devices" hx-swap="outerHTML">
-				<td><input type="checkbox" class="toggle" name="broadcast" {{if .Broadcast}}checked{{end}} /></td>
-				<td><input type="text" name="name" value="{{.Name}}" /></td>
-				<td><input type="text" name="ip" value="{{.IP}}" /></td>
-				<td><input type="number" name="port" value="{{.Port}}" /></td>
-				<td><input type="checkbox" name="loopback" {{if .Loopback}}checked{{end}} /></td>
-				<td><button type="button" hx-post="/admin/external-devices/{{.ID}}/delete" hx-target="#section-external-devices" hx-swap="outerHTML">Remove</button></td>
-			</tr>
+		<div class="device-card" hx-post="/admin/external-devices/{{.ID}}" hx-trigger="change" hx-include="closest .device-card" hx-target="#section-external-devices" hx-swap="outerHTML">
+			<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" {{if .Broadcast}}checked{{end}} />
+			<div class="device-fields">
+				<input type="text" name="name" value="{{.Name}}" placeholder="Name" />
+				<div class="device-address">
+					<input type="text" name="ip" value="{{.IP}}" placeholder="IP" />
+					<input type="number" name="port" value="{{.Port}}" placeholder="Port" />
+				</div>
+			</div>
+			<label class="loopback"><input type="checkbox" name="loopback" {{if .Loopback}}checked{{end}} /> Loopback</label>
+			<button type="button" hx-post="/admin/external-devices/{{.ID}}/delete" hx-target="#section-external-devices" hx-swap="outerHTML">Remove</button>
+		</div>
 		{{end}}
-		</tbody>
-	</table>
-	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="inline-form">
-		<input type="text" name="name" placeholder="Name" required />
-		<input type="text" name="ip" placeholder="IP" required />
-		<input type="number" name="port" placeholder="Port" required />
-		<label>Broadcast <input type="checkbox" name="broadcast" checked /></label>
-		<label>Loopback <input type="checkbox" name="loopback" /></label>
+	</div>
+	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="device-card add-device">
+		<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" checked />
+		<div class="device-fields">
+			<input type="text" name="name" placeholder="Name" required />
+			<div class="device-address">
+				<input type="text" name="ip" placeholder="IP" required />
+				<input type="number" name="port" placeholder="Port" required />
+			</div>
+		</div>
+		<label class="loopback"><input type="checkbox" name="loopback" /> Loopback</label>
 		<button type="submit">Add device</button>
 	</form>
 </section>

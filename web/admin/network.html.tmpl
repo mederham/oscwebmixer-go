@@ -1,11 +1,8 @@
 {{define "network-section"}}
 <section id="section-network">
 	<h2>Network</h2>
-	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s" hx-swap="innerHTML">
-		{{template "status-dot" .DeskStatus}}
-	</div>
 	<p class="hint">Changes here are saved but require a manual restart to take effect.</p>
-	<form hx-post="/admin/network" hx-target="#section-network" hx-swap="outerHTML">
+	<form class="field-grid" hx-post="/admin/network" hx-target="#section-network" hx-swap="outerHTML">
 		<label>Debug logging <input type="checkbox" name="debug" {{if .Global.Debug}}checked{{end}} /></label>
 		<label>Desk IP <input type="text" name="deskIP" value="{{.Global.Desk.IP}}" /></label>
 		<label>Desk port <input type="number" name="deskPort" value="{{.Global.Desk.Port}}" /></label>
