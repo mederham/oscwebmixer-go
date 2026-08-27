@@ -190,14 +190,6 @@ h2 {
 	margin: 0;
 	background: transparent;
 	cursor: pointer;
-	/* Without this, a touch-drag along this horizontal slider is ambiguous
-	   to the browser inside a vertically-scrolling page: it applies the
-	   initial tap-to-value jump, then hands subsequent touchmove events to
-	   page-scroll instead of continuing to track the thumb — the exact
-	   "tap jumps, drag doesn't work" symptom on mobile. This tells the
-	   browser the slider owns all touch gestures on itself; the page still
-	   scrolls normally everywhere else. */
-	touch-action: none;
 }
 /* Thumb height is a fixed rem, not 100%: percentage heights on a slider
    thumb pseudo-element aren't reliably resolved on mobile WebKit/Blink —
