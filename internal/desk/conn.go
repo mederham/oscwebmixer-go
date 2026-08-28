@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/mederham/osc"
 
@@ -34,8 +35,13 @@ type InboundMessage struct {
 	From    *net.UDPAddr
 }
 
-// Conn is the UDP transport to the desk.
+// Conn is the UDP transport to the desk. sock/raddr are mutable after
+// construction — SetRemote/Rebind let the admin panel apply a changed
+// Desk IP/port or OSC listen port live, without restarting the process —
+// so both are guarded by mu since Run/Send/SendTo read them from the hub
+// goroutine concurrently with an admin apply.
 type Conn struct {
+	mu    sync.Mutex
 	sock  *net.UDPConn
 	raddr *net.UDPAddr
 
@@ -77,23 +83,43 @@ func (c *Conn) Inbound() <-chan InboundMessage { return c.inbound }
 // exclusively in the hub, never here, so this loop is never the thing
 // standing between the kernel's receive buffer and going back for the next
 // packet. Run blocks until ctx is canceled or the socket errors.
+//
+// Reads the current socket fresh every iteration (under mu) rather than
+// once outside the loop, so a Rebind mid-flight is picked up without
+// restarting this goroutine or losing the caller's Inbound() channel
+// reference — see the error handling below for how a Rebind's deliberate
+// close is told apart from a real socket failure.
 func (c *Conn) Run(ctx context.Context) error {
 	stop := make(chan struct{})
 	defer close(stop)
 	go func() {
 		select {
 		case <-ctx.Done():
+			c.mu.Lock()
 			c.sock.Close()
+			c.mu.Unlock()
 		case <-stop:
 		}
 	}()
 
 	buf := make([]byte, 65536)
 	for {
-		n, addr, err := c.sock.ReadFromUDP(buf)
+		c.mu.Lock()
+		sock := c.sock
+		c.mu.Unlock()
+
+		n, addr, err := sock.ReadFromUDP(buf)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			c.mu.Lock()
+			reboundAway := c.sock != sock
+			c.mu.Unlock()
+			if reboundAway {
+				// This socket was deliberately replaced by Rebind, not a
+				// real failure — loop back and read from the new one.
+				continue
 			}
 			return fmt.Errorf("read udp: %w", err)
 		}
@@ -132,7 +158,10 @@ func (c *Conn) Run(ctx context.Context) error {
 
 // Send sends to the desk's configured address.
 func (c *Conn) Send(msg oscmsg.Message) error {
-	return c.SendTo(msg, c.raddr)
+	c.mu.Lock()
+	raddr := c.raddr
+	c.mu.Unlock()
+	return c.SendTo(msg, raddr)
 }
 
 // SendTo sends to an arbitrary address (used for configured external OSC
@@ -142,11 +171,55 @@ func (c *Conn) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.sock.WriteToUDP(oscMsg.Bytes(), addr)
+	c.mu.Lock()
+	sock := c.sock
+	c.mu.Unlock()
+	_, err = sock.WriteToUDP(oscMsg.Bytes(), addr)
 	return err
+}
+
+// SetRemote changes the desk's address that Send targets — no socket
+// rebind needed, since raddr is just the default destination for an
+// otherwise-unconnected UDP socket (see Listen), not a "connection" of any
+// kind. Lets the admin panel apply a changed Desk IP/port live.
+func (c *Conn) SetRemote(ip string, port int) error {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return fmt.Errorf("invalid desk ip %q", ip)
+	}
+	c.mu.Lock()
+	c.raddr = &net.UDPAddr{IP: parsed, Port: port}
+	c.mu.Unlock()
+	return nil
+}
+
+// Rebind closes the current socket and opens a new one on localPort,
+// letting Run's read loop pick up the new socket in place — see Run's doc
+// comment. Lets the admin panel apply a changed OSC listen port live,
+// unlike Desk IP/port above, this really does need a new socket since the
+// old one is bound to the previous local port.
+func (c *Conn) Rebind(localPort int) error {
+	sock, err := net.ListenUDP("udp", &net.UDPAddr{Port: localPort})
+	if err != nil {
+		return fmt.Errorf("listen udp :%d: %w", localPort, err)
+	}
+	if err := sock.SetReadBuffer(recvBufferBytes); err != nil {
+		log.Printf("desk: warning: could not raise UDP read buffer: %v", err)
+	}
+
+	c.mu.Lock()
+	old := c.sock
+	c.sock = sock
+	c.mu.Unlock()
+
+	old.Close() // unblocks Run's ReadFromUDP on the old socket
+	return nil
 }
 
 // Close closes the underlying socket, which also unblocks Run.
 func (c *Conn) Close() error {
-	return c.sock.Close()
+	c.mu.Lock()
+	sock := c.sock
+	c.mu.Unlock()
+	return sock.Close()
 }

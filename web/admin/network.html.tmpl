@@ -1,13 +1,11 @@
 {{define "network-section"}}
 <section id="section-network">
 	<h2>Network</h2>
-	<p class="hint">Changes here are saved but require a manual restart to take effect.</p>
+	<p class="hint">Applies live — no restart, no client disconnect. The HTTP server port isn't set here; see OSCWEBMIXER_HTTP_PORT.</p>
 	<form class="field-grid" hx-post="/admin/network" hx-target="#section-network" hx-swap="outerHTML">
-		<label>Debug logging <input type="checkbox" name="debug" {{if .Global.Debug}}checked{{end}} /></label>
 		<label>Desk IP <input type="text" name="deskIP" value="{{.Global.Desk.IP}}" /></label>
 		<label>Desk port <input type="number" name="deskPort" value="{{.Global.Desk.Port}}" /></label>
 		<label>OSC listen port <input type="number" name="oscPort" value="{{.Global.OSC.Port}}" /></label>
-		<label>HTTP server port <input type="number" name="serverPort" value="{{.Global.Server.Port}}" /></label>
 		<button type="submit">Save</button>
 	</form>
 </section>

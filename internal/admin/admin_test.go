@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,8 +26,20 @@ import (
 // startup sequence (1 channel, 1 aux, 0 groups) for hub to leave Starting.
 // These tests exercise the admin HTTP layer's persistence/apply flow, not
 // hub's startup sequencer — see internal/hub's own tests for that.
+// remoteCalls/rebindCalls record every SetRemote/Rebind call, guarded by
+// mu since they're written from hub's own goroutine (via handleAdminEvent)
+// concurrently with a test goroutine's assertions.
 type fakeDesk struct {
 	inbound chan desk.InboundMessage
+
+	mu          sync.Mutex
+	remoteCalls []remoteCall
+	rebindCalls []int
+}
+
+type remoteCall struct {
+	ip   string
+	port int
 }
 
 func (d *fakeDesk) reply(address string, args ...any) {
@@ -56,11 +69,47 @@ func (d *fakeDesk) Send(msg oscmsg.Message) error {
 
 func (d *fakeDesk) SendTo(oscmsg.Message, *net.UDPAddr) error { return nil }
 
+func (d *fakeDesk) SetRemote(ip string, port int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.remoteCalls = append(d.remoteCalls, remoteCall{ip: ip, port: port})
+	return nil
+}
+
+func (d *fakeDesk) Rebind(port int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.rebindCalls = append(d.rebindCalls, port)
+	return nil
+}
+
+func (d *fakeDesk) remoteCallsSnapshot() []remoteCall {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]remoteCall(nil), d.remoteCalls...)
+}
+
+func (d *fakeDesk) rebindCallsSnapshot() []int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]int(nil), d.rebindCalls...)
+}
+
 // newTestHandler builds a Handler backed by a real (but desk-less) hub and
 // a config.Manager rooted at a temp dir — the same request/response-over-
 // channel path production code uses, just with a scripted desk standing in
 // for hardware.
 func newTestHandler(t *testing.T) *Handler {
+	t.Helper()
+	handler, _ := newTestHandlerWithDesk(t)
+	return handler
+}
+
+// newTestHandlerWithDesk is newTestHandler plus the *fakeDesk backing it,
+// for tests that need to assert on SetRemote/Rebind calls (Network tab
+// live-apply) — most tests only need the handler, hence the thin
+// newTestHandler wrapper above rather than changing every existing caller.
+func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	t.Helper()
 	fd := &fakeDesk{inbound: make(chan desk.InboundMessage, 64)}
 	h := hub.New(fd, nil, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond})
@@ -88,7 +137,7 @@ func newTestHandler(t *testing.T) *Handler {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return handler
+	return handler, fd
 }
 
 func postForm(t *testing.T, mux *http.ServeMux, path, body string) *httptest.ResponseRecorder {
@@ -417,6 +466,93 @@ func TestSettingsSaveAppliesLive(t *testing.T) {
 	// wired the channel field into the aux check or vice versa.
 	if len(cfg.Auxes) != 1 || !cfg.Auxes[0].Enabled {
 		t.Fatalf("auxes after settings save = %+v, want aux 1 (Mon 1) still enabled", cfg.Auxes)
+	}
+}
+
+// TestSettingsSaveAppliesDebug proves Debug logging — moved to the
+// Settings tab (see handleSettingsUpdate) — round-trips to disk and
+// reaches hub live via the same AdminApply path as the auto-hide
+// patterns, not a restart.
+func TestSettingsSaveAppliesDebug(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := postForm(t, mux, "/admin/settings", "debug=on")
+	if !strings.Contains(rec.Body.String(), `name="debug" checked`) {
+		t.Fatalf("settings response = %s, want the debug checkbox to come back checked", rec.Body.String())
+	}
+
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	if !global.Debug {
+		t.Fatal("persisted Debug = false, want true")
+	}
+
+	// Unchecking (an absent "debug" field, same as an unchecked checkbox
+	// submitting nothing) must turn it back off, not leave the old value.
+	rec = postForm(t, mux, "/admin/settings", "")
+	if strings.Contains(rec.Body.String(), `name="debug" checked`) {
+		t.Fatalf("settings response = %s, want the debug checkbox unchecked after omitting the field", rec.Body.String())
+	}
+	global, err = h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	if global.Debug {
+		t.Fatal("persisted Debug = true after unchecking, want false")
+	}
+}
+
+// TestNetworkUpdateAppliesLiveOnlyWhenChanged proves POST /admin/network
+// reaches h.desk via SetRemote/Rebind end-to-end through the real HTTP
+// handler (internal/hub's own tests already cover applyNetworkChange's
+// diffing in isolation — this proves the admin layer actually wires it
+// up), and that re-saving identical values doesn't re-trigger either call.
+func TestNetworkUpdateAppliesLiveOnlyWhenChanged(t *testing.T) {
+	h, fd := newTestHandlerWithDesk(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/network", "deskIP=10.0.0.5&deskPort=8000&oscPort=9000")
+
+	if calls := fd.remoteCallsSnapshot(); len(calls) != 1 || calls[0] != (remoteCall{ip: "10.0.0.5", port: 8000}) {
+		t.Fatalf("SetRemote calls = %+v, want exactly one call with the new desk address", calls)
+	}
+	if calls := fd.rebindCallsSnapshot(); len(calls) != 1 || calls[0] != 9000 {
+		t.Fatalf("Rebind calls = %v, want exactly one call with the new OSC port", calls)
+	}
+
+	// Same values again — nothing changed from hub's point of view.
+	postForm(t, mux, "/admin/network", "deskIP=10.0.0.5&deskPort=8000&oscPort=9000")
+
+	if calls := fd.remoteCallsSnapshot(); len(calls) != 1 {
+		t.Fatalf("SetRemote calls = %+v after a no-op re-save, want still exactly one", calls)
+	}
+	if calls := fd.rebindCallsSnapshot(); len(calls) != 1 {
+		t.Fatalf("Rebind calls = %v after a no-op re-save, want still exactly one", calls)
+	}
+}
+
+// TestNetworkFormHasNoServerPortField is a regression guard: the HTTP
+// server port was deliberately removed from the admin panel (rebinding
+// the very listener serving this request isn't supported — see
+// OSCWEBMIXER_HTTP_PORT in main.go instead), and must stay removed.
+func TestNetworkFormHasNoServerPortField(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /admin: status = %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "serverPort") {
+		t.Fatalf("index page still contains a serverPort field: %s", rec.Body.String())
 	}
 }
 

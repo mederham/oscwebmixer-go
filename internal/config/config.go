@@ -44,9 +44,8 @@ func (m *Manager) LoadGlobalOrDefault() (Global, error) {
 	data, err := os.ReadFile(m.globalPath())
 	if errors.Is(err, os.ErrNotExist) {
 		return Global{
-			Server: ServerConfig{Port: 80},
-			OSC:    OSCConfig{Port: 8000},
-			Desk:   DeskConfig{Port: 9000},
+			OSC:  OSCConfig{Port: 8000},
+			Desk: DeskConfig{Port: 9000},
 		}, nil
 	}
 	if err != nil {

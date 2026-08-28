@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -29,6 +30,11 @@ import (
 	"github.com/mederham/oscwebmixer-go/web"
 )
 
+// defaultHTTPPort is used when OSCWEBMIXER_HTTP_PORT isn't set — matches
+// the port config.Global's old, now-removed Server field used to default
+// to for a fresh install.
+const defaultHTTPPort = 80
+
 func main() {
 	// Every network flag below only overrides config/global.json when
 	// explicitly passed on the command line (checked via flag.Visit) —
@@ -38,7 +44,6 @@ func main() {
 	deskIPFlag := flag.String("desk-ip", "", "override desk IP")
 	deskPortFlag := flag.Int("desk-port", 0, "override desk port")
 	listenPortFlag := flag.Int("listen-port", 0, "override local OSC listen port")
-	httpPortFlag := flag.Int("http-port", 0, "override HTTP server port")
 	configDir := flag.String("config-dir", "config", "directory for global.json/state.json/presets.json")
 	runFor := flag.Duration("run-for", 0, "exit automatically after this long (0 = run until interrupted)")
 	flag.Parse()
@@ -69,8 +74,19 @@ func main() {
 	if provided["listen-port"] {
 		global.OSC.Port = *listenPortFlag
 	}
-	if provided["http-port"] {
-		global.Server.Port = *httpPortFlag
+	// The HTTP server port isn't part of config.Global at all (see its doc
+	// comment) — admin can't edit it (rebinding the listener serving the
+	// very request that changed it isn't something to support), so
+	// there's nothing to persist and nothing that can go stale on disk:
+	// env var or this hardcoded default is the only source of truth,
+	// resolved fresh on every start.
+	httpPort := defaultHTTPPort
+	if v := os.Getenv("OSCWEBMIXER_HTTP_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			logger.Fatalf("OSCWEBMIXER_HTTP_PORT=%q: %v", v, err)
+		}
+		httpPort = port
 	}
 	if global.Desk.IP == "" {
 		logger.Fatalf("no desk IP configured — set desk.ip in %s/global.json or pass -desk-ip", *configDir)
@@ -101,6 +117,8 @@ func main() {
 
 	h := hub.New(conn, nil, logger, hub.Options{
 		DeskIP:                  global.Desk.IP,
+		DeskPort:                global.Desk.Port,
+		OSCPort:                 global.OSC.Port,
 		StartupRetryInterval:    2 * time.Second,
 		HealthCheckInterval:     3 * time.Second,
 		InitialLayout:           state.MixerLayout,
@@ -141,9 +159,9 @@ func main() {
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServerFS(adminTemplatesFS)))
 	mux.Handle("/", http.FileServer(http.FS(mixerFS)))
 
-	httpServer := &http.Server{Addr: fmt.Sprintf(":%d", global.Server.Port), Handler: mux}
+	httpServer := &http.Server{Addr: fmt.Sprintf(":%d", httpPort), Handler: mux}
 	go func() {
-		logger.Printf("HTTP/mixer server listening on :%d (admin at /admin)", global.Server.Port)
+		logger.Printf("HTTP/mixer server listening on :%d (admin at /admin)", httpPort)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Printf("http server: %v", err)
 		}

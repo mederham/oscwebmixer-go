@@ -21,10 +21,13 @@
 // htmx out-of-band swap in the same response (see SourcesSectionData/
 // AuxesSectionData's OOB field and handlePresetLoad).
 //
-// SCOPE NOTE: per the earlier explicit decision, desk/server/OSC network
-// settings are save-to-disk-and-require-restart. Layout/aux edits and
-// presets apply live via hub.AdminEvent — no restart, no client
-// disconnect.
+// SCOPE NOTE: Desk IP/port and the OSC listen port apply live too (see
+// AdminNetworkApply — desk.Conn.SetRemote/Rebind let hub reconfigure the
+// UDP transport in place, no restart, same as everything else here). The
+// HTTP server port is the one exception: it isn't editable from this panel
+// at all, since rebinding the very listener serving the request that
+// changed it isn't something to support — see OSCWEBMIXER_HTTP_PORT in
+// main.go.
 package admin
 
 import (
@@ -226,6 +229,7 @@ func (h *Handler) applyState(state config.State) {
 	global, err := h.cfg.LoadGlobalOrDefault()
 	var devices []hub.ExternalDevice
 	var autoHideChannel, autoHideGroup, autoHideAux []string
+	var debug bool
 	if err != nil {
 		h.log.Printf("admin apply: reload global config: %v", err)
 	} else {
@@ -233,6 +237,7 @@ func (h *Handler) applyState(state config.State) {
 		autoHideChannel = global.AutoHideChannelPatterns
 		autoHideGroup = global.AutoHideGroupPatterns
 		autoHideAux = global.AutoHideAuxPatterns
+		debug = global.Debug
 	}
 
 	select {
@@ -242,6 +247,7 @@ func (h *Handler) applyState(state config.State) {
 		AutoHideChannelPatterns: autoHideChannel,
 		AutoHideGroupPatterns:   autoHideGroup,
 		AutoHideAuxPatterns:     autoHideAux,
+		Debug:                   debug,
 	}:
 	default:
 		// The saved file is already correct regardless — this only means

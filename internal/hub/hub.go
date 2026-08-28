@@ -22,10 +22,15 @@ import (
 
 // DeskSender is the subset of *desk.Conn the hub needs — kept as an
 // interface so hub can be tested without a real UDP socket. SendTo exists
-// for the external-device relay (see broadcast in client.go).
+// for the external-device relay (see broadcast in client.go). SetRemote/
+// Rebind let the admin panel apply a changed Desk IP/port or OSC listen
+// port live, without a process restart — see handleAdminEvent's
+// AdminNetworkApply case.
 type DeskSender interface {
 	Send(msg oscmsg.Message) error
 	SendTo(msg oscmsg.Message, addr *net.UDPAddr) error
+	SetRemote(ip string, port int) error
+	Rebind(localPort int) error
 }
 
 // ExternalDevice mirrors one config/global.json externalDevices entry,
@@ -136,7 +141,13 @@ type Hub struct {
 	// deskIP is the configured desk address, used to tell an actual desk
 	// reply apart from a same-socket message that only looks like one
 	// (see broadcastSource) — mirrors JS's config.desk.ip comparison.
-	deskIP string
+	// deskPort/oscPort are tracked alongside it purely so
+	// handleAdminEvent's AdminNetworkApply case can tell whether a saved
+	// Network settings change actually changed anything, before touching
+	// h.desk — neither is otherwise consulted by hub's own logic.
+	deskIP   string
+	deskPort int
+	oscPort  int
 
 	cache  map[string]oscmsg.Message
 	status Status
@@ -218,8 +229,12 @@ func (h *Hub) debugf(format string, args ...any) {
 type Options struct {
 	// DeskIP is the configured desk address — required for correctly
 	// distinguishing an actual desk reply from a same-socket message that
-	// only looks like one (see broadcastSource's doc comment).
-	DeskIP string
+	// only looks like one (see broadcastSource's doc comment). DeskPort/
+	// OSCPort seed the change-detection fields of the same name — see
+	// their doc comment on Hub.
+	DeskIP   string
+	DeskPort int
+	OSCPort  int
 
 	// StartupRetryInterval: how often the startup sequence re-sends its
 	// current pending query if no reply has arrived. Pass a real-world
@@ -277,6 +292,8 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		pipeline:                pipe,
 		log:                     logger,
 		deskIP:                  opts.DeskIP,
+		deskPort:                opts.DeskPort,
+		oscPort:                 opts.OSCPort,
 		cache:                   make(map[string]oscmsg.Message),
 		status:                  StatusStarting,
 		ready:                   make(chan Snapshot, 1),

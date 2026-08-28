@@ -11,18 +11,17 @@ func TestLoadGlobalOrDefaultWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadGlobalOrDefault: %v", err)
 	}
-	if g.Server.Port != 80 || g.OSC.Port != 8000 || g.Desk.Port != 9000 {
-		t.Fatalf("defaults = %+v, want server:80 osc:8000 desk:9000", g)
+	if g.OSC.Port != 8000 || g.Desk.Port != 9000 {
+		t.Fatalf("defaults = %+v, want osc:8000 desk:9000", g)
 	}
 }
 
 func TestSaveAndLoadGlobalRoundTrip(t *testing.T) {
 	m := New(t.TempDir())
 	want := Global{
-		Debug:  true,
-		Server: ServerConfig{Port: 8080},
-		OSC:    OSCConfig{Port: 9001},
-		Desk:   DeskConfig{IP: "10.0.0.18", Port: 9000},
+		Debug: true,
+		OSC:   OSCConfig{Port: 9001},
+		Desk:  DeskConfig{IP: "10.0.0.18", Port: 9000},
 		ExternalDevices: []ExternalDevice{
 			{Name: "TouchOSC", IP: "10.0.0.50", Port: 9002, Broadcast: true, Loopback: false},
 		},
@@ -110,17 +109,17 @@ func TestSaveGlobalIsAtomic(t *testing.T) {
 	// writing must go through a temp file + rename, never truncate the
 	// target file in place.
 	m := New(t.TempDir())
-	if err := m.SaveGlobal(Global{Server: ServerConfig{Port: 1}}); err != nil {
+	if err := m.SaveGlobal(Global{OSC: OSCConfig{Port: 1}}); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
-	if err := m.SaveGlobal(Global{Server: ServerConfig{Port: 2}}); err != nil {
+	if err := m.SaveGlobal(Global{OSC: OSCConfig{Port: 2}}); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
 	g, err := m.LoadGlobalOrDefault()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if g.Server.Port != 2 {
-		t.Fatalf("port = %d, want 2", g.Server.Port)
+	if g.OSC.Port != 2 {
+		t.Fatalf("port = %d, want 2", g.OSC.Port)
 	}
 }

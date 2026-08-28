@@ -34,6 +34,21 @@ type scriptedDesk struct {
 
 	mu       sync.Mutex
 	dropOnce map[string]bool // query address -> drop the next reply to it once, simulating lost UDP
+
+	// remoteCalls/rebindCalls record every SetRemote/Rebind call, for
+	// TestAdminNetworkApply* to assert against — both the values passed
+	// and, just as importantly, how many times each was called (proving
+	// an unchanged field doesn't trigger a redundant rebind/address
+	// change). setRemoteErr/rebindErr let a test force a failure.
+	remoteCalls  []remoteCall
+	rebindCalls  []int
+	setRemoteErr error
+	rebindErr    error
+}
+
+type remoteCall struct {
+	ip   string
+	port int
 }
 
 // simulateDroppedReply marks address so its next query is answered with
@@ -123,6 +138,32 @@ func (d *scriptedDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
 		}
 	}
 	return nil
+}
+
+func (d *scriptedDesk) SetRemote(ip string, port int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.remoteCalls = append(d.remoteCalls, remoteCall{ip: ip, port: port})
+	return d.setRemoteErr
+}
+
+func (d *scriptedDesk) Rebind(port int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.rebindCalls = append(d.rebindCalls, port)
+	return d.rebindErr
+}
+
+func (d *scriptedDesk) remoteCallsSnapshot() []remoteCall {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]remoteCall(nil), d.remoteCalls...)
+}
+
+func (d *scriptedDesk) rebindCallsSnapshot() []int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]int(nil), d.rebindCalls...)
 }
 
 // replyName sends a populated name reply, or a zero-arg reply when name is
@@ -1358,5 +1399,82 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 	}
 	if len(cfg.Auxes) != 1 || cfg.Auxes[0].Enabled {
 		t.Errorf("aux 1 (Hall, unmentioned, no aux overrides) = %+v, want hidden by the aux auto-hide pattern", cfg.Auxes)
+	}
+}
+
+// TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged proves
+// AdminNetworkApply reaches h.desk via SetRemote/Rebind, and — critically
+// — only for the field that actually changed: Desk IP/port and OSC
+// listen port live on the same Network form, so re-saving it with only an
+// unrelated field different must not needlessly rebind the live OSC
+// socket or reset the desk address, both of which briefly disrupt real
+// traffic (see applyNetworkChange's doc comment).
+func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		channelCount: 1, auxCount: 1, groupCount: 0,
+		channelNames: map[int]string{1: "Kick"},
+		auxNames:     map[int]string{1: "Mon 1"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+		StartupRetryInterval: 50 * time.Millisecond,
+		DeskIP:               "10.0.0.10",
+		DeskPort:             8000,
+		OSCPort:              9000,
+	})
+	adminEvents := make(chan AdminEvent, 4)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, nil, adminEvents)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	waitForApply := func() {
+		reply := make(chan oscmsg.ConfigPayload, 1)
+		adminEvents <- AdminEvent{Kind: AdminQuery, Reply: reply}
+		select {
+		case <-reply:
+		case <-time.After(time.Second):
+			t.Fatal("did not receive AdminQuery reply")
+		}
+	}
+
+	// Desk IP/port change, OSC port unchanged — expect SetRemote only.
+	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8001, OSCPort: 9000}
+	waitForApply()
+
+	if calls := fakeDesk.remoteCallsSnapshot(); len(calls) != 1 || calls[0] != (remoteCall{ip: "10.0.0.20", port: 8001}) {
+		t.Fatalf("SetRemote calls = %+v, want exactly one call with the new desk address", calls)
+	}
+	if calls := fakeDesk.rebindCallsSnapshot(); len(calls) != 0 {
+		t.Fatalf("Rebind calls = %v, want none — OSC port didn't change", calls)
+	}
+
+	// Same event again (nothing changed from hub's point of view) — expect
+	// no further calls at all.
+	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8001, OSCPort: 9000}
+	waitForApply()
+
+	if calls := fakeDesk.remoteCallsSnapshot(); len(calls) != 1 {
+		t.Fatalf("SetRemote calls = %+v after a no-op re-save, want still exactly one — an unchanged field must not re-trigger it", calls)
+	}
+	if calls := fakeDesk.rebindCallsSnapshot(); len(calls) != 0 {
+		t.Fatalf("Rebind calls = %v after a no-op re-save, want none", calls)
+	}
+
+	// OSC port change only — expect Rebind only, no further SetRemote.
+	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8001, OSCPort: 9001}
+	waitForApply()
+
+	if calls := fakeDesk.remoteCallsSnapshot(); len(calls) != 1 {
+		t.Fatalf("SetRemote calls = %+v after an OSC-port-only change, want still exactly one", calls)
+	}
+	if calls := fakeDesk.rebindCallsSnapshot(); len(calls) != 1 || calls[0] != 9001 {
+		t.Fatalf("Rebind calls = %v, want exactly one call with the new OSC port", calls)
 	}
 }

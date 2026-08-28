@@ -6,10 +6,15 @@
 // and presets.json (named saved states).
 package config
 
-// Global mirrors config/global.json.
+// Global mirrors config/global.json. The HTTP server port deliberately
+// isn't a field here — see OSCWEBMIXER_HTTP_PORT in main.go: it's not
+// admin-editable (rebinding the listener serving the very request that
+// changed it isn't something to support) and round-tripping it through
+// this file anyway would just mean a stale value silently wins on every
+// startup where the env var isn't set — env var-or-hardcoded-default is
+// the only source of truth, deliberately never persisted.
 type Global struct {
 	Debug           bool             `json:"debug"`
-	Server          ServerConfig     `json:"server"`
 	OSC             OSCConfig        `json:"osc"`
 	Desk            DeskConfig       `json:"desk"`
 	ExternalDevices []ExternalDevice `json:"externalDevices"`
@@ -36,10 +41,6 @@ type Global struct {
 	AutoHideChannelPatterns []string `json:"autoHideChannelPatterns"`
 	AutoHideGroupPatterns   []string `json:"autoHideGroupPatterns"`
 	AutoHideAuxPatterns     []string `json:"autoHideAuxPatterns"`
-}
-
-type ServerConfig struct {
-	Port int `json:"port"`
 }
 
 type OSCConfig struct {

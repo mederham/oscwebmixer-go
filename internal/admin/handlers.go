@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
+	"github.com/mederham/oscwebmixer-go/internal/hub"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
@@ -241,8 +242,15 @@ func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNetworkUpdate saves desk/server/OSC settings — deliberately
-// save-only, no live reconfiguration (see package doc's scope note).
+// handleNetworkUpdate saves Desk IP/Desk port/OSC listen port and applies
+// all three live via AdminNetworkApply — no restart needed (see
+// hub.applyNetworkChange, which only actually touches the desk connection
+// for whichever field really changed). The HTTP server port isn't on this
+// form at all: rebinding the very listener serving this request, from
+// inside a handler of that same listener, isn't something to support —
+// set it via the OSCWEBMIXER_HTTP_PORT environment variable instead (see
+// main.go), which does need a restart, same as before. Debug logging
+// lives on the Settings tab (see handleSettingsUpdate), not here.
 func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -254,15 +262,24 @@ func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	global.Debug = r.Form.Has("debug")
 	global.Desk.IP = strings.TrimSpace(r.FormValue("deskIP"))
 	global.Desk.Port = formInt(r.FormValue("deskPort"), global.Desk.Port)
 	global.OSC.Port = formInt(r.FormValue("oscPort"), global.OSC.Port)
-	global.Server.Port = formInt(r.FormValue("serverPort"), global.Server.Port)
 
 	if err := h.cfg.SaveGlobal(global); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	select {
+	case h.adminEvents <- hub.AdminEvent{
+		Kind:   hub.AdminNetworkApply,
+		DeskIP: global.Desk.IP, DeskPort: global.Desk.Port, OSCPort: global.OSC.Port,
+	}:
+	default:
+		// The saved file is already correct regardless — see applyState's
+		// identical fallback for why this only means "not live yet."
+		h.log.Printf("admin apply: event channel full, network settings saved to disk but not yet applied live")
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
@@ -297,10 +314,11 @@ func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSettingsUpdate saves the auto-hide name patterns (see
-// config.Global.AutoHidePatterns) and applies them live — unlike the
-// Network tab's desk/server/OSC fields, this only affects in-hub logic, no
-// socket rebinding, so it follows the same live-apply path as external
-// devices rather than requiring a restart.
+// config.Global's AutoHide*Patterns fields) and Debug logging, and applies
+// both live via the same AdminApply path as external devices — no socket
+// involved here, unlike the Network tab's Desk IP/port/OSC listen port
+// (see handleNetworkUpdate/AdminNetworkApply), so this just rides the
+// existing state-apply flow rather than needing its own event kind.
 func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -314,6 +332,7 @@ func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	global.AutoHideChannelPatterns = parsePatterns(r.FormValue("autoHideChannelPatterns"))
 	global.AutoHideGroupPatterns = parsePatterns(r.FormValue("autoHideGroupPatterns"))
 	global.AutoHideAuxPatterns = parsePatterns(r.FormValue("autoHideAuxPatterns"))
+	global.Debug = r.Form.Has("debug")
 	if err := h.cfg.SaveGlobal(global); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
