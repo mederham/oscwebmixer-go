@@ -7,14 +7,15 @@
 // Sources is one flat, drag-and-drop-reorderable list of cards mixing
 // sources and admin-created section markers (see oscmsg.LayoutItem's doc
 // comment: display order and a source's section membership both come from
-// list position, not a stored field). The Sources tab's Save button and
-// drag-drop's auto-persist-on-drop both submit the same htmx form
-// (#sources-form, POST /admin/sources/save) — the form's one payload field
-// is a JSON-encoded array built fresh from the live DOM by admin.js's
-// htmx:configRequest listener (see admin.js), since the browser's native
-// form-field serialization has no way to preserve an ordered, mixed-kind
-// list — everything else about the request/response/swap lifecycle is
-// still plain htmx, not a hand-rolled fetch.
+// list position, not a stored field). No Save button: reordering, the
+// enabled toggle, and renaming a section all auto-submit the same htmx
+// form (#sources-form, POST /admin/sources/save — see admin.js) the
+// instant each happens. The form's one payload field is a JSON-encoded
+// array built fresh from the live DOM by admin.js's htmx:configRequest
+// listener, since the browser's native form-field serialization has no
+// way to preserve an ordered, mixed-kind list — everything else about the
+// request/response/swap lifecycle is still plain htmx, not a hand-rolled
+// fetch.
 //
 // A preset load changes both the mixer layout and auxes at once, but only
 // one can be the request's actual hx-target — the other rides along as an

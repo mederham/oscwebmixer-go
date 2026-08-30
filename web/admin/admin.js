@@ -86,12 +86,15 @@ document.body.addEventListener("change", function (e) {
 		return;
 	}
 
-	// Sources' enabled toggle applies immediately, same as dragging to
-	// reorder — leaving it behind the Save button (as auxes' still are)
-	// meant order and visibility behaved inconsistently on the same tab.
-	// Auxes has no drag-and-drop to be inconsistent with, so its fields
-	// stay batched behind Save, unchanged.
-	if (e.target.classList.contains("enabled-field")) {
+	// Sources' enabled toggle and section-rename field both apply
+	// immediately, same as dragging to reorder — leaving any of them
+	// behind a Save button (as auxes' fields still are) meant different
+	// edits on the same tab behaved inconsistently. "change" (not "blur")
+	// on a text input only fires when the value actually differs from
+	// what it was on focus, so tabbing through without editing is a
+	// no-op, not a wasted save. Auxes has no drag-and-drop to be
+	// inconsistent with, so its fields stay batched behind Save.
+	if (e.target.classList.contains("enabled-field") || e.target.classList.contains("section-name-field")) {
 		htmx.trigger(document.getElementById("sources-form"), "submit");
 	}
 });
