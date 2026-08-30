@@ -238,10 +238,12 @@ func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAuxesSave replaces per-row saving with one batch save for the
-// whole Auxes table — array position is already the channel identity
-// (configAuxesFromPayload's existing Auxes[i].Channel == i+1 convention),
-// so no hidden tracking fields are needed here at all, unlike Sources.
+// handleAuxesSave saves the whole Auxes form in one request — every field
+// (enabled/colour/icon) auto-submits it on change, no Save button (see
+// admin.js), same as Sources. Array position is already the channel
+// identity (configAuxesFromPayload's existing Auxes[i].Channel == i+1
+// convention), so no hidden tracking fields are needed here at all,
+// unlike Sources.
 func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

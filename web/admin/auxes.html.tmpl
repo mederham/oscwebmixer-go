@@ -2,7 +2,7 @@
 <section id="section-auxes"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Auxes</h2>
 	<button type="button" id="auxes-toggle-all">Show/Hide all</button>
-	<form hx-post="/admin/auxes" hx-target="#section-auxes" hx-swap="outerHTML">
+	<form id="auxes-form" hx-post="/admin/auxes" hx-target="#section-auxes" hx-swap="outerHTML">
 		<div class="cards">
 			{{range .Auxes}}
 			{{$aux := .}}
@@ -23,7 +23,6 @@
 			</div>
 			{{end}}
 		</div>
-		<button type="submit">Save</button>
 	</form>
 </section>
 {{end}}

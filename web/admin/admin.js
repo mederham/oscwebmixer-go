@@ -83,19 +83,19 @@ document.body.addEventListener("change", function (e) {
 	if (e.target.classList.contains("icon-select")) {
 		const img = e.target.parentElement.querySelector(".icon-preview");
 		if (img) img.src = e.target.value ? "/admin/icons/" + e.target.value : "";
-		return;
+		// No return: icon-select lives inside #auxes-form, and its change
+		// still needs to fall through to the auto-submit below.
 	}
 
-	// Sources' enabled toggle and section-rename field both apply
-	// immediately, same as dragging to reorder — leaving any of them
-	// behind a Save button (as auxes' fields still are) meant different
-	// edits on the same tab behaved inconsistently. "change" (not "blur")
-	// on a text input only fires when the value actually differs from
-	// what it was on focus, so tabbing through without editing is a
-	// no-op, not a wasted save. Auxes has no drag-and-drop to be
-	// inconsistent with, so its fields stay batched behind Save.
-	if (e.target.classList.contains("enabled-field") || e.target.classList.contains("section-name-field")) {
+	// Every field on the Sources and Auxes tabs applies immediately —
+	// no Save button on either. "change" (not "blur") on a text input only
+	// fires when the value actually differs from what it was on focus, so
+	// tabbing through a field without editing it is a no-op, not a wasted
+	// save.
+	if (e.target.closest("#sources-form") && (e.target.classList.contains("enabled-field") || e.target.classList.contains("section-name-field"))) {
 		htmx.trigger(document.getElementById("sources-form"), "submit");
+	} else if (e.target.closest("#auxes-form")) {
+		htmx.trigger(document.getElementById("auxes-form"), "submit");
 	}
 });
 
@@ -116,8 +116,8 @@ document.body.addEventListener("click", function (e) {
 		// now applying immediately (see the change listener above).
 		htmx.trigger(document.getElementById("sources-form"), "submit");
 	} else if (e.target.id === "auxes-toggle-all") {
-		// Auxes stays batched behind its own Save button, unchanged.
 		toggleAllEnabled("#section-auxes", "input[name^='enabled[']");
+		htmx.trigger(document.getElementById("auxes-form"), "submit");
 	}
 });
 
