@@ -12,7 +12,7 @@
 {{end}}
 
 {{define "status-dot"}}
-<span class="status-dot {{.Status | dotClass}}"></span>
+<span class="status-dot {{.Status | dotClass}}" data-status="{{.Status}}"></span>
 <span class="status-label">{{.Status | dotLabel}}</span>
 <span class="status-lastseen">{{if .LastSeen.IsZero}}last seen: never{{else}}last seen {{.LastSeen | sinceRounded}} ago{{end}}</span>
 {{end}}

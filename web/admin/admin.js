@@ -74,6 +74,25 @@ document.body.addEventListener("htmx:oobAfterSwap", function (e) {
 	}
 });
 
+// Full page reload whenever the desk status actually changes (e.g.
+// Reloading -> Healthy on a desk session change) — Sources/Auxes only ever
+// re-render from a save the admin page itself made, so a session change on
+// the desk otherwise leaves them stale until a manual reload; this just
+// does that reload automatically. lastDeskStatus starts null so the first
+// poll (fired by hx-trigger="load") only establishes the baseline instead
+// of reloading immediately.
+let lastDeskStatus = null;
+document.body.addEventListener("htmx:afterSwap", function (e) {
+	if (!e.detail.target || e.detail.target.id !== "desk-status") return;
+	const dot = e.detail.target.querySelector(".status-dot");
+	const status = dot && dot.dataset.status;
+	if (lastDeskStatus === null) {
+		lastDeskStatus = status;
+	} else if (status !== lastDeskStatus) {
+		location.reload();
+	}
+});
+
 // Aux icon picker: the <select> already lists every option server-side
 // (see auxes.html.tmpl), so this is just keeping the adjacent preview
 // image in sync with whatever's currently selected — event delegation on
