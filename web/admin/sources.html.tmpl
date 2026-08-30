@@ -1,7 +1,7 @@
 {{define "sources-section"}}
 <section id="section-sources"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Sources (channels &amp; groups)</h2>
-	<p class="hint">Drag anything to reorder — a section can sit anywhere among channels/groups; everything after it belongs to it until the next section or the end. Everything here — dragging, the enabled toggle, renaming a section — applies immediately.</p>
+	<p class="hint">Drag anything to reorder — a section can sit anywhere among channels/groups; everything after it belongs to it until the next section or the end. Hover a row's "+" to add a section right there, no dragging needed. Everything here — dragging, the enabled toggle, renaming a section — applies immediately.</p>
 
 	<button
 		type="button"
@@ -33,6 +33,7 @@
 	<span class="drag-handle" title="Drag to reorder">&#8942;&#8942;</span>
 	<span class="badge">{{badge .Type .Number}}</span>
 	<span class="label">{{.Label}}</span>
+	<button type="button" class="add-section-btn" data-before-key="source:{{.Type}}:{{.Number}}" title="Add section above">+ Section</button>
 	<input type="checkbox" class="enabled-field eye" title="Enabled" {{if .Enabled}}checked{{end}} />
 </div>
 {{end}}

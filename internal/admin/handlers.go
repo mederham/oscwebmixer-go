@@ -129,9 +129,16 @@ func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSectionAdd creates a new section marker at the end of the layout —
-// dragged into position afterward via the Sources form (handleSourcesSave),
-// same as any other item in that list.
+// handleSectionAdd creates a new section marker — at the end of the
+// layout by default (the bottom "+ Add section" form), or immediately
+// before a specific row when "beforeKey" is posted (the hover "+" button
+// on a source-card — see admin.js; section-markers don't render one, but
+// layoutItemKey/matching below stays general rather than source-only, so
+// a "section:id" key still works if ever posted some other way), so a
+// section can land exactly where it's wanted without a drag across a
+// layout that's often taller than the viewport. beforeKey matches
+// layoutItemKey's format exactly; an empty or unmatched key falls back to
+// appending at the end.
 func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -157,11 +164,24 @@ func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	layout := append(layoutFromPayload(cfg.MixerLayout), config.LayoutItem{
-		Kind: config.LayoutKindSection, SectionID: id, SectionName: name,
-	})
+	newItem := config.LayoutItem{Kind: config.LayoutKindSection, SectionID: id, SectionName: name}
 
-	fresh, err := h.saveState(ctx, layout, configAuxesFromPayload(cfg.Auxes))
+	layout := layoutFromPayload(cfg.MixerLayout)
+	insertAt := len(layout)
+	if beforeKey := r.FormValue("beforeKey"); beforeKey != "" {
+		for i, it := range layout {
+			if layoutItemKey(it) == beforeKey {
+				insertAt = i
+				break
+			}
+		}
+	}
+	inserted := make([]config.LayoutItem, 0, len(layout)+1)
+	inserted = append(inserted, layout[:insertAt]...)
+	inserted = append(inserted, newItem)
+	inserted = append(inserted, layout[insertAt:]...)
+
+	fresh, err := h.saveState(ctx, inserted, configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -170,6 +190,17 @@ func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
+}
+
+// layoutItemKey identifies one layout item the same way admin.js's
+// data-before-key attributes do (see sources.html.tmpl) — "source:type:
+// number" or "section:id" — so handleSectionAdd can find exactly which
+// row a hover "+" button was clicked on.
+func layoutItemKey(it config.LayoutItem) string {
+	if it.Kind == config.LayoutKindSection {
+		return "section:" + it.SectionID
+	}
+	return "source:" + it.Type + ":" + strconv.Itoa(it.Number)
 }
 
 // handleSectionDelete removes one section marker; nothing else needs

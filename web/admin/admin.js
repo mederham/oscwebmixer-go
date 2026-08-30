@@ -121,6 +121,23 @@ document.body.addEventListener("click", function (e) {
 	}
 });
 
+// Hover "+" on a source-card: adds a new, immediately-
+// renamable section right above that row — no drag across a layout
+// that's often taller than the viewport. htmx.ajax is htmx's own JS API
+// for a request with no real form-submit event (see collectLayout's
+// htmx:configRequest listener for the same reasoning), not a hand-rolled
+// fetch. beforeKey must match layoutItemKey's format server-side exactly
+// (see handleSectionAdd).
+document.body.addEventListener("click", function (e) {
+	const btn = e.target.closest(".add-section-btn");
+	if (!btn) return;
+	htmx.ajax("POST", "/admin/sections", {
+		target: "#section-sources",
+		swap: "outerHTML",
+		values: { name: "New section", beforeKey: btn.dataset.beforeKey || "" },
+	});
+});
+
 // Tabs: plain hide/show over server-rendered content that's already all in
 // the DOM (no fetching, no imperative element construction) — every
 // section still renders and swaps exactly as it does today, this just

@@ -189,6 +189,23 @@ button.danger:hover { background: #7a3a3a; }
 }
 .section-marker .section-name-field { flex: 1; font-weight: 600; }
 
+/* Adds a section immediately above this source-card — no drag across a
+   layout that's often taller than the viewport (see handleSectionAdd/
+   admin.js). Section-markers don't get one — no visual clutter on rows
+   that are already sections. */
+.add-section-btn {
+	font-size: 0.8rem;
+	padding: 0.2rem 0.5rem;
+	opacity: 0;
+	flex-shrink: 0;
+}
+.source-card:hover .add-section-btn,
+.source-card:focus-within .add-section-btn,
+.add-section-btn:hover,
+.add-section-btn:focus {
+	opacity: 1;
+}
+
 .source-card.sortable-ghost, .section-marker.sortable-ghost { opacity: 0.3; background: #2a4a6a; }
 .source-card.sortable-chosen, .section-marker.sortable-chosen { background: #1c2a3a; }
 
@@ -279,6 +296,11 @@ input.toggle:checked::before { left: 1.15rem; }
 	align-items: center;
 	margin-top: 0.25rem;
 }
+/* The text input's global width:100% otherwise fights the button for
+   space in this nowrap flex row, squeezing the button below its natural
+   width until its label wraps onto two lines instead of shrinking the
+   input (which is what should give way). */
+.inline-form button { flex-shrink: 0; white-space: nowrap; }
 
 /* Network's settings form — a responsive grid instead of the ragged
    flex-wrap this used to be: fields snap into however many columns fit

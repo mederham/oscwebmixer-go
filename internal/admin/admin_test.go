@@ -217,6 +217,70 @@ func TestSectionCreateAppearsInResponse(t *testing.T) {
 	}
 }
 
+// TestSectionAddInsertsAtGivenPosition proves the hover "+" button's
+// beforeKey (see admin.js/layoutItemKey) actually places the new section
+// where clicked, not just at the end — first before a source, then before
+// another section, covering both branches of layoutItemKey's key format.
+func TestSectionAddInsertsAtGivenPosition(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: true},
+	})
+	postForm(t, mux, "/admin/sections", "name=Drums&beforeKey="+url.QueryEscape("source:channel:1"))
+
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	if len(cfg.MixerLayout) != 2 ||
+		cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[0].SectionName != "Drums" ||
+		cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[1].Number != 1 {
+		t.Fatalf("mixer layout = %+v, want [section Drums, channel 1] — Drums inserted before channel 1", cfg.MixerLayout)
+	}
+
+	postForm(t, mux, "/admin/sections", "name=Vocals&beforeKey="+url.QueryEscape("section:"+cfg.MixerLayout[0].SectionID))
+
+	cfg, err = h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	if len(cfg.MixerLayout) != 3 ||
+		cfg.MixerLayout[0].SectionName != "Vocals" ||
+		cfg.MixerLayout[1].SectionName != "Drums" ||
+		cfg.MixerLayout[2].Number != 1 {
+		t.Fatalf("mixer layout = %+v, want [section Vocals, section Drums, channel 1] — Vocals inserted before Drums", cfg.MixerLayout)
+	}
+}
+
+// TestSectionAddFallsBackToAppendOnUnmatchedBeforeKey proves a beforeKey
+// naming a row that no longer exists (e.g. a stale key from a page the
+// admin hasn't refreshed) doesn't error or silently drop the new
+// section — it falls back to the same append-at-the-end behavior as
+// posting no beforeKey at all.
+func TestSectionAddFallsBackToAppendOnUnmatchedBeforeKey(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: true},
+	})
+	postForm(t, mux, "/admin/sections", "name=Drums&beforeKey=source:channel:99")
+
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	if len(cfg.MixerLayout) != 2 ||
+		cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSource ||
+		cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[1].SectionName != "Drums" {
+		t.Fatalf("mixer layout = %+v, want [channel 1, section Drums] — an unmatched beforeKey should fall back to appending", cfg.MixerLayout)
+	}
+}
+
 // TestSourcesSavePreservesOrderAndSectionPlacement is the core new-model
 // regression test: the posted layout's exact order — a section marker
 // immediately followed by a source — must come back unchanged, proving
