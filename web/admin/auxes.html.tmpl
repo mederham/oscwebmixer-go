@@ -13,7 +13,7 @@
 				<input type="color" name="colour[{{.Channel}}]" value="{{.Colour}}" />
 				<span class="icon-picker">
 					<select name="icon[{{.Channel}}]" class="icon-select">
-						<option value="">None</option>
+						<option value="">No icon</option>
 						{{range $.Icons}}
 						<option value="{{.}}" {{if eq . $aux.Icon}}selected{{end}}>{{iconLabel .}}</option>
 						{{end}}

@@ -78,13 +78,34 @@ input[type="text"], input[type="number"] {
 	width: 100%;
 }
 
+select {
+	background: #1c1c1c;
+	border: 1px solid #3a3a3a;
+	color: #eee;
+	border-radius: 3px;
+	padding: 0.25rem 0.4rem;
+}
+select option { background: #1c1c1c; color: #eee; }
+
+/* appearance:none — without it, mobile WebKit/Blink render this with
+   their own native swatch chrome instead of respecting width/height
+   evenly, which is what turns it oval instead of the rectangle border
+   below actually draws. The two pseudo-elements below are what render
+   the visible color fill on WebKit; left alone they add their own
+   padding/rounding on top, so they're reset to fill the box exactly. */
 input[type="color"] {
+	appearance: none;
+	-webkit-appearance: none;
 	width: 3rem;
 	height: 1.6rem;
 	padding: 0;
 	border: 1px solid #3a3a3a;
+	border-radius: 3px;
 	background: none;
 }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+input[type="color"]::-moz-color-swatch { border: none; border-radius: 2px; }
 
 .icon-picker { display: flex; align-items: center; gap: 0.4rem; }
 .icon-picker .icon-select { width: auto; min-width: 8rem; }
@@ -94,6 +115,13 @@ input[type="color"] {
 	object-fit: contain;
 	filter: invert(1); /* icons are dark-on-transparent; body is dark too */
 }
+/* An empty src="" resolves to the current document URL, not "no image" —
+   Firefox in particular shows its broken-image placeholder for that
+   rather than nothing. visibility:hidden (not display:none) so the row
+   still reserves the same space either way — display:none let the
+   surrounding flex row reflow narrower, shifting the row whenever an aux
+   with no icon sat next to one that had one. */
+.icon-preview[src=""] { visibility: hidden; }
 
 button {
 	background: #2a4a6a;
