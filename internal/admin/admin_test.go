@@ -192,6 +192,26 @@ func TestIndexRenders(t *testing.T) {
 	}
 }
 
+// TestAdminResponsesAreNotCached is the regression test for a live bug: a
+// plain browser reload of /admin (not a hard reload) served a stale
+// Sources tab — a cached response from before the last edit — because
+// nothing told the browser this page can change from any other request.
+// Cache-Control: no-store on every admin route (see Register's doc
+// comment) is what makes a plain reload always hit the server fresh.
+func TestAdminResponsesAreNotCached(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("GET /admin Cache-Control = %q, want %q", got, "no-store")
+	}
+}
+
 func TestSectionCreateAppearsInResponse(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()

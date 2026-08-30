@@ -163,25 +163,41 @@ func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEve
 	return &Handler{cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl, icons: icons}, nil
 }
 
-// Register mounts the admin routes onto mux.
+// Register mounts the admin routes onto mux. Every response is wrapped
+// with noStore: this whole handler tree renders live hub/config state
+// (desk status, mixer layout, auxes...) that can change from any other
+// request or from the desk itself, so a browser-cached GET (a plain
+// reload, not a hard reload) can silently show state that's since gone
+// stale — confirmed live: a normal reload right after a Sources edit
+// rendered a stale enabled/hidden set until a hard reload bypassed the
+// cache. Nothing served here is ever safe to reuse across requests.
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /admin", h.handleIndex)
-	mux.HandleFunc("POST /admin/sources/save", h.handleSourcesSave)
-	mux.HandleFunc("POST /admin/sources/reset", h.handleSourcesReset)
-	mux.HandleFunc("POST /admin/sections", h.handleSectionAdd)
-	mux.HandleFunc("POST /admin/sections/{id}/delete", h.handleSectionDelete)
-	mux.HandleFunc("POST /admin/auxes", h.handleAuxesSave)
-	mux.HandleFunc("POST /admin/network", h.handleNetworkUpdate)
-	mux.HandleFunc("GET /admin/network/status", h.handleNetworkStatus)
-	mux.HandleFunc("POST /admin/settings", h.handleSettingsUpdate)
-	mux.HandleFunc("POST /admin/external-devices", h.handleExternalDeviceAdd)
-	mux.HandleFunc("POST /admin/external-devices/{id}", h.handleExternalDeviceUpdate)
-	mux.HandleFunc("POST /admin/external-devices/{id}/delete", h.handleExternalDeviceDelete)
-	mux.HandleFunc("POST /admin/presets/save", h.handlePresetSave)
-	mux.HandleFunc("POST /admin/presets/reset", h.handlePresetsReset)
-	mux.HandleFunc("POST /admin/presets/{uuid}/load", h.handlePresetLoad)
-	mux.HandleFunc("POST /admin/presets/{uuid}/update", h.handlePresetUpdate)
-	mux.HandleFunc("POST /admin/presets/{uuid}/delete", h.handlePresetDelete)
+	mux.HandleFunc("GET /admin", noStore(h.handleIndex))
+	mux.HandleFunc("POST /admin/sources/save", noStore(h.handleSourcesSave))
+	mux.HandleFunc("POST /admin/sources/reset", noStore(h.handleSourcesReset))
+	mux.HandleFunc("POST /admin/sections", noStore(h.handleSectionAdd))
+	mux.HandleFunc("POST /admin/sections/{id}/delete", noStore(h.handleSectionDelete))
+	mux.HandleFunc("POST /admin/auxes", noStore(h.handleAuxesSave))
+	mux.HandleFunc("POST /admin/network", noStore(h.handleNetworkUpdate))
+	mux.HandleFunc("GET /admin/network/status", noStore(h.handleNetworkStatus))
+	mux.HandleFunc("POST /admin/settings", noStore(h.handleSettingsUpdate))
+	mux.HandleFunc("POST /admin/external-devices", noStore(h.handleExternalDeviceAdd))
+	mux.HandleFunc("POST /admin/external-devices/{id}", noStore(h.handleExternalDeviceUpdate))
+	mux.HandleFunc("POST /admin/external-devices/{id}/delete", noStore(h.handleExternalDeviceDelete))
+	mux.HandleFunc("POST /admin/presets/save", noStore(h.handlePresetSave))
+	mux.HandleFunc("POST /admin/presets/reset", noStore(h.handlePresetsReset))
+	mux.HandleFunc("POST /admin/presets/{uuid}/load", noStore(h.handlePresetLoad))
+	mux.HandleFunc("POST /admin/presets/{uuid}/update", noStore(h.handlePresetUpdate))
+	mux.HandleFunc("POST /admin/presets/{uuid}/delete", noStore(h.handlePresetDelete))
+}
+
+// noStore forbids caching a response anywhere (browser or intermediary) —
+// see Register's doc comment for why every admin response needs this.
+func noStore(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		fn(w, r)
+	}
 }
 
 // queryConfig asks hub for its current buildConfig() output — the request/
