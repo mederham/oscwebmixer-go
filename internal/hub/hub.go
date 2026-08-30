@@ -432,6 +432,35 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 		h.debugf("desk-path %s from %s", msg.Address, fromIP)
 	}
 
+	// Default-deny: only the desk itself and explicitly registered external
+	// devices may inject messages on the shared socket. Anything else —
+	// a stray device on the network, a port scanner, a spoofed sender —
+	// is silently dropped rather than processed and relayed as if it were
+	// trusted traffic. A registered device additionally needs Broadcast set
+	// to be let in at all; the reverse (registered, Broadcast: false) mirrors
+	// the existing egress gate in broadcast() (client.go).
+	if fromIP != h.deskIP {
+		var device *ExternalDevice
+		for i := range h.externalDevices {
+			if h.externalDevices[i].Addr.IP.String() == fromIP {
+				device = &h.externalDevices[i]
+				break
+			}
+		}
+		if device == nil {
+			if h.debug {
+				h.debugf("  -> from %s: dropped (unrecognized source)", fromIP)
+			}
+			return
+		}
+		if !device.Broadcast {
+			if h.debug {
+				h.debugf("  -> from external %q: dropped (broadcast disabled)", device.Name)
+			}
+			return
+		}
+	}
+
 	if fromIP == h.deskIP {
 		h.lastDeskSeen = time.Now()
 		if h.status == StatusDegraded {

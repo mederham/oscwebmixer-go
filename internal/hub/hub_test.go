@@ -32,6 +32,13 @@ type scriptedDesk struct {
 	channelNames, auxNames, groupNames map[int]string // missing key = unnamed
 	channelStereo                      map[int]bool   // missing key = mono
 
+	// deskIP, when set, is the source address reply() attaches to every
+	// simulated desk reply — must match Options.DeskIP for hub's
+	// default-deny source gate (handleDeskMessage) to accept them, exactly
+	// as a real desk's UDP replies carry its real address. Left empty in
+	// tests that also leave Options.DeskIP empty.
+	deskIP string
+
 	mu       sync.Mutex
 	dropOnce map[string]bool // query address -> drop the next reply to it once, simulating lost UDP
 
@@ -180,7 +187,11 @@ func (d *scriptedDesk) reply(address string, args ...any) {
 	if args == nil {
 		args = []any{}
 	}
-	d.inbound <- desk.InboundMessage{Message: oscmsg.Message{Address: address, Args: args}}
+	var from *net.UDPAddr
+	if d.deskIP != "" {
+		from = &net.UDPAddr{IP: net.ParseIP(d.deskIP), Port: 9000}
+	}
+	d.inbound <- desk.InboundMessage{Message: oscmsg.Message{Address: address, Args: args}, From: from}
 }
 
 func intArgs(n, mode int) []any {
@@ -777,6 +788,7 @@ func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
 		sent:         make(chan oscmsg.Message, 64),
+		deskIP:       deskIP,
 		channelCount: 1, auxCount: 1, groupCount: 1,
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
@@ -784,6 +796,9 @@ func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 	}
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
 		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
+		ExternalDevices: []ExternalDevice{
+			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: true},
+		},
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -814,6 +829,98 @@ func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 	}
 }
 
+// TestUnregisteredSourceMessagesAreDropped confirms the default-deny gate:
+// a packet arriving on the shared socket from an IP that is neither the
+// desk nor a registered external device must never be processed or
+// relayed — an unrecognized sender (a stray device, a scanner, a spoofed
+// packet) is not implicitly trusted.
+func TestUnregisteredSourceMessagesAreDropped(t *testing.T) {
+	const deskIP = "10.0.0.18"
+	const strangerIP = "10.0.0.99"
+
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		sent:         make(chan oscmsg.Message, 64),
+		deskIP:       deskIP,
+		channelCount: 1, auxCount: 1, groupCount: 1,
+		channelNames: map[int]string{1: "Kick"},
+		auxNames:     map[int]string{1: "Mon 1"},
+		groupNames:   map[int]string{1: "Drums"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, nil, nil)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+	drainAllSent(fakeDesk)
+
+	fakeDesk.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: "/Console/Name/?", Args: []any{}},
+		From:    &net.UDPAddr{IP: net.ParseIP(strangerIP), Port: 9000},
+	}
+
+	select {
+	case sent := <-fakeDesk.sent:
+		t.Fatalf("desk received a message from an unregistered source: %+v", sent)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// TestExternalDeviceMessagesAreDroppedWhenBroadcastDisabled confirms a
+// registered device with Broadcast: false is gated on ingress too — its
+// packets must never reach the desk, not just never be relayed back out to
+// it (see TestExternalDeviceMessagesAreForwardedToDesk for the enabled case).
+func TestExternalDeviceMessagesAreDroppedWhenBroadcastDisabled(t *testing.T) {
+	const deskIP = "10.0.0.18"
+	const ipadIP = "10.0.0.12"
+
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		sent:         make(chan oscmsg.Message, 64),
+		deskIP:       deskIP,
+		channelCount: 1, auxCount: 1, groupCount: 1,
+		channelNames: map[int]string{1: "Kick"},
+		auxNames:     map[int]string{1: "Mon 1"},
+		groupNames:   map[int]string{1: "Drums"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
+		ExternalDevices: []ExternalDevice{
+			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: false},
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, nil, nil)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+	drainAllSent(fakeDesk)
+
+	fakeDesk.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: "/Console/Name/?", Args: []any{}},
+		From:    &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000},
+	}
+
+	select {
+	case sent := <-fakeDesk.sent:
+		t.Fatalf("desk received a message from a broadcast-disabled device: %+v", sent)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 // TestDeskRepliesAreNotEchoedBackToDesk confirms the other half stays
 // correct: a message whose sender IP matches the configured desk must NOT
 // be sent straight back to it.
@@ -823,6 +930,7 @@ func TestDeskRepliesAreNotEchoedBackToDesk(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
 		sent:         make(chan oscmsg.Message, 64),
+		deskIP:       deskIP,
 		channelCount: 1, auxCount: 1, groupCount: 1,
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
@@ -867,6 +975,7 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 		inbound:      make(chan desk.InboundMessage, 64),
 		sent:         make(chan oscmsg.Message, 64),
 		sentExternal: make(chan externalSend, 64),
+		deskIP:       deskIP,
 		channelCount: 1, auxCount: 1, groupCount: 1,
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
@@ -940,6 +1049,7 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
 		sentExternal: make(chan externalSend, 64),
+		deskIP:       deskIP,
 		channelCount: 1, auxCount: 1, groupCount: 1,
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
@@ -1525,6 +1635,7 @@ func TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic(t *testing.T) {
 func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
+		deskIP:       "10.0.0.10",
 		channelCount: 1, auxCount: 1, groupCount: 0,
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
