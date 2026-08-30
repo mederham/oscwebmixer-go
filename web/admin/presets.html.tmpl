@@ -1,26 +1,10 @@
 {{define "presets-section"}}
 <section id="section-presets">
 	<h2>Presets</h2>
-	<table>
-		<thead><tr><th>Name</th><th>Last changed</th><th></th></tr></thead>
-		<tbody>
-		{{range .}}
-			<tr>
-				<td>{{.Name}}</td>
-				<td>{{.LastChanged}}</td>
-				<td>
-					<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
-					<button hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML">Delete</button>
-				</td>
-			</tr>
-		{{end}}
-		</tbody>
-	</table>
 	<form hx-post="/admin/presets/save" hx-target="#section-presets" hx-swap="outerHTML" class="inline-form">
 		<input type="text" name="name" placeholder="New preset name" required />
-		<button type="submit">Save current state as preset</button>
+		<button type="submit">Save</button>
 	</form>
-
 	<button
 		type="button"
 		class="danger"
@@ -29,5 +13,18 @@
 		hx-swap="outerHTML"
 		hx-confirm="Reset EVERYTHING — all sources, sections, and aux settings — to defaults? Saved presets, external devices, and network settings are not affected. This cannot be undone."
 	>Reset to defaults</button>
+
+	<div class="cards">
+	{{range .}}
+		<div class="preset-card">
+			<span class="label">{{.Name}}</span>
+			<span class="preset-meta">{{.LastChanged}}</span>
+			<div class="preset-actions">
+				<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
+				<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML">Delete</button>
+			</div>
+		</div>
+	{{end}}
+	</div>
 </section>
 {{end}}

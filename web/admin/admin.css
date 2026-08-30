@@ -54,21 +54,6 @@ h3 { font-size: 0.95rem; opacity: 0.8; margin: 1rem 0 0.4rem; }
 	display: inline-block;
 }
 
-table {
-	border-collapse: collapse;
-	width: 100%;
-	margin-bottom: 0.75rem;
-}
-
-th, td {
-	text-align: left;
-	padding: 0.35rem 0.5rem;
-	border-bottom: 1px solid #2a2a2a;
-	font-size: 0.9rem;
-}
-
-th { opacity: 0.7; font-weight: 600; }
-
 input[type="text"], input[type="number"] {
 	background: #1c1c1c;
 	border: 1px solid #3a3a3a;
@@ -167,7 +152,7 @@ button.danger:hover { background: #7a3a3a; }
 }
 #sources-list { min-height: 2.5rem; } /* an empty list still accepts a drop */
 
-.source-card, .aux-card, .device-card {
+.source-card, .aux-card, .device-card, .preset-card {
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
@@ -202,8 +187,15 @@ button.danger:hover { background: #7a3a3a; }
 	opacity: 0.6;
 	min-width: 3.2rem;
 }
-.source-card .label, .aux-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-card .label, .aux-card .label, .preset-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-card input[type="text"] { width: 8rem; }
+.preset-card .preset-meta { opacity: 0.6; font-size: 0.8rem; }
+/* Groups Load+Delete as one flex item so wrapping (on a narrow card)
+   moves them to the next line together instead of splitting between
+   them — button.danger's own margin-bottom (meant for a button standing
+   alone, e.g. Reset to defaults) doesn't apply inside this row. */
+.preset-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.preset-actions button.danger { margin-bottom: 0; }
 
 .section-marker {
 	display: flex;
@@ -300,6 +292,11 @@ input.toggle:checked::before { left: 1.15rem; }
 .device-card .device-address { display: flex; gap: 0.4rem; }
 .device-card .loopback { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; }
 .device-card.add-device { border-left-color: #3a6a9a; }
+/* .device-card's own display:flex (a class selector) otherwise beats the
+   UA stylesheet's [hidden] { display: none } in the cascade — same bug as
+   #pan-toggle-wrap earlier, fixed the same way: an explicit, higher-
+   specificity rule that wins regardless of source order. */
+.device-card.add-device[hidden] { display: none; }
 
 .status-dot {
 	display: inline-block;
@@ -346,4 +343,17 @@ input.toggle:checked::before { left: 1.15rem; }
 	gap: 0.2rem;
 	font-size: 0.85rem;
 }
+/* A toggle switch reads label-then-control on the same line, not stacked
+   like a text field's label above its input — :has() scopes this to just
+   the toggle case without a template-side class. */
+.field-grid label:has(.toggle) {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+}
 .field-grid button { grid-column: 1 / -1; justify-self: start; }
+/* Settings' subsection headers/hint (General, Auto-hide — see
+   settings.html.tmpl) span the full grid width instead of taking one
+   column slot like a field would — h3/.hint's own margins are unchanged. */
+.field-grid h3, .field-grid p { grid-column: 1 / -1; }
+.field-grid h3:first-child { margin-top: 0; }

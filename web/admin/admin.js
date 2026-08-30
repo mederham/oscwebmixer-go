@@ -138,6 +138,19 @@ document.body.addEventListener("click", function (e) {
 	});
 });
 
+// External devices: the add-device form starts hidden (see
+// external-devices.html.tmpl) so the list isn't cluttered by an empty
+// card by default — this just reveals it. No re-hide-on-cancel: the form
+// re-renders hidden again from scratch after a successful add (or a full
+// page reload), and there's no cancel button to need one.
+document.body.addEventListener("click", function (e) {
+	if (e.target.id !== "add-device-toggle") return;
+	const form = document.querySelector(".add-device");
+	if (!form) return;
+	form.hidden = false;
+	e.target.hidden = true;
+});
+
 // Tabs: plain hide/show over server-rendered content that's already all in
 // the DOM (no fetching, no imperative element construction) — every
 // section still renders and swaps exactly as it does today, this just
