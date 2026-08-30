@@ -16,12 +16,15 @@
 
 	<div class="cards">
 	{{range .}}
-		<div class="preset-card">
+		<div class="preset-card{{if .Active}} active{{end}}">
 			<span class="label">{{.Name}}</span>
-			<span class="preset-meta">{{.LastChanged}}</span>
+			<span class="preset-meta">{{prettyDate .LastChanged}}</span>
 			<div class="preset-actions">
 				<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
-				<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML">Delete</button>
+				{{if .Active}}
+				<button hx-post="/admin/presets/{{.UUID}}/update" hx-target="#section-presets" hx-swap="outerHTML">Update</button>
+				{{end}}
+				<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML" hx-confirm="Delete preset {{.Name}}? This cannot be undone.">Delete</button>
 			</div>
 		</div>
 	{{end}}

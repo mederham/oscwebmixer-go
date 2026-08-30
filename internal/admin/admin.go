@@ -74,6 +74,21 @@ var templateFuncs = template.FuncMap{
 	"iconLabel":    iconLabel,
 	"badge":        badge, // "Ch 01" / "Grp 01" — derived from Type+Number, not stored (see SourceRow)
 	"join":         strings.Join,
+	"prettyDate":   prettyDate,
+}
+
+// prettyDate turns a preset's stored RFC3339 LastChanged timestamp
+// ("2026-08-29T14:32:07Z") into a human-readable one for display
+// ("Aug 29, 2026 2:32 PM") — storage stays RFC3339 (sortable,
+// unambiguous, standard) since only rendering needs to change. Falls back
+// to the raw string on a parse failure rather than erroring the whole
+// page over one bad timestamp.
+func prettyDate(s string) string {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return s
+	}
+	return t.Local().Format("Jan 2, 2006 3:04 PM")
 }
 
 // iconLabel turns an icon filename ("acoustic-guitar.svg") into a
@@ -165,6 +180,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/presets/save", h.handlePresetSave)
 	mux.HandleFunc("POST /admin/presets/reset", h.handlePresetsReset)
 	mux.HandleFunc("POST /admin/presets/{uuid}/load", h.handlePresetLoad)
+	mux.HandleFunc("POST /admin/presets/{uuid}/update", h.handlePresetUpdate)
 	mux.HandleFunc("POST /admin/presets/{uuid}/delete", h.handlePresetDelete)
 }
 

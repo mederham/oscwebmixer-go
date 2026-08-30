@@ -488,6 +488,66 @@ func TestPresetsReset(t *testing.T) {
 	}
 }
 
+// TestPresetActiveAndUpdate proves loading a preset marks it Active in
+// the rendered list (see PresetRow.Active's doc comment for how that's
+// derived purely from state.UUID, no new stored field), and that Update
+// overwrites the preset's saved content with whatever the live state
+// currently is.
+func TestPresetActiveAndUpdate(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	indexBody := func() string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /admin: status = %d", rec.Code)
+		}
+		return rec.Body.String()
+	}
+
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: true},
+	})
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	if len(presets) != 1 {
+		t.Fatalf("presets = %+v, want 1", presets)
+	}
+	uuid := presets[0].UUID
+
+	// Saving a preset doesn't load it — nothing should be active yet.
+	if strings.Contains(indexBody(), `class="preset-card active"`) {
+		t.Fatal("a preset is marked active before any preset was loaded")
+	}
+
+	postForm(t, mux, "/admin/presets/"+uuid+"/load", "")
+	if !strings.Contains(indexBody(), `class="preset-card active"`) {
+		t.Fatal("the loaded preset is not marked active")
+	}
+
+	// Edit the now-active live state, then Update the preset with it.
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
+	})
+	postForm(t, mux, "/admin/presets/"+uuid+"/update", "")
+
+	updated, err := h.cfg.GetPresetByID(uuid)
+	if err != nil {
+		t.Fatalf("GetPresetByID: %v", err)
+	}
+	if len(updated.MixerLayout) != 1 || updated.MixerLayout[0].Enabled {
+		t.Fatalf("preset after update = %+v, want channel 1 disabled (the live state at update time)", updated.MixerLayout)
+	}
+}
+
 // TestSettingsSaveAppliesLive proves the Settings tab's per-type auto-hide
 // patterns (see config.Global's AutoHide*Patterns fields) round-trip to
 // disk and reach hub live, with no restart — fakeDesk's one channel is

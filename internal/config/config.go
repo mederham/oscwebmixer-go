@@ -149,6 +149,37 @@ func (m *Manager) SaveCurrentStateAsPreset(state State, name string) (Preset, er
 	return preset, nil
 }
 
+// UpdatePreset overwrites an existing preset's saved layout/auxes in
+// place — same identity (UUID, Name), fresh content and LastChanged. The
+// admin panel's "Update" action on the currently active preset — the
+// counterpart to Load, which goes the other direction (discard live
+// edits, revert to what's saved) — distinct from
+// SaveCurrentStateAsPreset, which always creates a new preset under a new
+// name. Returns ErrPresetNotFound if uuid doesn't match any saved preset.
+func (m *Manager) UpdatePreset(uuid string, mixerLayout []LayoutItem, auxes []Aux) (Preset, error) {
+	presets, err := m.LoadPresets()
+	if err != nil {
+		return Preset{}, err
+	}
+	idx := -1
+	for i, p := range presets {
+		if p.UUID == uuid {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return Preset{}, ErrPresetNotFound
+	}
+	presets[idx].MixerLayout = mixerLayout
+	presets[idx].Auxes = auxes
+	presets[idx].LastChanged = time.Now().UTC().Format(time.RFC3339)
+	if err := m.savePresets(presets); err != nil {
+		return Preset{}, err
+	}
+	return presets[idx], nil
+}
+
 // DeletePreset removes a preset by uuid, or returns ErrPresetNotFound.
 func (m *Manager) DeletePreset(uuid string) error {
 	presets, err := m.LoadPresets()

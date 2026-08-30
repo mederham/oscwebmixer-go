@@ -104,6 +104,50 @@ func TestPresetLifecycle(t *testing.T) {
 	}
 }
 
+// TestUpdatePreset proves UpdatePreset overwrites content in place — same
+// UUID/Name, fresh MixerLayout/Auxes/LastChanged — unlike
+// SaveCurrentStateAsPreset, which always creates a new preset under a new
+// name.
+func TestUpdatePreset(t *testing.T) {
+	m := New(t.TempDir())
+	original := State{MixerLayout: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}}
+	preset, err := m.SaveCurrentStateAsPreset(original, "Show 1")
+	if err != nil {
+		t.Fatalf("SaveCurrentStateAsPreset: %v", err)
+	}
+
+	newLayout := []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 2, Enabled: false}}
+	newAuxes := []Aux{{Enabled: true, Colour: "#ff0000"}}
+	updated, err := m.UpdatePreset(preset.UUID, newLayout, newAuxes)
+	if err != nil {
+		t.Fatalf("UpdatePreset: %v", err)
+	}
+	if updated.UUID != preset.UUID || updated.Name != "Show 1" {
+		t.Fatalf("updated = %+v, want same UUID/Name as the original preset", updated)
+	}
+	if len(updated.MixerLayout) != 1 || updated.MixerLayout[0].Number != 2 {
+		t.Fatalf("updated.MixerLayout = %+v, want the new layout", updated.MixerLayout)
+	}
+	if len(updated.Auxes) != 1 || updated.Auxes[0].Colour != "#ff0000" {
+		t.Fatalf("updated.Auxes = %+v, want the new auxes", updated.Auxes)
+	}
+	if updated.LastChanged == "" {
+		t.Fatal("LastChanged is empty, want it set")
+	}
+
+	got, err := m.GetPresetByID(preset.UUID)
+	if err != nil {
+		t.Fatalf("GetPresetByID: %v", err)
+	}
+	if len(got.MixerLayout) != 1 || got.MixerLayout[0].Number != 2 {
+		t.Fatalf("re-loaded preset = %+v, want the update to have persisted to disk", got)
+	}
+
+	if _, err := m.UpdatePreset("does-not-exist", newLayout, newAuxes); !errors.Is(err, ErrPresetNotFound) {
+		t.Fatalf("updating an unknown UUID: err = %v, want ErrPresetNotFound", err)
+	}
+}
+
 func TestSaveGlobalIsAtomic(t *testing.T) {
 	// Regression coverage for the plan's explicit atomicity requirement:
 	// writing must go through a temp file + rename, never truncate the

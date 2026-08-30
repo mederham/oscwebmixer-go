@@ -190,6 +190,10 @@ button.danger:hover { background: #7a3a3a; }
 .source-card .label, .aux-card .label, .preset-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-card input[type="text"] { width: 8rem; }
 .preset-card .preset-meta { opacity: 0.6; font-size: 0.8rem; }
+/* The currently-loaded preset — see PresetRow.Active's doc comment for
+   how that's derived. Green matches the status dot's existing "healthy/
+   current" color semantics elsewhere in this admin panel. */
+.preset-card.active { border-left-color: #2ecc40; border-left-width: 4px; }
 /* Groups Load+Delete as one flex item so wrapping (on a narrow card)
    moves them to the next line together instead of splitting between
    them — button.danger's own margin-bottom (meant for a button standing

@@ -93,10 +93,18 @@ type AuxRow struct {
 	Icon    string
 }
 
+// Active is derived, not stored: loading a preset copies its UUID into
+// state.json wholesale (see handlePresetLoad), and ordinary edits
+// (saveState) never touch that field — so "does this preset's UUID match
+// the live state's UUID" is already a reliable "is this the currently
+// loaded preset" signal with no new schema needed. It stops matching the
+// moment a different preset is loaded, or state is reset (both assign a
+// different/empty UUID).
 type PresetRow struct {
 	UUID        string
 	Name        string
 	LastChanged string
+	Active      bool
 }
 
 func badge(sourceType string, number int) string {
@@ -137,10 +145,13 @@ func toAuxRows(auxes []oscmsg.AuxConfig) []AuxRow {
 	return rows
 }
 
-func toPresetRows(presets []config.Preset) []PresetRow {
+func toPresetRows(presets []config.Preset, activeUUID string) []PresetRow {
 	rows := make([]PresetRow, len(presets))
 	for i, p := range presets {
-		rows[i] = PresetRow{UUID: p.UUID, Name: p.Name, LastChanged: p.LastChanged}
+		rows[i] = PresetRow{
+			UUID: p.UUID, Name: p.Name, LastChanged: p.LastChanged,
+			Active: activeUUID != "" && p.UUID == activeUUID,
+		}
 	}
 	return rows
 }

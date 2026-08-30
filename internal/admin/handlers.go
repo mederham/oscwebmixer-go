@@ -43,13 +43,18 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	data := ViewData{
 		Global:      global,
 		Network:     NetworkSectionData{Global: global, DeskStatus: status},
 		SourcesData: toSourcesSectionData(cfg.MixerLayout, false),
 		AuxesData:   AuxesSectionData{Auxes: toAuxRows(cfg.Auxes), Icons: h.icons},
-		Presets:     toPresetRows(presets),
+		Presets:     toPresetRows(presets, state.UUID),
 		Message:     r.URL.Query().Get("msg"),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -592,6 +597,41 @@ func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 		if err := h.renderAuxesSection(w, cfg.Auxes, true); err != nil {
 			h.log.Printf("admin render: %v", err)
 		}
+	}
+}
+
+// handlePresetUpdate overwrites an existing preset's saved content with
+// the current live state — the counterpart to Load, which goes the other
+// direction (discard live edits, revert to what's saved). Only shown in
+// the UI for the currently active preset (see PresetRow.Active), but not
+// restricted to that here — nothing about the update itself depends on
+// this preset being the one currently loaded. Doesn't touch state.json or
+// push anything to hub: the live state itself isn't changing, only what's
+// saved under this preset's UUID.
+func (h *Handler) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
+	uuid := r.PathValue("uuid")
+
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	_, err = h.cfg.UpdatePreset(uuid, layoutFromPayload(cfg.MixerLayout), configAuxesFromPayload(cfg.Auxes))
+	if errors.Is(err, config.ErrPresetNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderPresetsSection(w); err != nil {
+		h.log.Printf("admin render: %v", err)
 	}
 }
 

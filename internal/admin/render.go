@@ -27,5 +27,9 @@ func (h *Handler) renderPresetsSection(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return h.tmpl.ExecuteTemplate(w, "presets-section", toPresetRows(presets))
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		return err
+	}
+	return h.tmpl.ExecuteTemplate(w, "presets-section", toPresetRows(presets, state.UUID))
 }
