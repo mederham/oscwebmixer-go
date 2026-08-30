@@ -29,7 +29,10 @@ const (
 // mixer client, and desk status has no reason to ride along on that; this
 // is a distinct, admin-only, on-demand read.
 type DeskStatusInfo struct {
-	Status   string
+	Status string
+	// LastSeen is the zero time.Time until real desk traffic has actually
+	// arrived at least once (see Hub.lastDeskSeen's doc comment). The
+	// template checks LastSeen.IsZero() and renders "never" for this case.
 	LastSeen time.Time
 }
 

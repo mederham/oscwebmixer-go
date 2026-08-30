@@ -200,9 +200,15 @@ type Hub struct {
 	pendingQuerySince time.Time
 
 	// lastDeskSeen/healthCheckInterval back the Healthy<->Degraded
-	// transition — see checkDeskHealth. Only meaningful once past Starting;
-	// initialized to New()'s call time so a fresh hub doesn't read as
-	// already-stale before the first real desk message ever arrives.
+	// transition — see checkDeskHealth. Left at its zero value until real
+	// desk traffic actually arrives: the Degraded check only ever runs
+	// once status is already Healthy, and status only becomes Healthy as
+	// a direct result of desk traffic just having arrived (every step of
+	// the startup sequence is driven by an inbound desk message, which
+	// updates lastDeskSeen before that same message can advance startup)
+	// — so the zero value is never read by that check, only by the admin
+	// panel's "last seen" line, which uses it to show "never" for a desk
+	// that hasn't actually been reachable yet (see AdminStatusQuery).
 	lastDeskSeen        time.Time
 	healthCheckInterval time.Duration
 
@@ -305,7 +311,6 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		autoHideAuxPatterns:     opts.AutoHideAuxPatterns,
 		externalDevices:         opts.ExternalDevices,
 		startupRetryInterval:    opts.StartupRetryInterval,
-		lastDeskSeen:            time.Now(),
 		healthCheckInterval:     healthCheckInterval,
 		debug:                   opts.Debug,
 	}

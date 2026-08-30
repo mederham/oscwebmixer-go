@@ -1402,6 +1402,33 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 	}
 }
 
+// TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic proves
+// DeskStatusInfo.LastSeen stays the zero value (which the admin panel
+// renders as "never") until real desk traffic has actually arrived at
+// least once, rather than misreporting "just now" from lastDeskSeen's
+// construction-time initialization (see Hub.lastDeskSeen's doc comment).
+// Calls handleAdminEvent/handleDeskMessage directly rather than running
+// the full Run() goroutine — deterministic, and a faithful test of the
+// same handler methods Run's select loop itself dispatches to.
+func TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic(t *testing.T) {
+	fakeDesk := &scriptedDesk{inbound: make(chan desk.InboundMessage, 64)}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.5"})
+
+	reply := make(chan DeskStatusInfo, 1)
+	h.handleAdminEvent(AdminEvent{Kind: AdminStatusQuery, StatusReply: reply})
+	if info := <-reply; !info.LastSeen.IsZero() {
+		t.Fatalf("LastSeen = %v, want the zero time before any desk traffic has arrived", info.LastSeen)
+	}
+
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Name", Args: []any{"Test Desk"}}, "10.0.0.5")
+
+	reply2 := make(chan DeskStatusInfo, 1)
+	h.handleAdminEvent(AdminEvent{Kind: AdminStatusQuery, StatusReply: reply2})
+	if info := <-reply2; info.LastSeen.IsZero() {
+		t.Fatal("LastSeen is still zero after real desk traffic arrived")
+	}
+}
+
 // TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged proves
 // AdminNetworkApply reaches h.desk via SetRemote/Rebind, and — critically
 // — only for the field that actually changed: Desk IP/port and OSC
