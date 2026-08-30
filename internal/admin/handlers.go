@@ -59,10 +59,12 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSourcesSave is the single endpoint for everything the Sources
-// tab's one <form> can produce: field edits (enabled/icon/section name,
-// from the Save button) and drag-drop persistence (new item order,
-// auto-submitted by admin.js's onEnd on every drop) alike — both are just
-// "the Sources form was submitted." The posted "layout" field is a JSON
+// tab's one <form> can produce: reordering (auto-submitted by admin.js's
+// Sortable onEnd on every drop) and the enabled toggle (auto-submitted on
+// change, same as reordering — see admin.js) apply immediately; renaming a
+// section still needs the visible Save button. All three are just "the
+// Sources form was submitted," this one endpoint either way. The posted
+// "layout" field is a JSON
 // array (built by admin.js's collectLayout, injected via htmx:configRequest
 // — see this package's doc comment for why a plain named-field form can't
 // represent an ordered, mixed-kind list) mirroring oscmsg.LayoutItem.

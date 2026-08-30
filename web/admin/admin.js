@@ -80,15 +80,24 @@ document.body.addEventListener("htmx:oobAfterSwap", function (e) {
 // document.body means it works after any htmx swap of the auxes section
 // too, no re-init needed.
 document.body.addEventListener("change", function (e) {
-	if (!e.target.classList.contains("icon-select")) return;
-	const img = e.target.parentElement.querySelector(".icon-preview");
-	if (img) img.src = e.target.value ? "/admin/icons/" + e.target.value : "";
+	if (e.target.classList.contains("icon-select")) {
+		const img = e.target.parentElement.querySelector(".icon-preview");
+		if (img) img.src = e.target.value ? "/admin/icons/" + e.target.value : "";
+		return;
+	}
+
+	// Sources' enabled toggle applies immediately, same as dragging to
+	// reorder — leaving it behind the Save button (as auxes' still are)
+	// meant order and visibility behaved inconsistently on the same tab.
+	// Auxes has no drag-and-drop to be inconsistent with, so its fields
+	// stay batched behind Save, unchanged.
+	if (e.target.classList.contains("enabled-field")) {
+		htmx.trigger(document.getElementById("sources-form"), "submit");
+	}
 });
 
 // "Show/Hide all": a single smart toggle per tab — if everything in scope
-// is currently enabled, disable all; otherwise enable all. Client-side
-// only, like every other field edit here — takes effect on screen
-// immediately, persists once the section's own Save button is clicked.
+// is currently enabled, disable all; otherwise enable all.
 function toggleAllEnabled(scopeSelector, checkboxSelector) {
 	const boxes = document.querySelectorAll(scopeSelector + " " + checkboxSelector);
 	if (boxes.length === 0) return;
@@ -99,7 +108,12 @@ function toggleAllEnabled(scopeSelector, checkboxSelector) {
 document.body.addEventListener("click", function (e) {
 	if (e.target.id === "sources-toggle-all") {
 		toggleAllEnabled("#sources-list", ".enabled-field");
+		// Setting .checked in JS doesn't fire "change", so this toggle
+		// needs its own explicit submit to match individual checkboxes
+		// now applying immediately (see the change listener above).
+		htmx.trigger(document.getElementById("sources-form"), "submit");
 	} else if (e.target.id === "auxes-toggle-all") {
+		// Auxes stays batched behind its own Save button, unchanged.
 		toggleAllEnabled("#section-auxes", "input[name^='enabled[']");
 	}
 });
