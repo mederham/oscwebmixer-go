@@ -18,6 +18,7 @@ auxes = [],
 selectedAux = null; // the full aux object (channel/label/colour/icon/stereo), not just an id
 
 const panSnapThreshold = 0.03; // +/- around 0.5 (center) that snaps to exact center — see sliderChange
+const defaultTint = "74,144,217"; // DiGiCo blue, r,g,b — matches mixer.css's :root default; used when an aux has no/unparseable colour
 
 function sliderToDb(value) {
 	const val = ((Math.log(value * 100) / Math.log(100)) * 100) - 90;
@@ -129,7 +130,7 @@ function selectAux(channel) {
 	selectedAux = aux;
 	localStorage.setItem("aux", String(channel));
 	document.body.classList.remove("picking-aux");
-	document.body.style.setProperty("--tint", hexToRgb(aux.colour) || "74,144,217");
+	document.body.style.setProperty("--tint", hexToRgb(aux.colour) || defaultTint);
 	auxIcon.src = iconSrc(aux.icon);
 	auxLabel.textContent = aux.label || ("Aux " + aux.channel);
 	panToggleWrap.hidden = !aux.stereo;
@@ -149,7 +150,7 @@ function buildAux(list) {
 	let html = "";
 	for (const a of auxes) {
 		if (!a.enabled) continue;
-		html += '<button type="button" class="aux-button" data-channel="' + a.channel + '" style="--tint:' + (hexToRgb(a.colour) || '74,144,217') + '">';
+		html += '<button type="button" class="aux-button" data-channel="' + a.channel + '" style="--tint:' + (hexToRgb(a.colour) || defaultTint) + '">';
 		if (a.icon) html += '<img src="' + iconSrc(a.icon) + '" alt="" />';
 		html += '<span>' + escapeHtml(a.label || ("Aux " + a.channel)) + '</span></button>';
 	}

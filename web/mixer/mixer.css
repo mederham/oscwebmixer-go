@@ -20,38 +20,19 @@ body {
    "disconnected" (no live connection at all, nothing else can be trusted)
    is declared last and always wins over a possibly-stale desk-status
    class. */
-body.status-starting::before {
-	content: "connecting to desk…";
-	display: block;
-	background: #336699;
-	color: #fff;
-	padding: 0.5rem;
-	text-align: center;
-}
-body.status-reloading::before {
-	content: "reloading session…";
-	display: block;
-	background: #336699;
-	color: #fff;
-	padding: 0.5rem;
-	text-align: center;
-}
-body.status-degraded::before {
-	content: "desk offline";
-	display: block;
-	background: #a80;
-	color: #fff;
-	padding: 0.5rem;
-	text-align: center;
-}
+body.status-starting::before,
+body.status-reloading::before,
+body.status-degraded::before,
 body.disconnected::before {
-	content: "disconnected — reconnecting…";
 	display: block;
-	background: #a33;
 	color: #fff;
 	padding: 0.5rem;
 	text-align: center;
 }
+body.status-starting::before { content: "connecting to desk…"; background: #336699; }
+body.status-reloading::before { content: "reloading session…"; background: #336699; }
+body.status-degraded::before { content: "desk offline"; background: #a80; }
+body.disconnected::before { content: "disconnected — reconnecting…"; background: #a33; }
 
 header {
 	display: flex;
