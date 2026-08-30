@@ -60,6 +60,11 @@ type Handler struct {
 	// from web/admin/icons/*.svg (embedded alongside the templates), not
 	// hand-maintained as a list that could drift from the actual files.
 	icons []string
+
+	// version is the build-time app version (main.version, "dev" outside a
+	// release build) — rendered in the page footer so a running instance
+	// can always be identified at a glance.
+	version string
 }
 
 // templateFuncs backs network.html.tmpl's "status-dot" fragment and the
@@ -151,7 +156,7 @@ func dotLabel(status string) string {
 
 // New builds a Handler, parsing admin templates from the given filesystem
 // (web.AdminFS, rooted at "admin" via fs.Sub — see web/assets.go).
-func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger) (*Handler, error) {
+func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger, version string) (*Handler, error) {
 	tmpl, err := template.New("admin").Funcs(templateFuncs).ParseFS(templatesFS, "*.html.tmpl")
 	if err != nil {
 		return nil, err
@@ -160,7 +165,7 @@ func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEve
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl, icons: icons}, nil
+	return &Handler{cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl, icons: icons, version: version}, nil
 }
 
 // Register mounts the admin routes onto mux. Every response is wrapped

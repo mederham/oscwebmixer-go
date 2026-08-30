@@ -35,6 +35,12 @@ import (
 // to for a fresh install.
 const defaultHTTPPort = 80
 
+// version is set at build time via -ldflags "-X main.version=X.Y.Z" (see
+// the VERSION file and Dockerfile/build_router_image_arm64.sh, its two
+// consumers) — "dev" is what a plain `go build`/`go run` without that flag
+// gets, so a local build is always visibly distinguishable from a release.
+var version = "dev"
+
 func main() {
 	// Every network flag below only overrides config/global.json when
 	// explicitly passed on the command line (checked via flag.Visit) —
@@ -46,7 +52,13 @@ func main() {
 	listenPortFlag := flag.Int("listen-port", 0, "override local OSC listen port")
 	configDir := flag.String("config-dir", "config", "directory for global.json/state.json/presets.json")
 	runFor := flag.Duration("run-for", 0, "exit automatically after this long (0 = run until interrupted)")
+	versionFlag := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(version)
+		return
+	}
 
 	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds)
 
@@ -138,7 +150,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("admin assets: %v", err)
 	}
-	adminHandler, err := admin.New(adminTemplatesFS, cfgManager, adminEvents, logger)
+	adminHandler, err := admin.New(adminTemplatesFS, cfgManager, adminEvents, logger, version)
 	if err != nil {
 		logger.Fatalf("admin templates: %v", err)
 	}
@@ -150,6 +162,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/ws", ws)
+	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, version)
+	})
 	adminHandler.Register(mux)
 	// Static assets under /admin/ (admin.css, the vendored htmx.min.js/
 	// sortable.min.js, admin.js) — a subtree pattern, so it coexists with

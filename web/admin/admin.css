@@ -22,6 +22,7 @@ h3 { font-size: 0.95rem; opacity: 0.8; margin: 1rem 0 0.4rem; }
 	justify-content: space-between;
 	gap: 0.5rem;
 	padding-top: 0.25rem;
+	margin-bottom: 1.5rem;
 }
 
 .tabs {

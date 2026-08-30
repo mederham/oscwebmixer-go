@@ -22,6 +22,8 @@ import (
 	"github.com/mederham/oscwebmixer-go/web"
 )
 
+const testVersion = "1.2.3-test"
+
 // fakeDesk is a minimal hub.DeskSender that answers just enough of the
 // startup sequence (1 channel, 1 aux, 0 groups) for hub to leave Starting.
 // These tests exercise the admin HTTP layer's persistence/apply flow, not
@@ -133,7 +135,7 @@ func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	if err := cfg.EnsureDir(); err != nil {
 		t.Fatalf("EnsureDir: %v", err)
 	}
-	handler, err := New(tmplFS, cfg, adminEvents, log.New(io.Discard, "", 0))
+	handler, err := New(tmplFS, cfg, adminEvents, log.New(io.Discard, "", 0), testVersion)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -185,7 +187,7 @@ func TestIndexRenders(t *testing.T) {
 		t.Fatalf("GET /admin: status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Network", "Sources", "Auxes", "External devices", "Presets", "status-dot"} {
+	for _, want := range []string{"Network", "Sources", "Auxes", "External devices", "Presets", "status-dot", "v" + testVersion} {
 		if !strings.Contains(body, want) {
 			t.Errorf("index page missing expected content %q", want)
 		}

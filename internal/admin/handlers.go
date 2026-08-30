@@ -56,6 +56,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		AuxesData:   AuxesSectionData{Auxes: toAuxRows(cfg.Auxes), Icons: h.icons},
 		Presets:     toPresetRows(presets, state.UUID),
 		Message:     r.URL.Query().Get("msg"),
+		Version:     h.version,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "layout", data); err != nil {

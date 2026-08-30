@@ -16,6 +16,7 @@ type ViewData struct {
 	AuxesData   AuxesSectionData
 	Presets     []PresetRow
 	Message     string
+	Version     string
 }
 
 // NetworkSectionData bundles the editable network settings with a live
