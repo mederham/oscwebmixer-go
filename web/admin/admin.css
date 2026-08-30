@@ -138,10 +138,8 @@ button.danger:hover { background: #7a3a3a; }
    .field-grid/.cards/.device-card, each scoped to what actually needs it). */
 #sources-form { display: block; }
 
-/* Shared vertical-list container — #sources-list (the Sortable drag
-   target), auxes' and external-devices' card lists all use this same box
-   treatment. */
-.cards, #sources-list {
+/* Shared vertical-list container — auxes' and external-devices' card lists. */
+.cards {
 	display: flex;
 	flex-direction: column;
 	gap: 0.4rem;
@@ -150,7 +148,23 @@ button.danger:hover { background: #7a3a3a; }
 	background: #161616;
 	margin-bottom: 0.5rem;
 }
-#sources-list { min-height: 2.5rem; } /* an empty list still accepts a drop */
+
+/* #sources-list (the Sortable drag target): a responsive grid so a long
+   channel/group list uses the window's width on desktop instead of one
+   endless column. Cards fall into row-major DOM order regardless of
+   column count, so drag order stays unambiguous; section-markers span
+   every column (see .section-marker) so a section still reads as a full
+   dividing line, not just another grid cell. */
+#sources-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+	gap: 0.4rem;
+	padding: 0.25rem;
+	border-radius: 4px;
+	background: #161616;
+	margin-bottom: 0.5rem;
+	min-height: 2.5rem; /* an empty list still accepts a drop */
+}
 
 .source-card, .aux-card, .device-card, .preset-card {
 	display: flex;
@@ -210,6 +224,7 @@ button.danger:hover { background: #7a3a3a; }
 	background: #22282f;
 	border: 1px solid #333;
 	border-radius: 3px;
+	grid-column: 1 / -1; /* full-width break in #sources-list's grid */
 }
 .section-marker .section-name-field { flex: 1; font-weight: 600; }
 
