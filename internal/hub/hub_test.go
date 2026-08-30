@@ -642,6 +642,92 @@ func TestClientMessageBroadcastsToOthersNotSender(t *testing.T) {
 	}
 }
 
+// TestChronicallyFullClientGetsDisconnected proves sendTo's backpressure
+// policy actually cuts a stuck client loose (closing its outbound channel)
+// once it's gone maxConsecutiveDrops messages without draining a single
+// one, instead of retrying/logging forever — and that hub keeps serving
+// every other client normally throughout. This is the fix for CPU pinning
+// observed on real RB5009 hardware: a backgrounded/wedged client used to
+// cost hub a synchronous log write on every single subsequent broadcast.
+func TestChronicallyFullClientGetsDisconnected(t *testing.T) {
+	// Built directly rather than via newTestHubWithOneOfEach: that helper
+	// caps hub.Run's context at 5s, which this test's message volume can
+	// brush up against under a loaded/parallel `go test ./...` run — the
+	// symptom is indistinguishable from the bug this test checks for (hub
+	// goes quiet, stuck's channel never closes), so give it real headroom.
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		sent:         make(chan oscmsg.Message, 4096),
+		channelCount: 1, auxCount: 1, groupCount: 1,
+		channelNames: map[int]string{1: "Kick"},
+		auxNames:     map[int]string{1: "Mon 1"},
+		groupNames:   map[int]string{1: "Drums"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	clientEvents := make(chan ClientEvent, 8)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+	go h.Run(ctx, fakeDesk.inbound, clientEvents, nil)
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	sender := make(chan oscmsg.Envelope, 8)
+	stuck := make(chan oscmsg.Envelope, 4) // small and never drained below
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "sender", Outbound: sender}
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "stuck", Outbound: stuck}
+	drainN(t, sender, 2) // sender's own status+config
+	drainQuiet(sender)   // sweep up the boot snapshot query's straggler reply, if any
+
+	// Comfortably more than maxConsecutiveDrops — not tuned to the exact
+	// count, so a stray extra broadcast (e.g. the boot snapshot reply)
+	// landing on "stuck" doesn't make this test brittle.
+	moveMsg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
+	for i := 0; i < maxConsecutiveDrops*3; i++ {
+		clientEvents <- ClientEvent{Kind: ClientMessage, ClientID: "sender", Message: moveMsg}
+	}
+
+	// stuck's channel should end up closed: drain whatever made it into the
+	// buffer, then the channel read must report closed rather than block
+	// forever waiting for a message that will never come. One shared
+	// deadline (not one per read) so this stays reliable under a loaded,
+	// parallel `go test ./...` run rather than flaking on scheduling delay.
+	closed := false
+	deadline := time.After(5 * time.Second)
+readLoop:
+	for {
+		select {
+		case _, ok := <-stuck:
+			if !ok {
+				closed = true
+				break readLoop
+			}
+		case <-deadline:
+			break readLoop
+		}
+	}
+	if !closed {
+		t.Fatal("stuck client's outbound channel was never closed")
+	}
+
+	// hub must still be alive and serving other clients after cutting the
+	// stuck one loose.
+	other := make(chan oscmsg.Envelope, 8)
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "other", Outbound: other}
+	drainN(t, other, 2)
+	clientEvents <- ClientEvent{Kind: ClientMessage, ClientID: "sender", Message: moveMsg}
+	select {
+	case env := <-other:
+		if env.Kind != oscmsg.KindOSC || env.Message == nil || env.Message.Address != moveMsg.Address {
+			t.Fatalf("other received %+v, want the fader move", env)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("hub stopped broadcasting to other clients after disconnecting the stuck one")
+	}
+}
+
 func TestClientQueryRespondsFromCacheOnly(t *testing.T) {
 	_, fakeDesk, clientEvents := newTestHubWithOneOfEach(t)
 

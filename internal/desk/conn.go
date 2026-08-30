@@ -50,11 +50,19 @@ type Conn struct {
 
 // Listen opens the local UDP socket the desk (and any configured external
 // OSC devices) send to, and remembers the desk's address as the default
-// send target for Send.
+// send target for Send. deskIP may be empty — the router-container config
+// is meant to come up with no desk set and get pointed at one later via the
+// admin panel's Network tab (SetRemote), rather than requiring it at
+// process start; Send returns an error in the meantime rather than sending
+// anywhere.
 func Listen(localPort int, deskIP string, deskPort int) (*Conn, error) {
-	ip := net.ParseIP(deskIP)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid desk ip %q", deskIP)
+	var raddr *net.UDPAddr
+	if deskIP != "" {
+		ip := net.ParseIP(deskIP)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid desk ip %q", deskIP)
+		}
+		raddr = &net.UDPAddr{IP: ip, Port: deskPort}
 	}
 
 	sock, err := net.ListenUDP("udp", &net.UDPAddr{Port: localPort})
@@ -70,7 +78,7 @@ func Listen(localPort int, deskIP string, deskPort int) (*Conn, error) {
 
 	return &Conn{
 		sock:    sock,
-		raddr:   &net.UDPAddr{IP: ip, Port: deskPort},
+		raddr:   raddr,
 		inbound: make(chan InboundMessage, inboundBufferSize),
 	}, nil
 }
@@ -156,11 +164,15 @@ func (c *Conn) Run(ctx context.Context) error {
 	}
 }
 
-// Send sends to the desk's configured address.
+// Send sends to the desk's configured address. Errors if no desk has been
+// configured yet (see Listen's doc comment) — there's nowhere to send to.
 func (c *Conn) Send(msg oscmsg.Message) error {
 	c.mu.Lock()
 	raddr := c.raddr
 	c.mu.Unlock()
+	if raddr == nil {
+		return fmt.Errorf("desk: no desk configured")
+	}
 	return c.SendTo(msg, raddr)
 }
 

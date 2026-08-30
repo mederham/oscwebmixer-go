@@ -88,9 +88,9 @@ func main() {
 		}
 		httpPort = port
 	}
-	if global.Desk.IP == "" {
-		logger.Fatalf("no desk IP configured — set desk.ip in %s/global.json or pass -desk-ip", *configDir)
-	}
+	// No desk IP is a normal starting state, not an error — the router
+	// container is expected to boot with none set and get pointed at a
+	// desk later via the admin panel's Network tab (see desk.Listen).
 
 	// Persist the resolved config immediately (even if it only came from
 	// CLI flags on a first run) so global.json — and therefore the admin
@@ -174,7 +174,11 @@ func main() {
 	deskErr := make(chan error, 1)
 	go func() { deskErr <- conn.Run(ctx) }()
 
-	logger.Printf("connecting to desk %s:%d, listening on :%d", global.Desk.IP, global.Desk.Port, global.OSC.Port)
+	if global.Desk.IP == "" {
+		logger.Printf("no desk configured yet (set it in the admin Network tab), listening on :%d", global.OSC.Port)
+	} else {
+		logger.Printf("connecting to desk %s:%d, listening on :%d", global.Desk.IP, global.Desk.Port, global.OSC.Port)
+	}
 	err = h.Run(ctx, conn.Inbound(), clientEvents, adminEvents)
 	<-deskErr // wait for the reader goroutine to unwind too
 

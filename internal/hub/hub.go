@@ -161,6 +161,7 @@ type Hub struct {
 	snapshotName      string
 
 	clients         map[string]chan<- oscmsg.Envelope
+	dropStreak      map[string]int
 	externalDevices []ExternalDevice
 
 	// layout/auxOverrides are the admin-editable overlay loaded from
@@ -304,6 +305,7 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		status:                  StatusStarting,
 		ready:                   make(chan Snapshot, 1),
 		clients:                 make(map[string]chan<- oscmsg.Envelope),
+		dropStreak:              make(map[string]int),
 		layout:                  opts.InitialLayout,
 		auxOverrides:            opts.InitialAuxes,
 		autoHideChannelPatterns: opts.AutoHideChannelPatterns,
@@ -399,8 +401,8 @@ func (h *Hub) checkDeskHealth() {
 // connectivity changed, not topology).
 func (h *Hub) pushStatus() {
 	status := oscmsg.NewStatusEnvelope(string(h.status))
-	for _, out := range h.clients {
-		h.sendTo(out, status)
+	for id, out := range h.clients {
+		h.sendTo(id, out, status)
 	}
 }
 
@@ -410,9 +412,9 @@ func (h *Hub) pushStatus() {
 func (h *Hub) pushStatusAndConfig() {
 	status := oscmsg.NewStatusEnvelope(string(h.status))
 	cfg := oscmsg.NewConfigEnvelope(h.buildConfig())
-	for _, out := range h.clients {
-		h.sendTo(out, status)
-		h.sendTo(out, cfg)
+	for id, out := range h.clients {
+		h.sendTo(id, out, status)
+		h.sendTo(id, out, cfg)
 	}
 }
 

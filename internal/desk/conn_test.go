@@ -150,6 +150,34 @@ func TestSetRemoteChangesSendTarget(t *testing.T) {
 	assertReceivesPing(t, recv2)
 }
 
+func TestListenWithoutDeskIPThenSetRemote(t *testing.T) {
+	recv, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
+	if err != nil {
+		t.Fatalf("listen recv: %v", err)
+	}
+	defer recv.Close()
+	recvPort := recv.LocalAddr().(*net.UDPAddr).Port
+
+	c, err := Listen(0, "", 0)
+	if err != nil {
+		t.Fatalf("Listen with empty desk IP: %v", err)
+	}
+	defer c.Close()
+
+	msg := oscmsg.Message{Address: "/ping", Args: []any{}}
+	if err := c.Send(msg); err == nil {
+		t.Fatal("Send with no desk configured returned nil error, want an error")
+	}
+
+	if err := c.SetRemote("127.0.0.1", recvPort); err != nil {
+		t.Fatalf("SetRemote: %v", err)
+	}
+	if err := c.Send(msg); err != nil {
+		t.Fatalf("Send after SetRemote: %v", err)
+	}
+	assertReceivesPing(t, recv)
+}
+
 func TestSetRemoteRejectsInvalidIP(t *testing.T) {
 	c, err := Listen(0, "127.0.0.1", 1)
 	if err != nil {

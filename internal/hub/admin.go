@@ -91,8 +91,8 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		// fresh config push (see the "config on WS, push-based" decision;
 		// same mechanism used on connect).
 		cfg := oscmsg.NewConfigEnvelope(h.buildConfig())
-		for _, out := range h.clients {
-			h.sendTo(out, cfg)
+		for id, out := range h.clients {
+			h.sendTo(id, out, cfg)
 		}
 
 	case AdminStatusQuery:

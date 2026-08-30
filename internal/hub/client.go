@@ -33,11 +33,12 @@ func (h *Hub) handleClientEvent(ev ClientEvent) {
 	case ClientConnected:
 		h.clients[ev.ClientID] = ev.Outbound
 		h.log.Printf("client connected: %s (total %d)", ev.ClientID, len(h.clients))
-		h.sendTo(ev.Outbound, oscmsg.NewStatusEnvelope(string(h.status)))
-		h.sendTo(ev.Outbound, oscmsg.NewConfigEnvelope(h.buildConfig()))
+		h.sendTo(ev.ClientID, ev.Outbound, oscmsg.NewStatusEnvelope(string(h.status)))
+		h.sendTo(ev.ClientID, ev.Outbound, oscmsg.NewConfigEnvelope(h.buildConfig()))
 
 	case ClientDisconnected:
 		delete(h.clients, ev.ClientID)
+		delete(h.dropStreak, ev.ClientID)
 		h.log.Printf("client disconnected: %s (total %d)", ev.ClientID, len(h.clients))
 
 	case ClientMessage:
@@ -90,7 +91,7 @@ func (h *Hub) handleClientMessage(clientID string, msg oscmsg.Message) {
 		key := strings.TrimSuffix(msg.Address, "/?")
 		if cached, ok := h.cache[key]; ok {
 			if clientOut, ok := h.clients[clientID]; ok {
-				h.sendTo(clientOut, oscmsg.NewOSCEnvelope(cached))
+				h.sendTo(clientID, clientOut, oscmsg.NewOSCEnvelope(cached))
 			}
 			return
 		}
@@ -100,17 +101,42 @@ func (h *Hub) handleClientMessage(clientID string, msg oscmsg.Message) {
 	h.broadcast(msg, clientSource(clientID))
 }
 
+// maxConsecutiveDrops bounds how long sendTo tolerates a client's outbound
+// channel being full before giving up on it — see sendTo's doc comment.
+// Chosen well above outboundBufferSize's own headroom (a transient burst
+// briefly filling the channel is normal and must not trip this) but far
+// below what it'd take to notice: a client stuck at this streak has gone
+// long enough without draining a single message that it is not coming
+// back on its own.
+const maxConsecutiveDrops = 64
+
 // sendTo delivers one envelope to a client's outbound channel without ever
 // blocking the hub goroutine — a wedged/backgrounded client's channel
 // filling up must not stall fan-out to everyone else (see plan:
-// "Backpressure policy"). internal/wsserver is responsible for actually
-// disconnecting a client whose channel is chronically full; hub only ever
-// drops-and-logs here.
-func (h *Hub) sendTo(out chan<- oscmsg.Envelope, env oscmsg.Envelope) {
+// "Backpressure policy"). A single full channel is expected and cheap to
+// drop-and-move-on; what isn't cheap is doing that on every message for a
+// client that's stopped draining entirely — logging every one of those
+// (the previous behavior) turned a backgrounded mobile tab into a
+// synchronous log write on hub's hot path for every single desk/client
+// message thereafter, which is what was pinning CPU on real hardware
+// during heavy fader movement, not the message volume itself. Past
+// maxConsecutiveDrops in a row, close the channel and drop the client
+// instead of logging forever — closing is what tells wsserver's write pump
+// to exit and tear the connection down (see writePump), and mixer.js's
+// existing auto-reconnect brings it straight back once it can keep up.
+func (h *Hub) sendTo(id string, out chan<- oscmsg.Envelope, env oscmsg.Envelope) {
 	select {
 	case out <- env:
+		delete(h.dropStreak, id)
 	default:
-		h.log.Printf("client outbound channel full, dropping %s envelope", env.Kind)
+		h.dropStreak[id]++
+		if h.dropStreak[id] < maxConsecutiveDrops {
+			return
+		}
+		h.log.Printf("client %s: outbound channel stuck full after %d messages, disconnecting", id, h.dropStreak[id])
+		delete(h.dropStreak, id)
+		delete(h.clients, id)
+		close(out)
 	}
 }
 
@@ -179,6 +205,6 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 		if id == source.clientID {
 			continue
 		}
-		h.sendTo(out, env)
+		h.sendTo(id, out, env)
 	}
 }
