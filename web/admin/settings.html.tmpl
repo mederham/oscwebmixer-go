@@ -5,8 +5,8 @@
 		<h3>General</h3>
 		<label>Debug logging <input type="checkbox" class="toggle" name="debug" {{if .Debug}}checked{{end}} /></label>
 
-		<h3>Auto-hide</h3>
-		<p class="hint">Comma-separated, case-insensitive. A channel/group/aux whose desk name contains one of its type's patterns starts hidden the first time it appears — a manually re-enabled source always stays enabled regardless. Kept separate per type since names collide by convention (an effect aux "Hall" and its return channel "Hall Ret" both contain "Hall"). Applies to every session.</p>
+		<h3>Auto-hide patterns</h3>
+		<p class="hint">Auto-hide keeps a newly-seen source or aux off the mixer layout by default when its name matches a pattern below.<br/>Comma-separated, case-insensitive; manually re-enabling a source overrides this.</p>
 		<label>
 			Channels
 			<input type="text" name="autoHideChannelPatterns" value="{{join .AutoHideChannelPatterns ", "}}" placeholder="e.g. Talkback" />

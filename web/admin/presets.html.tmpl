@@ -1,6 +1,7 @@
 {{define "presets-section"}}
 <section id="section-presets">
 	<h2>Presets</h2>
+	<p class="hint">Save and restore your OSCWebMixer configuration (mixer layout, auxes).</p>
 	<form hx-post="/admin/presets/save" hx-target="#section-presets" hx-swap="outerHTML" class="inline-form">
 		<input type="text" name="name" placeholder="New preset name" required />
 		<button type="submit">Save</button>
@@ -27,6 +28,8 @@
 				<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML" hx-confirm="Delete preset {{.Name}}? This cannot be undone.">Delete</button>
 			</div>
 		</div>
+	{{else}}
+		<p class="hint">No presets are currently saved.</p>
 	{{end}}
 	</div>
 </section>

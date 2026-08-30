@@ -1,6 +1,7 @@
 {{define "auxes-section"}}
 <section id="section-auxes"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Auxes</h2>
+	<p class="hint">Auxes are the desk's mix buses - each one can become a personal mix a user can pick in the mixer app.</p>
 	<button type="button" id="auxes-toggle-all">Show/Hide all</button>
 	<form id="auxes-form" hx-post="/admin/auxes" hx-target="#section-auxes" hx-swap="outerHTML">
 		<div class="cards">

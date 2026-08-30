@@ -1,7 +1,7 @@
 {{define "external-devices-section"}}
 <section id="section-external-devices">
 	<h2>External devices</h2>
-	<p class="hint">Broadcast doubles as this device's enable/disable — off means it never receives relayed traffic. Edits save as soon as you change a field.</p>
+	<p class="hint">To use the DiGiCo iPad app or other OSC devices with OSCWebMixer, add your connections here. Multiple iPads can be connected to the same console through OSCWebMixer.</p>
 	<div class="cards">
 		{{range .ExternalDevices}}
 		<div class="device-card" hx-post="/admin/external-devices/{{.ID}}" hx-trigger="change" hx-include="closest .device-card" hx-target="#section-external-devices" hx-swap="outerHTML">

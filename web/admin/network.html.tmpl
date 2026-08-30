@@ -1,7 +1,7 @@
 {{define "network-section"}}
 <section id="section-network">
 	<h2>Network</h2>
-	<p class="hint">Applies live — no restart, no client disconnect. The HTTP server port isn't set here; see OSCWEBMIXER_HTTP_PORT.</p>
+	<p class="hint">To connect to a DiGiCo console, set the console's IP address and OSC receive port here.<br/>The OSC listen port of OSCWebMixer must be used as the "Send Port" on the console side.</p>
 	<form class="field-grid" hx-post="/admin/network" hx-target="#section-network" hx-swap="outerHTML">
 		<label>Desk IP <input type="text" name="deskIP" value="{{.Global.Desk.IP}}" /></label>
 		<label>Desk port <input type="number" name="deskPort" value="{{.Global.Desk.Port}}" /></label>

@@ -123,6 +123,11 @@ button:hover { background: #3a5a7a; }
 button.danger { background: #5a2a2a; border-color: #7a3a3a; margin-bottom: 0.5rem; }
 button.danger:hover { background: #7a3a3a; }
 
+/* Standalone "Show/Hide all" buttons need the same trailing gap that
+   button.danger gets — on Sources it rides along on the danger button's
+   line, but Auxes has no danger button ahead of it to provide one. */
+#sources-toggle-all, #auxes-toggle-all { margin-bottom: 0.5rem; }
+
 .drag-handle {
 	cursor: grab;
 	opacity: 0.5;
@@ -376,3 +381,6 @@ input.toggle:checked::before { left: 1.15rem; }
    column slot like a field would — h3/.hint's own margins are unchanged. */
 .field-grid h3, .field-grid p { grid-column: 1 / -1; }
 .field-grid h3:first-child { margin-top: 0; }
+/* Pull a hint up against the subsection heading it explains, rather than
+   the h3's usual 0.4rem plus the hint's own 0.25rem top margin stacking. */
+.field-grid h3 + .hint { margin-top: 0; }
