@@ -19,10 +19,14 @@ body {
    still be the last thing known while the socket itself later drops, so
    "disconnected" (no live connection at all, nothing else can be trusted)
    is declared last and always wins over a possibly-stale desk-status
-   class. */
+   class. locked sits above the desk-state messages (an admin's explicit
+   "hands off" beats "connecting…"/"desk offline") but below disconnected,
+   since a client with no live connection can't know the lock is even
+   still in effect. */
 body.status-starting::before,
 body.status-reloading::before,
 body.status-degraded::before,
+body.locked::before,
 body.disconnected::before {
 	display: block;
 	color: #fff;
@@ -32,6 +36,7 @@ body.disconnected::before {
 body.status-starting::before { content: "connecting to desk…"; background: #336699; }
 body.status-reloading::before { content: "reloading session…"; background: #336699; }
 body.status-degraded::before { content: "desk offline"; background: #a80; }
+body.locked::before { content: "personal mixing locked"; background: #555; }
 body.disconnected::before { content: "disconnected — reconnecting…"; background: #a33; }
 
 header {
@@ -135,11 +140,12 @@ body.picking-aux #aux-picker { display: flex; }
 }
 
 /* Channels/faders only ever show once the desk is confirmed healthy, the
-   socket is actually open, and the aux picker isn't covering them — a
-   starting/reloading/degraded/disconnected client has nothing meaningful
-   (or nothing at all) to fade, so there's no slider UI to misread as live. */
+   socket is actually open, the aux picker isn't covering them, and personal
+   mixing isn't admin-locked — a starting/reloading/degraded/disconnected/
+   locked client has nothing meaningful (or nothing it's allowed) to fade,
+   so there's no slider UI to misread as live. */
 #channels { display: none; padding: 0 1rem 1rem; }
-body.status-healthy:not(.disconnected):not(.picking-aux) #channels {
+body.status-healthy:not(.disconnected):not(.picking-aux):not(.locked) #channels {
 	display: block;
 }
 
@@ -157,7 +163,7 @@ body.status-healthy:not(.disconnected):not(.picking-aux) #channels {
 	   bare #channels rule, which would tie its specificity and let source
 	   order alone decide, showing the grid even while channels should
 	   stay hidden (disconnected / still picking an aux). */
-	body.status-healthy:not(.disconnected):not(.picking-aux) #channels {
+	body.status-healthy:not(.disconnected):not(.picking-aux):not(.locked) #channels {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
 		column-gap: 1.5rem;

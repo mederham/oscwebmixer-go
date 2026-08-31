@@ -570,6 +570,35 @@ func TestPresetActiveAndUpdate(t *testing.T) {
 	}
 }
 
+// TestLockSurvivesPresetLoad proves the lock is a runtime-only kill switch,
+// not part of saved state: it isn't in config.State/config.Preset at all,
+// so loading a preset (which overwrites layout/auxes live) must leave an
+// active lock untouched rather than silently clearing it.
+func TestLockSurvivesPresetLoad(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	uuid := presets[0].UUID
+
+	postForm(t, mux, "/admin/lock", "locked=on")
+
+	postForm(t, mux, "/admin/presets/"+uuid+"/load", "")
+
+	status, err := h.queryStatus(context.Background())
+	if err != nil {
+		t.Fatalf("queryStatus: %v", err)
+	}
+	if !status.Locked {
+		t.Fatal("Locked = false after loading a preset, want true (lock must survive preset/session changes)")
+	}
+}
+
 // TestSettingsSaveAppliesLive proves the Settings tab's per-type auto-hide
 // patterns (see config.Global's AutoHide*Patterns fields) round-trip to
 // disk and reach hub live, with no restart — fakeDesk's one channel is
@@ -649,6 +678,39 @@ func TestSettingsSaveAppliesDebug(t *testing.T) {
 	}
 	if global.Debug {
 		t.Fatal("persisted Debug = true after unchecking, want false")
+	}
+}
+
+// TestLockToggleAppliesLive proves POST /admin/lock reaches hub live (via
+// AdminSetLocked, reflected in queryStatus) with no disk write — locked is
+// deliberately runtime-only, see hub.Hub.locked's doc comment.
+func TestLockToggleAppliesLive(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := postForm(t, mux, "/admin/lock", "locked=on")
+	if !strings.Contains(rec.Body.String(), "checked") || !strings.Contains(rec.Body.String(), "locked") {
+		t.Fatalf("lock response = %s, want the toggle to come back checked/locked", rec.Body.String())
+	}
+	status, err := h.queryStatus(context.Background())
+	if err != nil {
+		t.Fatalf("queryStatus: %v", err)
+	}
+	if !status.Locked {
+		t.Fatal("hub Locked = false after locking, want true")
+	}
+
+	rec = postForm(t, mux, "/admin/lock", "")
+	if strings.Contains(rec.Body.String(), "checked") {
+		t.Fatalf("lock response = %s, want the toggle unchecked after omitting the field", rec.Body.String())
+	}
+	status, err = h.queryStatus(context.Background())
+	if err != nil {
+		t.Fatalf("queryStatus: %v", err)
+	}
+	if status.Locked {
+		t.Fatal("hub Locked = true after unlocking, want false")
 	}
 }
 

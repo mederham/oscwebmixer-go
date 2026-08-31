@@ -323,6 +323,14 @@ input.toggle:checked::before { left: 1.15rem; }
    specificity rule that wins regardless of source order. */
 .device-card.add-device[hidden] { display: none; }
 
+/* Lock toggle: same input.toggle switch as everywhere else, but checked
+   reads as "locked" (a warning state), not "on/enabled" — red instead of
+   the usual green, so a glance at the topbar tells you mixing is off for
+   everyone. */
+.lock-toggle label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer; }
+.lock-toggle input.toggle:checked { background: #a33; }
+.lock-toggle.locked { color: #e88; }
+
 .status-dot {
 	display: inline-block;
 	width: 0.7rem;

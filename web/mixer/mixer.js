@@ -220,6 +220,7 @@ function applyStatus(status) {
 	document.body.classList.toggle("status-reloading", desk === "reloading");
 	document.body.classList.toggle("status-degraded", desk === "degraded");
 	document.body.classList.toggle("status-healthy", desk === "healthy");
+	document.body.classList.toggle("locked", !!(status && status.locked));
 }
 
 const sendLevelPanRe = /^\/(Input_Channels|Group_Outputs)\/(\d+)\/Aux_Send\/(\d+)\/send_(level|pan)$/;

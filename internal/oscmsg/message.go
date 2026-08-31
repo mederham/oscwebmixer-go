@@ -30,9 +30,12 @@ const (
 
 // StatusPayload carries desk connectivity/session state, pushed down an
 // already-open socket instead of the socket being torn down (see the plan's
-// Healthcheck / connection-lifecycle redesign).
+// Healthcheck / connection-lifecycle redesign). Locked is independent of
+// Desk: an admin-toggled kill switch for personal mixing, not a connectivity
+// state, so it rides along on the same push rather than a state of its own.
 type StatusPayload struct {
-	Desk string `json:"desk"` // "starting" | "healthy" | "degraded" | "reloading"
+	Desk   string `json:"desk"` // "starting" | "healthy" | "degraded" | "reloading"
+	Locked bool   `json:"locked"`
 }
 
 // NewOSCEnvelope wraps a Message for transmission to a WS client.
@@ -40,9 +43,10 @@ func NewOSCEnvelope(m Message) Envelope {
 	return Envelope{Kind: KindOSC, Message: &m}
 }
 
-// NewStatusEnvelope wraps a desk status for transmission to a WS client.
-func NewStatusEnvelope(desk string) Envelope {
-	return Envelope{Kind: KindStatus, Status: &StatusPayload{Desk: desk}}
+// NewStatusEnvelope wraps a desk status and the personal-mixing lock state
+// for transmission to a WS client.
+func NewStatusEnvelope(desk string, locked bool) Envelope {
+	return Envelope{Kind: KindStatus, Status: &StatusPayload{Desk: desk, Locked: locked}}
 }
 
 // NewConfigEnvelope wraps a config payload for transmission to a WS client.

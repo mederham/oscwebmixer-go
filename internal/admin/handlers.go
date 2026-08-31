@@ -354,6 +354,29 @@ func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleLockUpdate toggles the personal-mixing kill switch live — no disk
+// write (see hub.Hub.locked's doc comment: deliberately runtime-only) and
+// no config reload, just a direct AdminSetLocked event and a re-render of
+// the topbar's lock-toggle fragment reflecting the new state.
+func (h *Handler) handleLockUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	locked := r.Form.Has("locked")
+
+	select {
+	case h.adminEvents <- hub.AdminEvent{Kind: hub.AdminSetLocked, Locked: locked}:
+	default:
+		h.log.Printf("admin lock: event channel full, not applied")
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "lock-toggle", hub.DeskStatusInfo{Locked: locked}); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
 // handleSettingsUpdate saves the auto-hide name patterns (see
 // config.Global's AutoHide*Patterns fields) and Debug logging, and applies
 // both live via the same AdminApply path as external devices — no socket

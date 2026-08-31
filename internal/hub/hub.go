@@ -218,6 +218,12 @@ type Hub struct {
 
 	// debug gates debugf — see Options.Debug.
 	debug bool
+
+	// locked is the admin-toggled personal-mixing kill switch (AdminSetLocked)
+	// — deliberately runtime-only, not persisted to config/state.json: it's a
+	// temporary "everyone hands off" switch for during a show, not a mixer
+	// setting meant to survive a restart.
+	locked bool
 }
 
 // debugf logs a per-hop trace line when Options.Debug is set — otherwise a
@@ -400,7 +406,7 @@ func (h *Hub) checkDeskHealth() {
 // whenever status changes but the config itself hasn't (going Degraded:
 // connectivity changed, not topology).
 func (h *Hub) pushStatus() {
-	status := oscmsg.NewStatusEnvelope(string(h.status))
+	status := oscmsg.NewStatusEnvelope(string(h.status), h.locked)
 	for id, out := range h.clients {
 		h.sendTo(id, out, status)
 	}
@@ -410,7 +416,7 @@ func (h *Hub) pushStatus() {
 // stale config snapshot from before this transition (recovering from either
 // Starting or Degraded).
 func (h *Hub) pushStatusAndConfig() {
-	status := oscmsg.NewStatusEnvelope(string(h.status))
+	status := oscmsg.NewStatusEnvelope(string(h.status), h.locked)
 	cfg := oscmsg.NewConfigEnvelope(h.buildConfig())
 	for id, out := range h.clients {
 		h.sendTo(id, out, status)

@@ -33,7 +33,7 @@ func TestOSCEnvelopeRoundTrip(t *testing.T) {
 }
 
 func TestStatusEnvelopeRoundTrip(t *testing.T) {
-	env := NewStatusEnvelope("degraded")
+	env := NewStatusEnvelope("degraded", false)
 
 	data, err := json.Marshal(env)
 	if err != nil {

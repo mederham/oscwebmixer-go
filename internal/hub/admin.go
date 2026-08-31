@@ -21,6 +21,7 @@ const (
 	AdminApply
 	AdminStatusQuery
 	AdminNetworkApply
+	AdminSetLocked
 )
 
 // DeskStatusInfo answers AdminStatusQuery — the Network tab's status dot
@@ -34,6 +35,7 @@ type DeskStatusInfo struct {
 	// arrived at least once (see Hub.lastDeskSeen's doc comment). The
 	// template checks LastSeen.IsZero() and renders "never" for this case.
 	LastSeen time.Time
+	Locked   bool
 }
 
 // AdminEvent is the "admin config change" member of the tagged union the
@@ -58,6 +60,9 @@ type AdminEvent struct {
 	DeskIP   string
 	DeskPort int
 	OSCPort  int
+
+	// Locked is set for AdminSetLocked.
+	Locked bool
 }
 
 // sourceKey identifies a source by its stable identity (type+number) —
@@ -97,12 +102,17 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 
 	case AdminStatusQuery:
 		select {
-		case ev.StatusReply <- DeskStatusInfo{Status: string(h.status), LastSeen: h.lastDeskSeen}:
+		case ev.StatusReply <- DeskStatusInfo{Status: string(h.status), LastSeen: h.lastDeskSeen, Locked: h.locked}:
 		default:
 		}
 
 	case AdminNetworkApply:
 		h.applyNetworkChange(ev)
+
+	case AdminSetLocked:
+		h.locked = ev.Locked
+		h.log.Printf("admin: personal mixing locked = %v", h.locked)
+		h.pushStatus()
 	}
 }
 

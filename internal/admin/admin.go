@@ -186,6 +186,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/network", noStore(h.handleNetworkUpdate))
 	mux.HandleFunc("GET /admin/network/status", noStore(h.handleNetworkStatus))
 	mux.HandleFunc("POST /admin/settings", noStore(h.handleSettingsUpdate))
+	mux.HandleFunc("POST /admin/lock", noStore(h.handleLockUpdate))
 	mux.HandleFunc("POST /admin/external-devices", noStore(h.handleExternalDeviceAdd))
 	mux.HandleFunc("POST /admin/external-devices/{id}", noStore(h.handleExternalDeviceUpdate))
 	mux.HandleFunc("POST /admin/external-devices/{id}/delete", noStore(h.handleExternalDeviceDelete))

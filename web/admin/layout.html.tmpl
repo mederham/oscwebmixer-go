@@ -1,3 +1,17 @@
+{{/* lock-toggle: the personal-mixing kill switch, always visible in the
+     topbar regardless of which tab is open. Submits on change (same
+     instant-apply pattern as external-devices.html.tmpl's broadcast
+     toggle), no separate Save button — this is meant to take effect the
+     moment it's clicked. */}}
+{{define "lock-toggle"}}
+<div id="lock-toggle" class="lock-toggle{{if .Locked}} locked{{end}}" hx-post="/admin/lock" hx-trigger="change" hx-include="closest .lock-toggle" hx-target="#lock-toggle" hx-swap="outerHTML">
+	<label>
+		<input type="checkbox" class="toggle" name="locked" {{if .Locked}}checked{{end}} />
+		{{if .Locked}}Personal mixing locked{{else}}Lock personal mixing{{end}}
+	</label>
+</div>
+{{end}}
+
 {{define "layout"}}
 <!DOCTYPE html>
 <html lang="en">
@@ -15,6 +29,7 @@
 	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s" hx-swap="innerHTML">
 		{{template "status-dot" .Network.DeskStatus}}
 	</div>
+	{{template "lock-toggle" .Network.DeskStatus}}
 </header>
 <div id="flash">{{if .Message}}<p class="flash">{{.Message}}</p>{{end}}</div>
 

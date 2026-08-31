@@ -33,7 +33,7 @@ func (h *Hub) handleClientEvent(ev ClientEvent) {
 	case ClientConnected:
 		h.clients[ev.ClientID] = ev.Outbound
 		h.log.Printf("client connected: %s (total %d)", ev.ClientID, len(h.clients))
-		h.sendTo(ev.ClientID, ev.Outbound, oscmsg.NewStatusEnvelope(string(h.status)))
+		h.sendTo(ev.ClientID, ev.Outbound, oscmsg.NewStatusEnvelope(string(h.status), h.locked))
 		h.sendTo(ev.ClientID, ev.Outbound, oscmsg.NewConfigEnvelope(h.buildConfig()))
 
 	case ClientDisconnected:
