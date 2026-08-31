@@ -13,12 +13,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -53,10 +55,46 @@ func main() {
 	configDir := flag.String("config-dir", "config", "directory for global.json/state.json/presets.json")
 	runFor := flag.Duration("run-for", 0, "exit automatically after this long (0 = run until interrupted)")
 	versionFlag := flag.Bool("version", false, "print version and exit")
+	healthcheckFlag := flag.Bool("healthcheck", false, "check that this instance's own HTTP server is responding, exit 0/1 accordingly (for Docker HEALTHCHECK — scratch has no shell/curl to run one externally, see Dockerfile)")
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Println(version)
+		return
+	}
+
+	// Resolved before the healthcheck flag below, and independently of
+	// cfgManager/logger — a healthcheck runs frequently (every
+	// HEALTHCHECK --interval) and has no business touching config files
+	// or a log stream, just a fast local HTTP round trip.
+	//
+	// The HTTP server port isn't part of config.Global at all (see its doc
+	// comment) — admin can't edit it (rebinding the listener serving the
+	// very request that changed it isn't something to support), so
+	// there's nothing to persist and nothing that can go stale on disk:
+	// env var or this hardcoded default is the only source of truth,
+	// resolved fresh on every start.
+	httpPort := defaultHTTPPort
+	if v := os.Getenv("OSCWEBMIXER_HTTP_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "OSCWEBMIXER_HTTP_PORT=%q: %v\n", v, err)
+			os.Exit(1)
+		}
+		httpPort = port
+	}
+
+	if *healthcheckFlag {
+		got, err := healthcheck(httpPort)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "healthcheck:", err)
+			os.Exit(1)
+		}
+		// Printed even on success: this is scratch, no shell to exec into
+		// and manually curl /version for a live look — `docker inspect`'s
+		// Health.Log (stdout+stderr of the last few runs) is the only
+		// place any of this is ever visible.
+		fmt.Println("ok:", got)
 		return
 	}
 
@@ -85,20 +123,6 @@ func main() {
 	}
 	if provided["listen-port"] {
 		global.OSC.Port = *listenPortFlag
-	}
-	// The HTTP server port isn't part of config.Global at all (see its doc
-	// comment) — admin can't edit it (rebinding the listener serving the
-	// very request that changed it isn't something to support), so
-	// there's nothing to persist and nothing that can go stale on disk:
-	// env var or this hardcoded default is the only source of truth,
-	// resolved fresh on every start.
-	httpPort := defaultHTTPPort
-	if v := os.Getenv("OSCWEBMIXER_HTTP_PORT"); v != "" {
-		port, err := strconv.Atoi(v)
-		if err != nil {
-			logger.Fatalf("OSCWEBMIXER_HTTP_PORT=%q: %v", v, err)
-		}
-		httpPort = port
 	}
 	// No desk IP is a normal starting state, not an error — the router
 	// container is expected to boot with none set and get pointed at a
@@ -201,4 +225,28 @@ func main() {
 		logger.Fatalf("hub: %v", err)
 	}
 	logger.Printf("shutting down (%v)", err)
+}
+
+// healthcheck backs the --healthcheck flag: a plain HTTP GET against this
+// same process's own /version endpoint. That endpoint requires nothing
+// (no desk, no config) to answer, so this only proves the HTTP server
+// itself is alive and serving — deliberately not tied to hub.Status
+// (starting/degraded/reloading are all normal, expected states whenever
+// the desk itself is rebooting or between sessions, not container-level
+// failures a restart would fix).
+func healthcheck(port int) (string, error) {
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/version", port))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("/version returned %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(body)), nil
 }

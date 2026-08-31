@@ -11,4 +11,6 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.version="${VERSION}"
 WORKDIR /webmixer
 COPY --from=builder /oscwebmixer /webmixer/oscwebmixer
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["/webmixer/oscwebmixer", "--healthcheck"]
 ENTRYPOINT ["/webmixer/oscwebmixer"]
