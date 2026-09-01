@@ -63,6 +63,63 @@ function sendOSC(address, args) {
 	}));
 }
 
+// sendThrottleMs matches the desk's own fader-update cadence — captured
+// live, DigiCo echoes a moving fader's value at ~30-40Hz best-effort
+// regardless of what's driving it (its own iPad app or this web mixer).
+// Sending faster than that just adds load (WS + UDP + hub processing per
+// message) without adding resolution the desk itself ever produces.
+const sendThrottleMs = 30;
+
+// dragEchoGuardMs bridges the round trip a locally-sent value takes before
+// it comes back as a server push: our own throttle delay (sendThrottleMs)
+// plus the desk's own echo latency. Without this, the desk's echo of a
+// value THIS client just sent — a beat old by the time it arrives — lands
+// back on this same screen and overwrites the slider mid-drag, fighting
+// the user's live input (confirmed live: visible fighting/jitter while
+// dragging). While active `input` events keep arriving, each one re-arms
+// the guard well before it can expire, so it only actually lapses once
+// the user has stopped moving the slider.
+const dragEchoGuardMs = 300;
+const sliderSendState = new WeakMap(); // el -> {timer, lastSent, pending, dragUntil}
+
+// isDraggingLocally reports whether el is (or very recently was) being
+// dragged by this client — see dragEchoGuardMs's doc comment for why
+// onMessage uses this to skip applying a server push while it's true.
+function isDraggingLocally(el) {
+	const state = sliderSendState.get(el);
+	return !!state && performance.now() < state.dragUntil;
+}
+
+// throttledSliderSend coalesces a fast-dragging slider's sends to at most
+// one per sendThrottleMs, always the latest value — never a queue of
+// stale ones (see sendThrottleMs's doc comment for why this cap exists,
+// and the "external devices" fix's doc comments for what happens
+// upstream once these land in the hub).
+function throttledSliderSend(el, address, args) {
+	let state = sliderSendState.get(el);
+	if (!state) {
+		state = { timer: null, lastSent: -Infinity, pending: null, dragUntil: -Infinity };
+		sliderSendState.set(el, state);
+	}
+	state.pending = () => sendOSC(address, args);
+
+	const now = performance.now();
+	state.dragUntil = now + dragEchoGuardMs;
+	const remaining = sendThrottleMs - (now - state.lastSent);
+	if (remaining <= 0) {
+		state.lastSent = now;
+		state.pending();
+		state.pending = null;
+	} else if (!state.timer) {
+		state.timer = setTimeout(() => {
+			state.timer = null;
+			state.lastSent = performance.now();
+			state.pending();
+			state.pending = null;
+		}, remaining);
+	}
+}
+
 function requestValues() {
 	if (!selectedAux) return;
 	const auxChannel = selectedAux.channel;
@@ -92,9 +149,9 @@ function sliderChange() {
 	const type = el.dataset.type, number = el.dataset.number;
 	const root = addressRoot(type);
 	if (el.classList.contains("volumeInput")) {
-		sendOSC(root + "/" + number + "/Aux_Send/" + selectedAux.channel + "/send_level", [sliderToDb(value)]);
+		throttledSliderSend(el, root + "/" + number + "/Aux_Send/" + selectedAux.channel + "/send_level", [sliderToDb(value)]);
 	} else {
-		sendOSC(root + "/" + number + "/Aux_Send/" + selectedAux.channel + "/send_pan", [value]);
+		throttledSliderSend(el, root + "/" + number + "/Aux_Send/" + selectedAux.channel + "/send_pan", [value]);
 	}
 }
 
@@ -257,7 +314,7 @@ function onMessage(e) {
 		if (!selectedAux || auxChannel !== String(selectedAux.channel)) return;
 		const cls = kind === "level" ? "volumeInput" : "panInput";
 		const el = findSlider(type, number, cls);
-		if (!el) return;
+		if (!el || isDraggingLocally(el)) return;
 		const value = kind === "level" ? dbToSlider(parseFloat(msg.args[0])) : parseFloat(msg.args[0]);
 		el.value = value;
 		el.parentNode.style.setProperty('--value', (value * 100) + "%");
