@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1700,5 +1702,34 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 	}
 	if calls := fakeDesk.rebindCallsSnapshot(); len(calls) != 1 || calls[0] != 9001 {
 		t.Fatalf("Rebind calls = %v, want exactly one call with the new OSC port", calls)
+	}
+}
+
+// TestLogSendErrThrottledSuppressesRepeats proves broadcast's send-error
+// logging (see lastSendErrLogged's doc comment) doesn't spam the log at
+// message rate for a destination that's down — every message to it fails,
+// so without throttling every single one would log a line.
+func TestLogSendErrThrottledSuppressesRepeats(t *testing.T) {
+	var buf bytes.Buffer
+	h := New(&scriptedDesk{}, nil, log.New(&buf, "", 0), Options{})
+
+	for i := 0; i < 5; i++ {
+		h.logSendErrThrottled("dead-device", "broadcast to external %q: boom", "dead-device")
+	}
+	if n := strings.Count(buf.String(), "boom"); n != 1 {
+		t.Fatalf("logged %d times within the throttle window, want exactly 1: %s", n, buf.String())
+	}
+
+	// A different key must not be suppressed by the first key's throttle.
+	h.logSendErrThrottled("other-device", "broadcast to external %q: boom", "other-device")
+	if n := strings.Count(buf.String(), "boom"); n != 2 {
+		t.Fatalf("logged %d times after a different key, want exactly 2: %s", n, buf.String())
+	}
+
+	// Once the interval has passed, the same key logs again.
+	h.lastSendErrLogged["dead-device"] = time.Now().Add(-sendErrLogInterval - time.Second)
+	h.logSendErrThrottled("dead-device", "broadcast to external %q: boom", "dead-device")
+	if n := strings.Count(buf.String(), "boom"); n != 3 {
+		t.Fatalf("logged %d times after the throttle window elapsed, want exactly 3: %s", n, buf.String())
 	}
 }

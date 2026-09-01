@@ -45,6 +45,21 @@ type Conn struct {
 	sock  *net.UDPConn
 	raddr *net.UDPAddr
 
+	// sendSocks holds one dedicated, connected outbound socket per
+	// destination address (keyed by addr.String()), instead of writing
+	// every destination through the shared receive socket above. A
+	// per-destination socket isolates OS-level "destination unreachable"
+	// errors (ICMP host/net unreachable) to the one address that caused
+	// them — on a shared unconnected socket, the kernel latches that error
+	// onto the socket itself and returns it on the *next* send call
+	// regardless of target, silently failing sends to a completely
+	// different, healthy destination (confirmed live: enabling one
+	// offline external device dropped almost all desk traffic too).
+	// Entries are never evicted — an address that stops being used (e.g.
+	// after SetRemote or an admin device-IP edit) just leaves one idle
+	// socket cached for the life of the process, which is negligible.
+	sendSocks map[string]*net.UDPConn
+
 	inbound chan InboundMessage
 }
 
@@ -77,9 +92,10 @@ func Listen(localPort int, deskIP string, deskPort int) (*Conn, error) {
 	}
 
 	return &Conn{
-		sock:    sock,
-		raddr:   raddr,
-		inbound: make(chan InboundMessage, inboundBufferSize),
+		sock:      sock,
+		raddr:     raddr,
+		sendSocks: make(map[string]*net.UDPConn),
+		inbound:   make(chan InboundMessage, inboundBufferSize),
 	}, nil
 }
 
@@ -177,17 +193,51 @@ func (c *Conn) Send(msg oscmsg.Message) error {
 }
 
 // SendTo sends to an arbitrary address (used for configured external OSC
-// devices, not just the desk).
+// devices, not just the desk). Each destination gets its own dedicated
+// outbound socket — see sendSocks' doc comment for why — rather than going
+// out through the shared receive socket.
 func (c *Conn) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
 	oscMsg, err := toOSC(msg)
 	if err != nil {
 		return err
 	}
-	c.mu.Lock()
-	sock := c.sock
-	c.mu.Unlock()
-	_, err = sock.WriteToUDP(oscMsg.Bytes(), addr)
+	sock, err := c.sendSock(addr)
+	if err != nil {
+		return err
+	}
+	_, err = sock.Write(oscMsg.Bytes())
 	return err
+}
+
+// sendSock returns the dedicated outbound socket for addr, creating and
+// caching it on first use. The source port is whatever the OS assigns —
+// devices reply to a separately configured fixed address, not to whatever
+// port a request happened to come from, so there's no need for outbound
+// sends to share the receive socket's local port.
+func (c *Conn) sendSock(addr *net.UDPAddr) (*net.UDPConn, error) {
+	key := addr.String()
+
+	c.mu.Lock()
+	sock, ok := c.sendSocks[key]
+	c.mu.Unlock()
+	if ok {
+		return sock, nil
+	}
+
+	sock, err := net.DialUDP("udp", nil, addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial udp %s: %w", addr, err)
+	}
+
+	c.mu.Lock()
+	if existing, ok := c.sendSocks[key]; ok {
+		c.mu.Unlock()
+		sock.Close()
+		return existing, nil
+	}
+	c.sendSocks[key] = sock
+	c.mu.Unlock()
+	return sock, nil
 }
 
 // SetRemote changes the desk's address that Send targets — no socket
@@ -228,10 +278,16 @@ func (c *Conn) Rebind(localPort int) error {
 	return nil
 }
 
-// Close closes the underlying socket, which also unblocks Run.
+// Close closes the underlying socket, which also unblocks Run, plus every
+// dedicated outbound socket opened by SendTo.
 func (c *Conn) Close() error {
 	c.mu.Lock()
 	sock := c.sock
+	sendSocks := c.sendSocks
+	c.sendSocks = make(map[string]*net.UDPConn)
 	c.mu.Unlock()
+	for _, s := range sendSocks {
+		s.Close()
+	}
 	return sock.Close()
 }

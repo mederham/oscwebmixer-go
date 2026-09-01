@@ -2,9 +2,14 @@ package hub
 
 import (
 	"strings"
+	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
+
+// sendErrLogInterval bounds how often broadcast logs a repeated send
+// failure to the same destination — see lastSendErrLogged's doc comment.
+const sendErrLogInterval = 1 * time.Minute
 
 // ClientEventKind distinguishes the lifecycle events a WS client produces,
 // forwarded into hub's single serialization point (see plan: "Concurrency
@@ -168,7 +173,7 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 	}
 	if !fromDesk {
 		if err := h.desk.Send(msg); err != nil {
-			h.log.Printf("broadcast to desk: %v", err)
+			h.logSendErrThrottled("desk", "broadcast to desk: %v", err)
 		} else if h.debug {
 			h.debugf("  -> desk: sent")
 		}
@@ -194,7 +199,7 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 			continue
 		}
 		if err := h.desk.SendTo(msg, ext.Addr); err != nil {
-			h.log.Printf("broadcast to external %q: %v", ext.Name, err)
+			h.logSendErrThrottled(ext.Addr.String(), "broadcast to external %q: %v", ext.Name, err)
 		} else if h.debug {
 			h.debugf("  -> external %q at %s: sent", ext.Name, ext.Addr)
 		}
@@ -207,4 +212,17 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 		}
 		h.sendTo(id, out, env)
 	}
+}
+
+// logSendErrThrottled logs a desk/external-device send failure at most once
+// per sendErrLogInterval per key ("desk" or the device's address string) —
+// see lastSendErrLogged's doc comment for why: a down destination fails on
+// every broadcast call, which runs once per message.
+func (h *Hub) logSendErrThrottled(key, format string, args ...any) {
+	now := time.Now()
+	if last, ok := h.lastSendErrLogged[key]; ok && now.Sub(last) < sendErrLogInterval {
+		return
+	}
+	h.lastSendErrLogged[key] = now
+	h.log.Printf(format, args...)
 }

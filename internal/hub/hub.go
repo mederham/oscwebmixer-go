@@ -164,6 +164,15 @@ type Hub struct {
 	dropStreak      map[string]int
 	externalDevices []ExternalDevice
 
+	// lastSendErrLogged throttles broadcast's desk/external-device send-error
+	// logging (see logSendErrThrottled) — keyed by "desk" or the external
+	// device's address string. A destination that's down fails on literally
+	// every message broadcast sends it (one dedicated socket per
+	// destination — see desk.Conn.SendTo's doc comment — means that failure
+	// no longer leaks onto other destinations, but it still fires at
+	// message rate for its own), which would otherwise spam the log.
+	lastSendErrLogged map[string]time.Time
+
 	// layout/auxOverrides are the admin-editable overlay loaded from
 	// config/state.json — layered onto the live desk-reported data in
 	// buildConfig(). layout is the ordered mixer layout (sources +
@@ -312,6 +321,7 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		ready:                   make(chan Snapshot, 1),
 		clients:                 make(map[string]chan<- oscmsg.Envelope),
 		dropStreak:              make(map[string]int),
+		lastSendErrLogged:       make(map[string]time.Time),
 		layout:                  opts.InitialLayout,
 		auxOverrides:            opts.InitialAuxes,
 		autoHideChannelPatterns: opts.AutoHideChannelPatterns,

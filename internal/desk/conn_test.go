@@ -178,6 +178,51 @@ func TestListenWithoutDeskIPThenSetRemote(t *testing.T) {
 	assertReceivesPing(t, recv)
 }
 
+// TestSendToUnreachableAddrDoesNotBreakOtherSends reproduces the
+// "almost all messages dropped" bug: on a shared unconnected UDP socket, an
+// ICMP error triggered by one unreachable destination (e.g. an external
+// device that's off the network) is latched onto the socket by the OS and
+// surfaces on the *next* send call — even to a completely different,
+// reachable address. SendTo must isolate each destination on its own
+// socket so this can't happen.
+func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
+	recv, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
+	if err != nil {
+		t.Fatalf("listen recv: %v", err)
+	}
+	defer recv.Close()
+	recvAddr := recv.LocalAddr().(*net.UDPAddr)
+
+	// A closed UDP port on loopback: nothing listens here, so the kernel
+	// answers with ICMP port-unreachable, the same class of OS-level
+	// "destination unreachable" error a genuinely offline device produces.
+	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen deadSock: %v", err)
+	}
+	deadAddr := deadSock.LocalAddr().(*net.UDPAddr)
+	deadSock.Close() // now nothing is listening on deadAddr
+
+	c, err := Listen(0, "", 0)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer c.Close()
+
+	msg := oscmsg.Message{Address: "/ping", Args: []any{}}
+
+	// Send repeatedly to the dead address to give the ICMP error time to
+	// land, then confirm a send to the healthy address right after still
+	// gets through.
+	for i := 0; i < 5; i++ {
+		c.SendTo(msg, deadAddr)
+	}
+	if err := c.SendTo(msg, recvAddr); err != nil {
+		t.Fatalf("SendTo healthy addr right after dead addr: %v", err)
+	}
+	assertReceivesPing(t, recv)
+}
+
 func TestSetRemoteRejectsInvalidIP(t *testing.T) {
 	c, err := Listen(0, "127.0.0.1", 1)
 	if err != nil {
