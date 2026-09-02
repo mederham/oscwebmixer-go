@@ -1034,6 +1034,89 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 	}
 }
 
+// TestDeskEchoSuppressedShortlyAfterClientDrivenChange is the regression
+// test for the fader-jump bug (see deskEchoSuppressWindow's doc comment,
+// client.go): a WS client's own change to an address is relayed to other
+// clients immediately; the desk's own echo of that same change arrives
+// later — via a full send-to-desk-and-back round trip — and re-relaying
+// it made the fader visibly jump backward to the stale echoed value on
+// every other client's screen before catching back up (confirmed live,
+// viewed from a second client while a first client dragged a fader). The
+// desk's echo of a just-client-driven address must be suppressed within
+// the window, then relayed normally again once it elapses.
+func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
+	const deskIP = "10.0.0.18"
+	const addr = "/Some/Fader/Value"
+
+	fakeDesk := &scriptedDesk{
+		inbound: make(chan desk.InboundMessage, 64),
+		sent:    make(chan oscmsg.Message, 64),
+		deskIP:  deskIP,
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
+	})
+	clientEvents := make(chan ClientEvent, 8)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, clientEvents, nil)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	outA := make(chan oscmsg.Envelope, 16)
+	outB := make(chan oscmsg.Envelope, 16)
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "A", Outbound: outA}
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "B", Outbound: outB}
+	drainN(t, outA, 2)
+	drainN(t, outB, 2)
+	drainAllSent(fakeDesk)
+
+	// A drives the fader — B gets the immediate client-to-client relay
+	// right away.
+	clientEvents <- ClientEvent{Kind: ClientMessage, ClientID: "A", Message: oscmsg.Message{Address: addr, Args: []any{float32(-6)}}}
+	select {
+	case env := <-outB:
+		if env.Kind != oscmsg.KindOSC || env.Message == nil || env.Message.Address != addr {
+			t.Fatalf("relayed envelope = %+v, want an OSC message for %s", env, addr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("B never received the client-driven relay")
+	}
+	drainAllSent(fakeDesk) // the relayed fader move landing on the (fake) desk
+
+	// The desk's own echo of that same address, arriving inside the
+	// window, must not reach B a second time.
+	fakeDesk.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: addr, Args: []any{float32(-6.02)}}, // close but not identical — the desk's own quantization
+		From:    &net.UDPAddr{IP: net.ParseIP(deskIP), Port: 9000},
+	}
+	select {
+	case env := <-outB:
+		t.Fatalf("B received a second envelope %+v — the desk's echo of a just-client-driven address must be suppressed", env)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// Once the window has elapsed, the next desk echo reconciles normally.
+	time.Sleep(deskEchoSuppressWindow)
+	fakeDesk.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: addr, Args: []any{float32(-6.02)}},
+		From:    &net.UDPAddr{IP: net.ParseIP(deskIP), Port: 9000},
+	}
+	select {
+	case env := <-outB:
+		if env.Kind != oscmsg.KindOSC || env.Message == nil || env.Message.Address != addr {
+			t.Fatalf("post-window envelope = %+v, want an OSC message for %s", env, addr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("B never received the desk's echo once the suppression window elapsed")
+	}
+}
+
 // TestExternalDeviceGetsReplyEvenWhenValueMatchesCache is the regression
 // test for the actual live-session bug (see handleDeskMessage's doc
 // comment): an external device relayed through webmixer as if it were the

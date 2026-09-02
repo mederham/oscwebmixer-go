@@ -11,6 +11,26 @@ import (
 // failure to the same destination — see lastSendErrLogged's doc comment.
 const sendErrLogInterval = 1 * time.Minute
 
+// deskEchoSuppressWindow bounds how long after relaying a WS client's own
+// change to an address broadcast will skip re-relaying the desk's echo of
+// that same address to clients. A client-driven change is relayed to
+// every other client immediately; the desk's own echo of that same change
+// only arrives after a full round trip (send to desk, desk processes and
+// echoes on its own ~30Hz best-effort cadence — see mixer.js's
+// sendThrottleMs doc comment for measurements), by which point a
+// continuously-dragged fader has already moved past it on every other
+// client's screen. Re-relaying that stale echo made the fader visibly
+// jump backward to the old position before catching back up (confirmed
+// live, viewed from a second client) — this window skips exactly that
+// redundant, structurally-late re-broadcast, while still recording the
+// desk's value in cache (handleDeskMessage caches before calling
+// broadcast) and still relaying to external devices below, which have no
+// such staleness problem since they don't render a live client-driven
+// stream of their own. Once a client stops driving an address, the very
+// next desk echo arrives after this window and reconciles every client to
+// the desk's authoritative (possibly quantized) value normally.
+const deskEchoSuppressWindow = 300 * time.Millisecond
+
 // ClientEventKind distinguishes the lifecycle events a WS client produces,
 // forwarded into hub's single serialization point (see plan: "Concurrency
 // model" — a tagged union processed one at a time, here realized as a
@@ -172,6 +192,7 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 			msg.Address, source.ip, source.clientID, h.deskIP, fromDesk, len(h.externalDevices))
 	}
 	if !fromDesk {
+		h.lastClientDriven[msg.Address] = time.Now()
 		if err := h.desk.Send(msg); err != nil {
 			h.logSendErrThrottled("desk", "broadcast to desk: %v", err)
 		} else if h.debug {
@@ -202,6 +223,20 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 			h.logSendErrThrottled(ext.Addr.String(), "broadcast to external %q: %v", ext.Name, err)
 		} else if h.debug {
 			h.debugf("  -> external %q at %s: sent", ext.Name, ext.Addr)
+		}
+	}
+
+	// See deskEchoSuppressWindow's doc comment: a desk-echoed change to an
+	// address a client was just driving is stale by the time it gets here
+	// relative to what clients already saw via the direct client-to-client
+	// relay above, so skip re-relaying it — cache and external devices
+	// already got it regardless, above.
+	if fromDesk {
+		if last, ok := h.lastClientDriven[msg.Address]; ok && time.Since(last) < deskEchoSuppressWindow {
+			if h.debug {
+				h.debugf("  -> clients: skipped (desk echo of a recently client-driven %s)", msg.Address)
+			}
+			return
 		}
 	}
 

@@ -173,6 +173,13 @@ type Hub struct {
 	// message rate for its own), which would otherwise spam the log.
 	lastSendErrLogged map[string]time.Time
 
+	// lastClientDriven records, per OSC address, the last time a WS
+	// client's own change to it was relayed — see
+	// deskEchoSuppressWindow's doc comment for why broadcast uses this to
+	// skip re-relaying the desk's echo of that same address to clients
+	// shortly after.
+	lastClientDriven map[string]time.Time
+
 	// layout/auxOverrides are the admin-editable overlay loaded from
 	// config/state.json — layered onto the live desk-reported data in
 	// buildConfig(). layout is the ordered mixer layout (sources +
@@ -322,6 +329,7 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		clients:                 make(map[string]chan<- oscmsg.Envelope),
 		dropStreak:              make(map[string]int),
 		lastSendErrLogged:       make(map[string]time.Time),
+		lastClientDriven:        make(map[string]time.Time),
 		layout:                  opts.InitialLayout,
 		auxOverrides:            opts.InitialAuxes,
 		autoHideChannelPatterns: opts.AutoHideChannelPatterns,
