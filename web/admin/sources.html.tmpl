@@ -9,7 +9,12 @@
 			<option value="{{.ID}}" {{if eq .ID $.LayoutID}}selected{{end}}>{{.Name}}</option>
 			{{end}}
 		</select>
-		{{if not .IsDefault}}
+		{{if .IsDefault}}
+		<form hx-post="/admin/layouts" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
+			<input type="text" name="name" placeholder="New layout name" required />
+			<button type="submit">+ New layout</button>
+		</form>
+		{{else}}
 		<input type="text" class="layout-name-field" name="name" value="{{.LayoutName}}" hx-post="/admin/layouts/{{.LayoutID}}/rename" hx-target="#section-sources" hx-swap="outerHTML" hx-trigger="change" />
 		<button type="button" class="danger" hx-post="/admin/layouts/{{.LayoutID}}/delete" hx-target="#section-sources" hx-swap="outerHTML" hx-confirm="Delete this layout? Any aux using it falls back to Default.">Delete layout</button>
 		{{end}}
@@ -33,16 +38,6 @@
 				{{if .IsSection}}{{template "section-marker" .Section}}{{else}}{{template "source-card" .Source}}{{end}}
 			{{end}}
 		</div>
-	</form>
-
-	<form hx-post="/admin/sections" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
-		<input type="text" name="name" placeholder="New section name" required />
-		<button type="submit">+ Add section</button>
-	</form>
-
-	<form hx-post="/admin/layouts" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
-		<input type="text" name="name" placeholder="New layout name" required />
-		<button type="submit">+ New layout</button>
 	</form>
 </section>
 {{end}}
