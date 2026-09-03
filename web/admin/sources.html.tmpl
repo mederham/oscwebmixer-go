@@ -3,17 +3,31 @@
 	<h2>Sources (channels &amp; groups)</h2>
 	<p class="hint">Sources are channels and group buses that can be mixed into auxes. Drag to reorder, hover over a source and click "+" to insert a section above.</p>
 
+	<div class="layout-picker">
+		<select name="layout" hx-get="/admin/sources" hx-target="#section-sources" hx-swap="outerHTML">
+			{{range .Layouts}}
+			<option value="{{.ID}}" {{if eq .ID $.LayoutID}}selected{{end}}>{{.Name}}</option>
+			{{end}}
+		</select>
+		{{if ne .LayoutID "default"}}
+		<input type="text" class="layout-name-field" name="name" value="{{.LayoutName}}" hx-post="/admin/layouts/{{.LayoutID}}/rename" hx-target="#section-sources" hx-swap="outerHTML" hx-trigger="change" />
+		<button type="button" class="danger" hx-post="/admin/layouts/{{.LayoutID}}/delete" hx-target="#section-sources" hx-swap="outerHTML" hx-confirm="Delete this layout? Any aux using it falls back to Default.">Delete layout</button>
+		{{end}}
+	</div>
+
 	<button
 		type="button"
 		class="danger"
 		hx-post="/admin/sources/reset"
 		hx-target="#section-sources"
 		hx-swap="outerHTML"
-		hx-confirm="Reset the layout to all channels then groups, ascending? This clears every section and customization."
+		hx-include="[name='layoutId']"
+		hx-confirm="Reset this layout to all channels then groups, ascending? This clears every section and customization."
 	>Reset layout</button>
 	<button type="button" id="sources-toggle-all">Show/Hide all</button>
 
 	<form id="sources-form" hx-post="/admin/sources/save" hx-target="#section-sources" hx-swap="outerHTML">
+		<input type="hidden" name="layoutId" value="{{.LayoutID}}" />
 		<div id="sources-list">
 			{{range .Items}}
 				{{if .IsSection}}{{template "section-marker" .Section}}{{else}}{{template "source-card" .Source}}{{end}}
@@ -21,9 +35,14 @@
 		</div>
 	</form>
 
-	<form hx-post="/admin/sections" hx-target="#section-sources" hx-swap="outerHTML" class="inline-form">
+	<form hx-post="/admin/sections" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
 		<input type="text" name="name" placeholder="New section name" required />
 		<button type="submit">+ Add section</button>
+	</form>
+
+	<form hx-post="/admin/layouts" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
+		<input type="text" name="name" placeholder="New layout name" required />
+		<button type="submit">+ New layout</button>
 	</form>
 </section>
 {{end}}

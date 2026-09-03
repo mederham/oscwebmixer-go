@@ -1031,3 +1031,81 @@ func TestPresetSaveLoadPreservesMultipleLayouts(t *testing.T) {
 		t.Fatalf("aux LayoutID after load = %q, want %q", cfg.Auxes[0].LayoutID, monID)
 	}
 }
+
+// TestSourcesTabRendersLayoutPicker proves the Sources tab's layout
+// picker/new-layout form render, and that a non-default layout shows
+// rename/delete controls Default itself never shows.
+func TestSourcesTabRendersLayoutPicker(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	for _, want := range []string{`class="layout-picker"`, `name="layout"`, `+ New layout`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("index page missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "Delete layout") {
+		t.Fatal("Default layout view should not show Delete layout")
+	}
+
+	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	var id string
+	for layoutID, nl := range cfg.MixerLayouts {
+		if nl.Name == "Monitor Mix" {
+			id = layoutID
+		}
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/admin/sources?layout="+id, nil)
+	mux.ServeHTTP(rec, req)
+	body = rec.Body.String()
+	for _, want := range []string{"Delete layout", `value="Monitor Mix"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("custom layout view missing %q: %s", want, body)
+		}
+	}
+}
+
+// TestAuxesTabRendersLayoutSelect proves each aux card's layout select
+// lists every layout and preselects the aux's current LayoutID.
+func TestAuxesTabRendersLayoutSelect(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	var id string
+	for layoutID, nl := range cfg.MixerLayouts {
+		if nl.Name == "Monitor Mix" {
+			id = layoutID
+		}
+	}
+	postForm(t, mux, "/admin/auxes", "layout[1]="+id)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="layout[1]"`) {
+		t.Fatalf("auxes tab missing layout select: %s", body)
+	}
+	if !strings.Contains(body, `value="`+id+`" selected`) && !strings.Contains(body, `value="`+id+`" selected`) {
+		// tmpl attribute order: value before the conditional "selected"
+		if !strings.Contains(body, id+`" selected`) {
+			t.Errorf("aux 1's layout select doesn't preselect %q: %s", id, body)
+		}
+	}
+}

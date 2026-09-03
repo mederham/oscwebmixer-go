@@ -21,6 +21,11 @@
 					</select>
 					<img class="icon-preview" src="{{if .Icon}}/admin/icons/{{.Icon}}{{end}}" alt="" />
 				</span>
+				<select name="layout[{{.Channel}}]" class="layout-select" title="Mixer layout">
+					{{range $.Layouts}}
+					<option value="{{.ID}}" {{if eq .ID $aux.LayoutID}}selected{{end}}>{{.Name}}</option>
+					{{end}}
+				</select>
 			</div>
 			{{end}}
 		</div>

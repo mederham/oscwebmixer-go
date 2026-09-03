@@ -150,10 +150,15 @@ document.body.addEventListener("click", function (e) {
 document.body.addEventListener("click", function (e) {
 	const btn = e.target.closest(".add-section-btn");
 	if (!btn) return;
+	const layoutIdField = document.querySelector("#sources-form [name='layoutId']");
 	htmx.ajax("POST", "/admin/sections", {
 		target: "#section-sources",
 		swap: "outerHTML",
-		values: { name: "New section", beforeKey: btn.dataset.beforeKey || "" },
+		values: {
+			name: "New section",
+			beforeKey: btn.dataset.beforeKey || "",
+			layoutId: layoutIdField ? layoutIdField.value : "",
+		},
 	});
 });
 
