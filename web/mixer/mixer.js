@@ -15,7 +15,8 @@ let ws = null,
 reconnectTimer = null,
 sources = [],
 auxes = [],
-selectedAux = null; // the full aux object (channel/label/colour/icon/stereo), not just an id
+mixerLayouts = {},
+selectedAux = null; // the full aux object (channel/label/colour/icon/stereo/layoutId), not just an id
 
 const panSnapThreshold = 0.03; // +/- around 0.5 (center) that snaps to exact center — see sliderChange
 const defaultTint = "74,144,217"; // DiGiCo blue, r,g,b — matches mixer.css's :root default; used when an aux has no/unparseable colour
@@ -39,6 +40,13 @@ function sourceKey(type, number) {
 // different namespace roots (see plan: "Group buses").
 function addressRoot(type) {
 	return type === "group" ? "/Group_Outputs" : "/Input_Channels";
+}
+
+// layoutFor resolves which named layout an aux renders — an aux with no
+// layoutId (or one naming a layout that's since been deleted admin-side)
+// falls back to "default", mirroring config.Aux.LayoutID's doc comment.
+function layoutFor(aux) {
+	return (aux && mixerLayouts[aux.layoutId]) || mixerLayouts["default"] || [];
 }
 
 // hexToRgb turns admin's "#rrggbb" colour picker output into the "r,g,b"
@@ -193,6 +201,7 @@ function selectAux(channel) {
 	panToggleWrap.hidden = !aux.stereo;
 	panToggle.checked = false;
 	document.body.classList.remove("panning");
+	buildSources(layoutFor(aux));
 	resetSliders();
 	requestValues();
 }
@@ -222,6 +231,7 @@ function buildAux(list) {
 		auxIcon.src = "";
 		auxLabel.textContent = "Select aux…";
 		panToggleWrap.hidden = true;
+		buildSources(layoutFor(null));
 		document.body.classList.add("picking-aux");
 	}
 }
@@ -288,8 +298,8 @@ function onMessage(e) {
 
 	if (env.kind === "config") {
 		snapshotSpan.textContent = (env.config && env.config.snapshot) || "";
+		mixerLayouts = (env.config && env.config.mixerLayouts) || {};
 		buildAux(env.config && env.config.auxes);
-		buildSources(env.config && env.config.mixerLayout);
 		requestValues();
 		return;
 	}
