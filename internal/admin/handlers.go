@@ -14,6 +14,18 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
+// formLayoutID reads the posted layoutId field, defaulting to the Default
+// layout — every Sources-tab request that doesn't explicitly name a
+// layout (or names an empty one) targets Default, matching the picker's
+// own "Default" option carrying id "default". Requires r.ParseForm to
+// have already been called.
+func formLayoutID(r *http.Request) string {
+	if id := r.FormValue("layoutId"); id != "" {
+		return id
+	}
+	return oscmsg.DefaultLayoutID
+}
+
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
@@ -52,8 +64,8 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	data := ViewData{
 		Global:      global,
 		Network:     NetworkSectionData{Global: global, DeskStatus: status},
-		SourcesData: toSourcesSectionData(cfg.MixerLayout, false),
-		AuxesData:   AuxesSectionData{Auxes: toAuxRows(cfg.Auxes), Icons: h.icons},
+		SourcesData: sourcesSectionData(cfg, oscmsg.DefaultLayoutID, false),
+		AuxesData:   auxesSectionData(cfg, h.icons, false),
 		Presets:     toPresetRows(presets, state.UUID),
 		Message:     r.URL.Query().Get("msg"),
 		Version:     h.version,
@@ -84,6 +96,7 @@ func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid layout: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	layoutID := formLayoutID(r)
 
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
@@ -93,13 +106,13 @@ func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fresh, err := h.saveState(ctx, layoutFromPayload(wireLayout), configAuxesFromPayload(cfg.Auxes))
+	fresh, err := h.saveLayout(ctx, layoutID, layoutFromPayload(wireLayout), configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
+	if err := h.renderSourcesSection(w, fresh, layoutID, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -116,6 +129,12 @@ func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 // apply anymore anyway (different channel names/counts/purpose), so
 // starting over is faster than hunting down what's still relevant.
 func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	layoutID := formLayoutID(r)
+
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
 	cfg, err := h.queryConfig(ctx)
@@ -124,13 +143,13 @@ func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fresh, err := h.saveState(ctx, nil, configAuxesFromPayload(cfg.Auxes))
+	fresh, err := h.saveLayout(ctx, layoutID, nil, configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
+	if err := h.renderSourcesSection(w, fresh, layoutID, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -157,6 +176,8 @@ func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	layoutID := formLayoutID(r)
+
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
 	cfg, err := h.queryConfig(ctx)
@@ -172,7 +193,7 @@ func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	newItem := config.LayoutItem{Kind: config.LayoutKindSection, SectionID: id, SectionName: name}
 
-	layout := layoutFromPayload(cfg.MixerLayout)
+	layout := layoutFromPayload(cfg.MixerLayouts[layoutID].Items)
 	insertAt := len(layout)
 	if beforeKey := r.FormValue("beforeKey"); beforeKey != "" {
 		for i, it := range layout {
@@ -187,13 +208,13 @@ func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	inserted = append(inserted, newItem)
 	inserted = append(inserted, layout[insertAt:]...)
 
-	fresh, err := h.saveState(ctx, inserted, configAuxesFromPayload(cfg.Auxes))
+	fresh, err := h.saveLayout(ctx, layoutID, inserted, configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
+	if err := h.renderSourcesSection(w, fresh, layoutID, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -215,6 +236,11 @@ func layoutItemKey(it config.LayoutItem) string {
 // field, so removing the marker alone is the whole operation.
 func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	layoutID := formLayoutID(r)
 
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
@@ -224,7 +250,7 @@ func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	layout := layoutFromPayload(cfg.MixerLayout)
+	layout := layoutFromPayload(cfg.MixerLayouts[layoutID].Items)
 	filtered := layout[:0]
 	for _, it := range layout {
 		if it.Kind == config.LayoutKindSection && it.SectionID == id {
@@ -233,13 +259,13 @@ func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
 		filtered = append(filtered, it)
 	}
 
-	fresh, err := h.saveState(ctx, filtered, configAuxesFromPayload(cfg.Auxes))
+	fresh, err := h.saveLayout(ctx, layoutID, filtered, configAuxesFromPayload(cfg.Auxes))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderSourcesSection(w, fresh.MixerLayout, false); err != nil {
+	if err := h.renderSourcesSection(w, fresh, layoutID, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -270,15 +296,16 @@ func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 		auxes[i].Enabled = r.Form.Has(fmt.Sprintf("enabled[%d]", n))
 		auxes[i].Colour = r.FormValue(fmt.Sprintf("colour[%d]", n))
 		auxes[i].Icon = r.FormValue(fmt.Sprintf("icon[%d]", n))
+		auxes[i].LayoutID = r.FormValue(fmt.Sprintf("layout[%d]", n))
 	}
 
-	fresh, err := h.saveState(ctx, layoutFromPayload(cfg.MixerLayout), auxes)
+	fresh, err := h.saveAuxes(ctx, auxes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.renderAuxesSection(w, fresh.Auxes, false); err != nil {
+	if err := h.renderAuxesSection(w, fresh, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -565,8 +592,8 @@ func (h *Handler) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := config.State{
-		MixerLayout: layoutFromPayload(cfg.MixerLayout),
-		Auxes:       configAuxesFromPayload(cfg.Auxes),
+		MixerLayouts: configLayoutsFromPayload(cfg.MixerLayouts),
+		Auxes:        configAuxesFromPayload(cfg.Auxes),
 	}
 	if _, err := h.cfg.SaveCurrentStateAsPreset(state, name); err != nil {
 		if errors.Is(err, config.ErrPresetExists) {
@@ -615,10 +642,10 @@ func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 		h.log.Printf("admin render: %v", err)
 	}
 	if err == nil {
-		if err := h.renderSourcesSection(w, cfg.MixerLayout, true); err != nil {
+		if err := h.renderSourcesSection(w, cfg, oscmsg.DefaultLayoutID, true); err != nil {
 			h.log.Printf("admin render: %v", err)
 		}
-		if err := h.renderAuxesSection(w, cfg.Auxes, true); err != nil {
+		if err := h.renderAuxesSection(w, cfg, true); err != nil {
 			h.log.Printf("admin render: %v", err)
 		}
 	}
@@ -643,7 +670,7 @@ func (h *Handler) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.cfg.UpdatePreset(uuid, layoutFromPayload(cfg.MixerLayout), configAuxesFromPayload(cfg.Auxes))
+	_, err = h.cfg.UpdatePreset(uuid, configLayoutsFromPayload(cfg.MixerLayouts), configAuxesFromPayload(cfg.Auxes))
 	if errors.Is(err, config.ErrPresetNotFound) {
 		http.NotFound(w, r)
 		return
@@ -667,7 +694,7 @@ func (h *Handler) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
 // to state.json only: saved presets, external devices, and network
 // settings are untouched, and the running process is not restarted.
 func (h *Handler) handlePresetsReset(w http.ResponseWriter, r *http.Request) {
-	def := config.State{Name: "Default"}
+	def := config.NewDefaultState()
 	if err := h.cfg.SaveState(def); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -683,10 +710,10 @@ func (h *Handler) handlePresetsReset(w http.ResponseWriter, r *http.Request) {
 		h.log.Printf("admin render: %v", err)
 	}
 	if err == nil {
-		if err := h.renderSourcesSection(w, cfg.MixerLayout, true); err != nil {
+		if err := h.renderSourcesSection(w, cfg, oscmsg.DefaultLayoutID, true); err != nil {
 			h.log.Printf("admin render: %v", err)
 		}
-		if err := h.renderAuxesSection(w, cfg.Auxes, true); err != nil {
+		if err := h.renderAuxesSection(w, cfg, true); err != nil {
 			h.log.Printf("admin render: %v", err)
 		}
 	}

@@ -229,13 +229,13 @@ func TestSectionCreateAppearsInResponse(t *testing.T) {
 		t.Fatalf("queryConfig: %v", err)
 	}
 	var found bool
-	for _, it := range cfg.MixerLayout {
+	for _, it := range cfg.MixerLayouts["default"].Items {
 		if it.Kind == oscmsg.LayoutKindSection && it.SectionName == "Drums" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("mixer layout = %+v, want a Drums section marker", cfg.MixerLayout)
+		t.Fatalf("mixer layout = %+v, want a Drums section marker", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -257,23 +257,23 @@ func TestSectionAddInsertsAtGivenPosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 2 ||
-		cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[0].SectionName != "Drums" ||
-		cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[1].Number != 1 {
-		t.Fatalf("mixer layout = %+v, want [section Drums, channel 1] — Drums inserted before channel 1", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 2 ||
+		cfg.MixerLayouts["default"].Items[0].Kind != oscmsg.LayoutKindSection || cfg.MixerLayouts["default"].Items[0].SectionName != "Drums" ||
+		cfg.MixerLayouts["default"].Items[1].Kind != oscmsg.LayoutKindSource || cfg.MixerLayouts["default"].Items[1].Number != 1 {
+		t.Fatalf("mixer layout = %+v, want [section Drums, channel 1] — Drums inserted before channel 1", cfg.MixerLayouts["default"].Items)
 	}
 
-	postForm(t, mux, "/admin/sections", "name=Vocals&beforeKey="+url.QueryEscape("section:"+cfg.MixerLayout[0].SectionID))
+	postForm(t, mux, "/admin/sections", "name=Vocals&beforeKey="+url.QueryEscape("section:"+cfg.MixerLayouts["default"].Items[0].SectionID))
 
 	cfg, err = h.queryConfig(context.Background())
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 3 ||
-		cfg.MixerLayout[0].SectionName != "Vocals" ||
-		cfg.MixerLayout[1].SectionName != "Drums" ||
-		cfg.MixerLayout[2].Number != 1 {
-		t.Fatalf("mixer layout = %+v, want [section Vocals, section Drums, channel 1] — Vocals inserted before Drums", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 3 ||
+		cfg.MixerLayouts["default"].Items[0].SectionName != "Vocals" ||
+		cfg.MixerLayouts["default"].Items[1].SectionName != "Drums" ||
+		cfg.MixerLayouts["default"].Items[2].Number != 1 {
+		t.Fatalf("mixer layout = %+v, want [section Vocals, section Drums, channel 1] — Vocals inserted before Drums", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -296,10 +296,10 @@ func TestSectionAddFallsBackToAppendOnUnmatchedBeforeKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 2 ||
-		cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSource ||
-		cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[1].SectionName != "Drums" {
-		t.Fatalf("mixer layout = %+v, want [channel 1, section Drums] — an unmatched beforeKey should fall back to appending", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 2 ||
+		cfg.MixerLayouts["default"].Items[0].Kind != oscmsg.LayoutKindSource ||
+		cfg.MixerLayouts["default"].Items[1].Kind != oscmsg.LayoutKindSection || cfg.MixerLayouts["default"].Items[1].SectionName != "Drums" {
+		t.Fatalf("mixer layout = %+v, want [channel 1, section Drums] — an unmatched beforeKey should fall back to appending", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -322,10 +322,10 @@ func TestSourcesSavePreservesOrderAndSectionPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 2 ||
-		cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[0].SectionName != "Drums" ||
-		cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[1].Number != 1 {
-		t.Fatalf("mixer layout = %+v, want [section Drums, channel 1] in exactly that order", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 2 ||
+		cfg.MixerLayouts["default"].Items[0].Kind != oscmsg.LayoutKindSection || cfg.MixerLayouts["default"].Items[0].SectionName != "Drums" ||
+		cfg.MixerLayouts["default"].Items[1].Kind != oscmsg.LayoutKindSource || cfg.MixerLayouts["default"].Items[1].Number != 1 {
+		t.Fatalf("mixer layout = %+v, want [section Drums, channel 1] in exactly that order", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -349,8 +349,8 @@ func TestSectionDeleteKeepsSourcesRemovesMarker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[0].Number != 1 {
-		t.Fatalf("mixer layout after section delete = %+v, want just channel 1 (marker removed, source kept)", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Kind != oscmsg.LayoutKindSource || cfg.MixerLayouts["default"].Items[0].Number != 1 {
+		t.Fatalf("mixer layout after section delete = %+v, want just channel 1 (marker removed, source kept)", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -374,13 +374,13 @@ func TestSourcesReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	for _, it := range cfg.MixerLayout {
+	for _, it := range cfg.MixerLayouts["default"].Items {
 		if it.Kind == oscmsg.LayoutKindSection {
-			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayout)
+			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayouts["default"].Items)
 		}
 	}
-	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Number != 1 || !cfg.MixerLayout[0].Enabled || cfg.MixerLayout[0].Icon != "" {
-		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled, no icon)", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Number != 1 || !cfg.MixerLayouts["default"].Items[0].Enabled || cfg.MixerLayouts["default"].Items[0].Icon != "" {
+		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled, no icon)", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -407,10 +407,10 @@ func TestSourcesSaveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 1 {
-		t.Fatalf("mixer layout = %+v, want 1", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 1 {
+		t.Fatalf("mixer layout = %+v, want 1", cfg.MixerLayouts["default"].Items)
 	}
-	s := cfg.MixerLayout[0]
+	s := cfg.MixerLayouts["default"].Items[0]
 	if s.Enabled {
 		t.Fatal("enabled = true, want false")
 	}
@@ -497,13 +497,13 @@ func TestPresetsReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	for _, it := range cfg.MixerLayout {
+	for _, it := range cfg.MixerLayouts["default"].Items {
 		if it.Kind == oscmsg.LayoutKindSection {
-			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayout)
+			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayouts["default"].Items)
 		}
 	}
-	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Number != 1 || !cfg.MixerLayout[0].Enabled {
-		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled)", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Number != 1 || !cfg.MixerLayouts["default"].Items[0].Enabled {
+		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled)", cfg.MixerLayouts["default"].Items)
 	}
 	if len(cfg.Auxes) != 1 || !cfg.Auxes[0].Enabled || cfg.Auxes[0].Icon != "" {
 		t.Fatalf("auxes after reset = %+v, want aux 1 back to defaults (enabled, no icon)", cfg.Auxes)
@@ -565,8 +565,8 @@ func TestPresetActiveAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPresetByID: %v", err)
 	}
-	if len(updated.MixerLayout) != 1 || updated.MixerLayout[0].Enabled {
-		t.Fatalf("preset after update = %+v, want channel 1 disabled (the live state at update time)", updated.MixerLayout)
+	if len(updated.MixerLayouts["default"].Items) != 1 || updated.MixerLayouts["default"].Items[0].Enabled {
+		t.Fatalf("preset after update = %+v, want channel 1 disabled (the live state at update time)", updated.MixerLayouts["default"].Items)
 	}
 }
 
@@ -632,8 +632,8 @@ func TestSettingsSaveAppliesLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queryConfig: %v", err)
 	}
-	if len(cfg.MixerLayout) != 1 || cfg.MixerLayout[0].Enabled {
-		t.Fatalf("mixer layout after settings save = %+v, want channel 1 (Kick) hidden by the channel pattern, applied live with no restart", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Enabled {
+		t.Fatalf("mixer layout after settings save = %+v, want channel 1 (Kick) hidden by the channel pattern, applied live with no restart", cfg.MixerLayouts["default"].Items)
 	}
 	// fakeDesk's one aux is named "Mon 1" (see fakeDesk.Send) — unaffected
 	// by the "Kick" aux pattern, since nothing named "Kick" exists among

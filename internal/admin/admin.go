@@ -243,16 +243,34 @@ func (h *Handler) queryStatus(ctx context.Context) (hub.DeskStatusInfo, error) {
 	}
 }
 
-// saveState persists the mixer layout/auxes (each already reflecting
-// whatever edit the caller made) in one atomic write, applies it live to
-// hub, and returns a fresh post-apply ConfigPayload to render from — the
-// same sequence every Sources/Auxes/Sections mutation follows.
-func (h *Handler) saveState(ctx context.Context, layout []config.LayoutItem, auxes []config.Aux) (oscmsg.ConfigPayload, error) {
+// saveLayout persists one named layout's items (layoutID) plus the auxes
+// overlay in one atomic write, applies it live to hub, and returns a
+// fresh post-apply ConfigPayload to render from — used by every
+// Sources/Sections mutation. Every other layout in state.MixerLayouts is
+// left untouched.
+func (h *Handler) saveLayout(ctx context.Context, layoutID string, items []config.LayoutItem, auxes []config.Aux) (oscmsg.ConfigPayload, error) {
 	state, err := h.cfg.LoadStateOrDefault()
 	if err != nil {
 		return oscmsg.ConfigPayload{}, err
 	}
-	state.MixerLayout = layout
+	nl := state.MixerLayouts[layoutID]
+	nl.Items = items
+	state.MixerLayouts[layoutID] = nl
+	state.Auxes = auxes
+	if err := h.cfg.SaveState(state); err != nil {
+		return oscmsg.ConfigPayload{}, err
+	}
+	h.applyState(state)
+	return h.queryConfig(ctx)
+}
+
+// saveAuxes persists the auxes overlay only, leaving every layout
+// untouched — the Auxes tab's counterpart to saveLayout.
+func (h *Handler) saveAuxes(ctx context.Context, auxes []config.Aux) (oscmsg.ConfigPayload, error) {
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		return oscmsg.ConfigPayload{}, err
+	}
 	state.Auxes = auxes
 	if err := h.cfg.SaveState(state); err != nil {
 		return oscmsg.ConfigPayload{}, err
@@ -281,7 +299,7 @@ func (h *Handler) applyState(state config.State) {
 
 	select {
 	case h.adminEvents <- hub.AdminEvent{
-		Kind: hub.AdminApply, Layout: state.MixerLayout, Auxes: state.Auxes,
+		Kind: hub.AdminApply, Layouts: state.MixerLayouts, Auxes: state.Auxes,
 		ExternalDevices:         devices,
 		AutoHideChannelPatterns: autoHideChannel,
 		AutoHideGroupPatterns:   autoHideGroup,
