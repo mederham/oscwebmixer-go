@@ -11,7 +11,7 @@
 		</select>
 		{{if .IsDefault}}
 		<form hx-post="/admin/layouts" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
-			<input type="text" name="name" placeholder="New layout name" required />
+			<input type="hidden" name="name" value="New Layout" />
 			<button type="submit">+ New layout</button>
 		</form>
 		{{else}}
