@@ -46,7 +46,8 @@ function addressRoot(type) {
 // layoutId (or one naming a layout that's since been deleted admin-side)
 // falls back to "default", mirroring config.Aux.LayoutID's doc comment.
 function layoutFor(aux) {
-	return (aux && mixerLayouts[aux.layoutId]) || mixerLayouts["default"] || [];
+	const nl = (aux && mixerLayouts[aux.layoutId]) || mixerLayouts["default"];
+	return (nl && nl.items) || [];
 }
 
 // hexToRgb turns admin's "#rrggbb" colour picker output into the "r,g,b"
