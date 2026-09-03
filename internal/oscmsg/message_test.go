@@ -55,3 +55,41 @@ func TestStatusEnvelopeRoundTrip(t *testing.T) {
 		t.Fatalf("status = %+v, want desk %q", got.Status, "degraded")
 	}
 }
+
+// TestConfigPayloadMixerLayoutsRoundTrip guards the wire shape itself:
+// MixerLayouts must marshal as a JSON object keyed by layout id (not an
+// array), each value carrying both name and items, and AuxConfig must
+// carry layoutId — this is what mixer.js's onMessage/admin's queryConfig
+// both parse.
+func TestConfigPayloadMixerLayoutsRoundTrip(t *testing.T) {
+	cfg := ConfigPayload{
+		MixerLayouts: map[string]NamedLayout{
+			DefaultLayoutID: {Name: "Default", Items: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}},
+			"mon-1":         {Name: "Monitor Mix", Items: []LayoutItem{{Kind: LayoutKindSection, SectionID: "s1", SectionName: "Drums"}}},
+		},
+		Auxes:    []AuxConfig{{Channel: 1, LayoutID: "mon-1"}},
+		Snapshot: "Show A",
+	}
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !json.Valid(data) {
+		t.Fatalf("marshaled output is not valid JSON: %s", data)
+	}
+
+	var got ConfigPayload
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got.MixerLayouts) != 2 {
+		t.Fatalf("MixerLayouts = %+v, want 2 entries", got.MixerLayouts)
+	}
+	if got.MixerLayouts["mon-1"].Name != "Monitor Mix" || len(got.MixerLayouts["mon-1"].Items) != 1 {
+		t.Fatalf("mon-1 = %+v, want Name=Monitor Mix, 1 item", got.MixerLayouts["mon-1"])
+	}
+	if len(got.Auxes) != 1 || got.Auxes[0].LayoutID != "mon-1" {
+		t.Fatalf("auxes = %+v, want aux 1 layoutId=mon-1", got.Auxes)
+	}
+}
