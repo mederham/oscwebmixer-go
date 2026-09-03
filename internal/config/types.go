@@ -76,14 +76,22 @@ const (
 	LayoutKindSection = "section"
 )
 
-// LayoutItem is one entry in State.MixerLayout — the single ordered
+// DefaultLayoutID is the one map key in State.MixerLayouts guaranteed to
+// always exist — every Manager load enforces this (see ensureDefaultLayout)
+// so callers elsewhere never need to nil-check or fall back by hand. It's
+// a fixed literal, not a generated id like every other layout gets,
+// specifically so it's recognizable in code and never renamed/deleted (see
+// admin's handleLayoutRename/handleLayoutDelete guards).
+const DefaultLayoutID = "default"
+
+// LayoutItem is one entry in a NamedLayout's Items — the single ordered
 // sequence mixing sources and admin-created section markers, exactly as
-// arranged in the admin UI's Sources tab. A source's section membership is
-// derived from whichever marker precedes it in this same sequence, not
-// stored as a field on the source — the old Title-on-a-source convention
-// worked the same way (a header derived from position), just as a real
-// named object now instead of a string glued onto whichever source
-// happened to carry it.
+// arranged in the admin UI's Sources tab for that named layout. A source's
+// section membership is derived from whichever marker precedes it in this
+// same sequence, not stored as a field on the source — the old Title-on-a-
+// source convention worked the same way (a header derived from position),
+// just as a real named object now instead of a string glued onto whichever
+// source happened to carry it.
 //
 // Array position IS display order: there is no separate Order field to
 // keep in sync with it. That matters because two independently-numbered
@@ -95,8 +103,9 @@ const (
 // Sparse, like the old Source overlay was: only a source the admin has
 // actually customized (disabled, given an icon) or a section marker needs
 // an entry here. Any channel/group the desk reports that isn't mentioned
-// anywhere in MixerLayout is appended at the end, in natural desk order,
-// by hub.buildConfig — same fallback this had before Sections existed.
+// anywhere in a given layout's Items is appended at the end, in natural
+// desk order, by hub.buildConfig — same fallback this had before Sections
+// existed, now applied independently per named layout.
 type LayoutItem struct {
 	Kind string `json:"kind"` // LayoutKindSource | LayoutKindSection
 
@@ -111,14 +120,23 @@ type LayoutItem struct {
 	SectionName string `json:"sectionName"`
 }
 
+// NamedLayout is one entry in State.MixerLayouts — a named, independently
+// ordered mixer layout an aux can be assigned to (see Aux.LayoutID). The
+// DefaultLayoutID entry always exists (see ensureDefaultLayout) and is the
+// one every aux without an explicit LayoutID renders.
+type NamedLayout struct {
+	Name  string       `json:"name"`
+	Items []LayoutItem `json:"items"`
+}
+
 // State mirrors config/state.json — the admin-editable overlay merged onto
 // live desk data by hub.buildConfig().
 type State struct {
-	UUID        string       `json:"uuid"`
-	Name        string       `json:"name"`
-	SessionName string       `json:"sessionName"`
-	Auxes       []Aux        `json:"auxes"`
-	MixerLayout []LayoutItem `json:"mixerLayout"`
+	UUID         string                 `json:"uuid"`
+	Name         string                 `json:"name"`
+	SessionName  string                 `json:"sessionName"`
+	Auxes        []Aux                  `json:"auxes"`
+	MixerLayouts map[string]NamedLayout `json:"mixerLayouts"`
 }
 
 // Aux is the admin-editable overlay for one aux bus, indexed 1:1 by
@@ -129,6 +147,14 @@ type Aux struct {
 	Enabled bool   `json:"enabled"`
 	Colour  string `json:"colour"`
 	Icon    string `json:"icon"`
+
+	// LayoutID names the entry in State.MixerLayouts this aux renders in
+	// the mixer client. Empty, or any id no longer present in
+	// MixerLayouts (e.g. a since-deleted custom layout), resolves to
+	// DefaultLayoutID — deleting a layout never blocks on or warns about
+	// auxes still pointing at it, they just silently fall back (see the
+	// design doc's "delete-in-use" decision).
+	LayoutID string `json:"layoutId"`
 }
 
 // Preset is a named, saved snapshot of State — mirrors JS's

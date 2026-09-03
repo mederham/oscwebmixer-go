@@ -33,6 +33,31 @@ func (m *Manager) globalPath() string  { return filepath.Join(m.dir, "global.jso
 func (m *Manager) statePath() string   { return filepath.Join(m.dir, "state.json") }
 func (m *Manager) presetsPath() string { return filepath.Join(m.dir, "presets.json") }
 
+// ensureDefaultLayout guarantees s.MixerLayouts has a DefaultLayoutID
+// entry named "Default" — called after every load (fresh, legacy-shimmed,
+// or already-current) so every other function in this package and its
+// callers can rely on that entry existing without a nil-check.
+func ensureDefaultLayout(s *State) {
+	if s.MixerLayouts == nil {
+		s.MixerLayouts = map[string]NamedLayout{}
+	}
+	def, ok := s.MixerLayouts[DefaultLayoutID]
+	if !ok || def.Name == "" {
+		def.Name = "Default"
+		s.MixerLayouts[DefaultLayoutID] = def
+	}
+}
+
+// NewDefaultState returns a blank State with the "default" layout already
+// present — the zero-value starting point both a missing state.json
+// (LoadStateOrDefault) and an explicit "reset everything" admin action
+// (handlePresetsReset) share, so the invariant lives in exactly one place.
+func NewDefaultState() State {
+	s := State{Name: "Default"}
+	ensureDefaultLayout(&s)
+	return s
+}
+
 // EnsureDir creates the config directory if it doesn't exist yet.
 func (m *Manager) EnsureDir() error {
 	return os.MkdirAll(m.dir, 0o755)
@@ -68,7 +93,7 @@ func (m *Manager) SaveGlobal(g Global) error {
 func (m *Manager) LoadStateOrDefault() (State, error) {
 	data, err := os.ReadFile(m.statePath())
 	if errors.Is(err, os.ErrNotExist) {
-		return State{Name: "Default"}, nil
+		return NewDefaultState(), nil
 	}
 	if err != nil {
 		return State{}, err
@@ -77,6 +102,21 @@ func (m *Manager) LoadStateOrDefault() (State, error) {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return State{}, fmt.Errorf("parse %s: %w", m.statePath(), err)
 	}
+	// ponytail: one-time compat shim for the mixerLayout -> mixerLayouts
+	// rename (2026-09). Safe to delete once you're confident every
+	// state.json on disk has been resaved in the new shape (happens
+	// automatically on the first admin edit after upgrading) — see the
+	// design doc's "legacy compat shim" section for why this isn't a
+	// general migration framework.
+	if len(s.MixerLayouts) == 0 {
+		var legacy struct {
+			MixerLayout []LayoutItem `json:"mixerLayout"`
+		}
+		if json.Unmarshal(data, &legacy) == nil && len(legacy.MixerLayout) > 0 {
+			s.MixerLayouts = map[string]NamedLayout{DefaultLayoutID: {Name: "Default", Items: legacy.MixerLayout}}
+		}
+	}
+	ensureDefaultLayout(&s)
 	return s, nil
 }
 
@@ -94,9 +134,26 @@ func (m *Manager) LoadPresets() ([]Preset, error) {
 	if err != nil {
 		return nil, err
 	}
-	var presets []Preset
-	if err := json.Unmarshal(data, &presets); err != nil {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", m.presetsPath(), err)
+	}
+	presets := make([]Preset, len(raw))
+	for i, r := range raw {
+		if err := json.Unmarshal(r, &presets[i]); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", m.presetsPath(), err)
+		}
+		// ponytail: same one-time compat shim as LoadStateOrDefault,
+		// applied per preset entry — see that function's doc comment.
+		if len(presets[i].MixerLayouts) == 0 {
+			var legacy struct {
+				MixerLayout []LayoutItem `json:"mixerLayout"`
+			}
+			if json.Unmarshal(r, &legacy) == nil && len(legacy.MixerLayout) > 0 {
+				presets[i].MixerLayouts = map[string]NamedLayout{DefaultLayoutID: {Name: "Default", Items: legacy.MixerLayout}}
+			}
+		}
+		ensureDefaultLayout(&presets[i].State)
 	}
 	return presets, nil
 }
@@ -149,14 +206,14 @@ func (m *Manager) SaveCurrentStateAsPreset(state State, name string) (Preset, er
 	return preset, nil
 }
 
-// UpdatePreset overwrites an existing preset's saved layout/auxes in
+// UpdatePreset overwrites an existing preset's saved layouts/auxes in
 // place — same identity (UUID, Name), fresh content and LastChanged. The
 // admin panel's "Update" action on the currently active preset — the
 // counterpart to Load, which goes the other direction (discard live
 // edits, revert to what's saved) — distinct from
 // SaveCurrentStateAsPreset, which always creates a new preset under a new
 // name. Returns ErrPresetNotFound if uuid doesn't match any saved preset.
-func (m *Manager) UpdatePreset(uuid string, mixerLayout []LayoutItem, auxes []Aux) (Preset, error) {
+func (m *Manager) UpdatePreset(uuid string, mixerLayouts map[string]NamedLayout, auxes []Aux) (Preset, error) {
 	presets, err := m.LoadPresets()
 	if err != nil {
 		return Preset{}, err
@@ -171,7 +228,7 @@ func (m *Manager) UpdatePreset(uuid string, mixerLayout []LayoutItem, auxes []Au
 	if idx == -1 {
 		return Preset{}, ErrPresetNotFound
 	}
-	presets[idx].MixerLayout = mixerLayout
+	presets[idx].MixerLayouts = mixerLayouts
 	presets[idx].Auxes = auxes
 	presets[idx].LastChanged = time.Now().UTC().Format(time.RFC3339)
 	if err := m.savePresets(presets); err != nil {
