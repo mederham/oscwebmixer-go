@@ -26,6 +26,18 @@ func formLayoutID(r *http.Request) string {
 	return oscmsg.DefaultLayoutID
 }
 
+// queryLayoutID reads the "layout" URL query param GET requests for the
+// Sources tab use (handleIndex, handleSourcesView) — admin.js keeps it in
+// the address bar (see its htmx:afterSwap listener) so a page reload lands
+// back on whatever layout was selected instead of always falling back to
+// Default.
+func queryLayoutID(r *http.Request) string {
+	if id := r.URL.Query().Get("layout"); id != "" {
+		return id
+	}
+	return oscmsg.DefaultLayoutID
+}
+
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
@@ -64,7 +76,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	data := ViewData{
 		Global:      global,
 		Network:     NetworkSectionData{Global: global, DeskStatus: status},
-		SourcesData: sourcesSectionData(cfg, oscmsg.DefaultLayoutID, false),
+		SourcesData: sourcesSectionData(cfg, queryLayoutID(r), false),
 		AuxesData:   auxesSectionData(cfg, h.icons, false),
 		Presets:     toPresetRows(presets, state.UUID),
 		Message:     r.URL.Query().Get("msg"),
@@ -163,10 +175,7 @@ func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
 // empty list rather than erroring, since the picker itself only ever
 // offers ids that currently exist.
 func (h *Handler) handleSourcesView(w http.ResponseWriter, r *http.Request) {
-	layoutID := r.URL.Query().Get("layout")
-	if layoutID == "" {
-		layoutID = oscmsg.DefaultLayoutID
-	}
+	layoutID := queryLayoutID(r)
 
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()

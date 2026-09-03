@@ -63,14 +63,33 @@ document.addEventListener("DOMContentLoaded", initSourcesSortable);
 // drag-drop auto-save, a section add/delete, or an out-of-band update from
 // a preset load) — outerHTML replacement creates brand new DOM nodes with
 // no Sortable instance attached.
+// Keeps ?layout=<id> in the address bar in sync with whichever layout is
+// currently showing (read from #sources-form's hidden layoutId field, which
+// every render of this section carries) — a plain history.replaceState, no
+// navigation, so it doesn't disturb htmx. Without this, a page reload always
+// fell back to Default: handleIndex had no way to know what was selected.
+// Re-queries the live document rather than trusting the swap event's own
+// target — for an outerHTML swap (used throughout this section) htmx fires
+// afterSwap with e.detail.target still the old, now-detached element (same
+// reason initSourcesSortable re-queries by id instead of using it).
+function syncLayoutURL() {
+	const hidden = document.querySelector("#sources-form input[name='layoutId']");
+	if (!hidden) return;
+	const url = new URL(location.href);
+	url.searchParams.set("layout", hidden.value);
+	history.replaceState(null, "", url);
+}
+
 document.body.addEventListener("htmx:afterSwap", function (e) {
 	if (e.detail.target && e.detail.target.id === "section-sources") {
 		initSourcesSortable();
+		syncLayoutURL();
 	}
 });
 document.body.addEventListener("htmx:oobAfterSwap", function (e) {
 	if (e.detail.target && e.detail.target.id === "section-sources") {
 		initSourcesSortable();
+		syncLayoutURL();
 	}
 });
 
