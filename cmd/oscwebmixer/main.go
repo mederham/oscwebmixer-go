@@ -157,7 +157,7 @@ func main() {
 		OSCPort:                 global.OSC.Port,
 		StartupRetryInterval:    2 * time.Second,
 		HealthCheckInterval:     3 * time.Second,
-		InitialLayout:           state.MixerLayout,
+		InitialLayouts:          state.MixerLayouts,
 		InitialAuxes:            state.Auxes,
 		ExternalDevices:         admin.ResolveExternalDevices(global.ExternalDevices, logger, global.Debug),
 		AutoHideChannelPatterns: global.AutoHideChannelPatterns,

@@ -475,7 +475,10 @@ func newTestHubWithOneOfEach(t *testing.T) (*Hub, *scriptedDesk, chan ClientEven
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+		StartupRetryInterval: 50 * time.Millisecond,
+		InitialLayouts:       map[string]config.NamedLayout{config.DefaultLayoutID: {Name: "Default"}},
+	})
 	clientEvents := make(chan ClientEvent, 8)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -606,11 +609,11 @@ func TestClientConnectReceivesStatusAndConfig(t *testing.T) {
 	if configEnv.Kind != oscmsg.KindConfig || configEnv.Config == nil {
 		t.Fatalf("config envelope = %+v", configEnv)
 	}
-	if len(configEnv.Config.MixerLayout) != 2 {
-		t.Fatalf("mixer layout = %+v, want 2 (1 channel + 1 group)", configEnv.Config.MixerLayout)
+	if len(configEnv.Config.MixerLayouts["default"].Items) != 2 {
+		t.Fatalf("mixer layout = %+v, want 2 (1 channel + 1 group)", configEnv.Config.MixerLayouts["default"].Items)
 	}
-	if configEnv.Config.MixerLayout[0].Type != "channel" || configEnv.Config.MixerLayout[1].Type != "group" {
-		t.Fatalf("layout order = %+v, want channel then group (natural desk order fallback)", configEnv.Config.MixerLayout)
+	if configEnv.Config.MixerLayouts["default"].Items[0].Type != "channel" || configEnv.Config.MixerLayouts["default"].Items[1].Type != "group" {
+		t.Fatalf("layout order = %+v, want channel then group (natural desk order fallback)", configEnv.Config.MixerLayouts["default"].Items)
 	}
 	if len(configEnv.Config.Auxes) != 1 || configEnv.Config.Auxes[0].Label != "Mon 1" {
 		t.Fatalf("auxes = %+v", configEnv.Config.Auxes)
@@ -1204,7 +1207,10 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+		StartupRetryInterval: 50 * time.Millisecond,
+		InitialLayouts:       map[string]config.NamedLayout{config.DefaultLayoutID: {Name: "Default"}},
+	})
 	clientEvents := make(chan ClientEvent, 8)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1262,7 +1268,7 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 		t.Fatalf("post-reload envelope = %+v, want config", configEnv)
 	}
 
-	sources := configEnv.Config.MixerLayout
+	sources := configEnv.Config.MixerLayouts["default"].Items
 	if len(sources) != 3 { // 2 channels + 1 group
 		t.Fatalf("mixer layout = %+v, want 3 (2 channels + 1 group, session 2's counts)", sources)
 	}
@@ -1572,10 +1578,15 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 	// order fallback for anything the layout doesn't reference.
 	adminEvents <- AdminEvent{
 		Kind: AdminApply,
-		Layout: []config.LayoutItem{
-			{Kind: config.LayoutKindSource, Type: "channel", Number: 2, Enabled: true},
-			{Kind: config.LayoutKindSection, SectionID: "b", SectionName: "Section B"},
-			{Kind: config.LayoutKindSource, Type: "channel", Number: 3, Enabled: false},
+		Layouts: map[string]config.NamedLayout{
+			config.DefaultLayoutID: {
+				Name: "Default",
+				Items: []config.LayoutItem{
+					{Kind: config.LayoutKindSource, Type: "channel", Number: 2, Enabled: true},
+					{Kind: config.LayoutKindSection, SectionID: "b", SectionName: "Section B"},
+					{Kind: config.LayoutKindSource, Type: "channel", Number: 3, Enabled: false},
+				},
+			},
 		},
 	}
 
@@ -1591,20 +1602,20 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 		t.Fatal("did not receive AdminQuery reply")
 	}
 
-	if len(cfg.MixerLayout) != 4 {
-		t.Fatalf("mixer layout = %+v, want 4 (channel 2, section marker, channel 3, channel 1 appended)", cfg.MixerLayout)
+	if len(cfg.MixerLayouts["default"].Items) != 4 {
+		t.Fatalf("mixer layout = %+v, want 4 (channel 2, section marker, channel 3, channel 1 appended)", cfg.MixerLayouts["default"].Items)
 	}
-	if cfg.MixerLayout[0].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[0].Number != 2 || !cfg.MixerLayout[0].Enabled {
-		t.Fatalf("item 0 = %+v, want enabled channel 2", cfg.MixerLayout[0])
+	if cfg.MixerLayouts["default"].Items[0].Kind != oscmsg.LayoutKindSource || cfg.MixerLayouts["default"].Items[0].Number != 2 || !cfg.MixerLayouts["default"].Items[0].Enabled {
+		t.Fatalf("item 0 = %+v, want enabled channel 2", cfg.MixerLayouts["default"].Items[0])
 	}
-	if cfg.MixerLayout[1].Kind != oscmsg.LayoutKindSection || cfg.MixerLayout[1].SectionName != "Section B" {
-		t.Fatalf("item 1 = %+v, want the Section B marker, in position between channels 2 and 3", cfg.MixerLayout[1])
+	if cfg.MixerLayouts["default"].Items[1].Kind != oscmsg.LayoutKindSection || cfg.MixerLayouts["default"].Items[1].SectionName != "Section B" {
+		t.Fatalf("item 1 = %+v, want the Section B marker, in position between channels 2 and 3", cfg.MixerLayouts["default"].Items[1])
 	}
-	if cfg.MixerLayout[2].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[2].Number != 3 || cfg.MixerLayout[2].Enabled {
-		t.Fatalf("item 2 = %+v, want disabled channel 3", cfg.MixerLayout[2])
+	if cfg.MixerLayouts["default"].Items[2].Kind != oscmsg.LayoutKindSource || cfg.MixerLayouts["default"].Items[2].Number != 3 || cfg.MixerLayouts["default"].Items[2].Enabled {
+		t.Fatalf("item 2 = %+v, want disabled channel 3", cfg.MixerLayouts["default"].Items[2])
 	}
-	if cfg.MixerLayout[3].Kind != oscmsg.LayoutKindSource || cfg.MixerLayout[3].Number != 1 || !cfg.MixerLayout[3].Enabled {
-		t.Fatalf("item 3 = %+v, want channel 1 appended at the end (never mentioned in the applied layout), enabled by default", cfg.MixerLayout[3])
+	if cfg.MixerLayouts["default"].Items[3].Kind != oscmsg.LayoutKindSource || cfg.MixerLayouts["default"].Items[3].Number != 1 || !cfg.MixerLayouts["default"].Items[3].Enabled {
+		t.Fatalf("item 3 = %+v, want channel 1 appended at the end (never mentioned in the applied layout), enabled by default", cfg.MixerLayouts["default"].Items[3])
 	}
 }
 
@@ -1643,8 +1654,11 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 	// fallback.
 	adminEvents <- AdminEvent{
 		Kind: AdminApply,
-		Layout: []config.LayoutItem{
-			{Kind: config.LayoutKindSource, Type: "group", Number: 1, Enabled: true},
+		Layouts: map[string]config.NamedLayout{
+			config.DefaultLayoutID: {
+				Name:  "Default",
+				Items: []config.LayoutItem{{Kind: config.LayoutKindSource, Type: "group", Number: 1, Enabled: true}},
+			},
 		},
 		AutoHideGroupPatterns: []string{"master"},
 		AutoHideAuxPatterns:   []string{"hall"},
@@ -1661,7 +1675,7 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 	}
 
 	bySource := map[string]oscmsg.LayoutItem{}
-	for _, it := range cfg.MixerLayout {
+	for _, it := range cfg.MixerLayouts["default"].Items {
 		if it.Kind == oscmsg.LayoutKindSource {
 			bySource[sourceKey(it.Type, it.Number)] = it
 		}
@@ -1814,5 +1828,83 @@ func TestLogSendErrThrottledSuppressesRepeats(t *testing.T) {
 	h.logSendErrThrottled("dead-device", "broadcast to external %q: boom", "dead-device")
 	if n := strings.Count(buf.String(), "boom"); n != 3 {
 		t.Fatalf("logged %d times after the throttle window elapsed, want exactly 3: %s", n, buf.String())
+	}
+}
+
+// TestBuildConfigPerLayoutIndependence proves buildConfig runs its merge
+// (explicit items + natural-order fallback) once per entry in h.layouts,
+// not just for "default" — two differently-ordered/customized layouts
+// covering the same desk must each come back independently correct, and
+// an aux's LayoutID must ride through to the wire AuxConfig unchanged.
+func TestBuildConfigPerLayoutIndependence(t *testing.T) {
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		channelCount: 2, auxCount: 1, groupCount: 0,
+		channelNames: map[int]string{1: "One", 2: "Two"},
+		auxNames:     map[int]string{1: "Mon 1"},
+	}
+	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	adminEvents := make(chan AdminEvent, 4)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, nil, adminEvents)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	adminEvents <- AdminEvent{
+		Kind: AdminApply,
+		Layouts: map[string]config.NamedLayout{
+			config.DefaultLayoutID: {
+				Name:  "Default",
+				Items: []config.LayoutItem{{Kind: config.LayoutKindSource, Type: "channel", Number: 1, Enabled: true}},
+			},
+			"mon-1": {
+				Name:  "Monitor Mix",
+				Items: []config.LayoutItem{{Kind: config.LayoutKindSource, Type: "channel", Number: 2, Enabled: false}},
+			},
+		},
+		Auxes: []config.Aux{{Enabled: true, LayoutID: "mon-1"}},
+	}
+
+	reply := make(chan oscmsg.ConfigPayload, 1)
+	adminEvents <- AdminEvent{Kind: AdminQuery, Reply: reply}
+
+	var cfg oscmsg.ConfigPayload
+	select {
+	case cfg = <-reply:
+	case <-time.After(time.Second):
+		t.Fatal("did not receive AdminQuery reply")
+	}
+
+	if len(cfg.MixerLayouts) != 2 {
+		t.Fatalf("MixerLayouts = %+v, want 2 entries", cfg.MixerLayouts)
+	}
+
+	def := cfg.MixerLayouts[config.DefaultLayoutID]
+	if len(def.Items) != 2 || def.Items[0].Number != 1 || !def.Items[0].Enabled {
+		t.Fatalf("default layout = %+v, want channel 1 enabled first", def.Items)
+	}
+	if def.Items[1].Number != 2 || !def.Items[1].Enabled {
+		t.Fatalf("default layout = %+v, want channel 2 appended (unmentioned), enabled by default", def.Items)
+	}
+
+	mon := cfg.MixerLayouts["mon-1"]
+	if mon.Name != "Monitor Mix" {
+		t.Fatalf("mon-1 name = %q, want Monitor Mix", mon.Name)
+	}
+	if len(mon.Items) != 2 || mon.Items[0].Number != 2 || mon.Items[0].Enabled {
+		t.Fatalf("mon-1 layout = %+v, want channel 2 disabled first (independent of default's order/enabled)", mon.Items)
+	}
+	if mon.Items[1].Number != 1 || !mon.Items[1].Enabled {
+		t.Fatalf("mon-1 layout = %+v, want channel 1 appended (unmentioned in mon-1), enabled by default", mon.Items)
+	}
+
+	if len(cfg.Auxes) != 1 || cfg.Auxes[0].LayoutID != "mon-1" {
+		t.Fatalf("auxes = %+v, want aux 1 layoutId=mon-1", cfg.Auxes)
 	}
 }

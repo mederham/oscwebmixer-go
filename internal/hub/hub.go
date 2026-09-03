@@ -180,21 +180,21 @@ type Hub struct {
 	// shortly after.
 	lastClientDriven map[string]time.Time
 
-	// layout/auxOverrides are the admin-editable overlay loaded from
+	// layouts/auxOverrides are the admin-editable overlay loaded from
 	// config/state.json — layered onto the live desk-reported data in
-	// buildConfig(). layout is the ordered mixer layout (sources +
-	// section markers — see config.LayoutItem's doc comment for why
-	// array position is the single source of truth for both display
-	// order and section membership). Updated live via AdminEvent, no
-	// restart required (see Phase 3 scope note: only network settings
-	// need a restart, everything here applies immediately and
-	// re-broadcasts to connected clients).
-	layout       []config.LayoutItem
+	// buildConfig(). layouts holds every named layout keyed by id (see
+	// config.NamedLayout's doc comment for why array position within
+	// each one is the single source of truth for both display order and
+	// section membership). Updated live via AdminEvent, no restart
+	// required (see Phase 3 scope note: only network settings need a
+	// restart, everything here applies immediately and re-broadcasts to
+	// connected clients).
+	layouts      map[string]config.NamedLayout
 	auxOverrides []config.Aux
 
 	// autoHide{Channel,Group,Aux}Patterns mirror config.Global's fields of
 	// the same name — see their doc comment. Updated live via AdminEvent,
-	// same as layout/auxOverrides.
+	// same as layouts/auxOverrides.
 	autoHideChannelPatterns []string
 	autoHideGroupPatterns   []string
 	autoHideAuxPatterns     []string
@@ -280,12 +280,12 @@ type Options struct {
 	// stay fast.
 	HealthCheckInterval time.Duration
 
-	// InitialLayout/InitialAuxes seed the admin overlay from
+	// InitialLayouts/InitialAuxes seed the admin overlay from
 	// config/state.json at startup, so the very first buildConfig() call
 	// already reflects persisted admin edits — not just messages arriving
 	// after the first AdminEvent.
-	InitialLayout []config.LayoutItem
-	InitialAuxes  []config.Aux
+	InitialLayouts map[string]config.NamedLayout
+	InitialAuxes   []config.Aux
 
 	// ExternalDevices seeds the relay list from config/global.json.
 	ExternalDevices []ExternalDevice
@@ -330,7 +330,7 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		dropStreak:              make(map[string]int),
 		lastSendErrLogged:       make(map[string]time.Time),
 		lastClientDriven:        make(map[string]time.Time),
-		layout:                  opts.InitialLayout,
+		layouts:                 opts.InitialLayouts,
 		auxOverrides:            opts.InitialAuxes,
 		autoHideChannelPatterns: opts.AutoHideChannelPatterns,
 		autoHideGroupPatterns:   opts.AutoHideGroupPatterns,

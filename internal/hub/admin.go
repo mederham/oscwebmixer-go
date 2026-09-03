@@ -48,7 +48,7 @@ type AdminEvent struct {
 	StatusReply chan<- DeskStatusInfo       // set for AdminStatusQuery
 
 	// The following are set for AdminApply.
-	Layout                  []config.LayoutItem
+	Layouts                 map[string]config.NamedLayout
 	Auxes                   []config.Aux
 	ExternalDevices         []ExternalDevice
 	AutoHideChannelPatterns []string
@@ -81,7 +81,7 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		}
 
 	case AdminApply:
-		h.layout = ev.Layout
+		h.layouts = ev.Layouts
 		h.auxOverrides = ev.Auxes
 		h.externalDevices = ev.ExternalDevices
 		h.autoHideChannelPatterns = ev.AutoHideChannelPatterns
@@ -89,8 +89,8 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns
 		h.debug = ev.Debug
 
-		h.log.Printf("admin config applied: %d layout item(s), %d aux override(s), %d external device(s)",
-			len(ev.Layout), len(ev.Auxes), len(ev.ExternalDevices))
+		h.log.Printf("admin config applied: %d layout(s), %d aux override(s), %d external device(s)",
+			len(ev.Layouts), len(ev.Auxes), len(ev.ExternalDevices))
 
 		// Live, no restart, no disconnect — every connected client gets a
 		// fresh config push (see the "config on WS, push-based" decision;
