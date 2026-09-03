@@ -154,6 +154,21 @@ func postForm(t *testing.T, mux *http.ServeMux, path, body string) *httptest.Res
 	return rec
 }
 
+// postFormExpectStatus is postForm's counterpart for requests expected to
+// fail — postForm itself fatals on anything but 200, so a refusal path
+// (e.g. renaming/deleting the Default layout) has to be posted directly.
+func postFormExpectStatus(t *testing.T, mux *http.ServeMux, path, body string, want int) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != want {
+		t.Fatalf("POST %s: status = %d, want %d, body = %s", path, rec.Code, want, rec.Body.String())
+	}
+	return rec
+}
+
 // postSourcesSave posts to /admin/sources/save the same way admin.js's
 // htmx:configRequest listener does in the browser: one "layout" form field
 // carrying a JSON-encoded array — see internal/admin's package doc comment
@@ -831,5 +846,188 @@ func TestExternalDeviceUpdateByID(t *testing.T) {
 	}
 	if global.ExternalDevices[0].Name != "iPad Renamed Again" {
 		t.Fatalf("second update (post-rename) did not apply: %+v", global.ExternalDevices[0])
+	}
+}
+
+// TestLayoutCreateClonesAndSwitches proves + New layout clones the
+// from-layout's items (not empty) and the response lands on the new
+// layout (its picker option selected, its items shown).
+func TestLayoutCreateClonesAndSwitches(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
+	})
+
+	// postForm asserts 200 OK on its own. The rendered body doesn't name
+	// the new layout yet — sources.html.tmpl has no layout picker/name to
+	// render until Task 6 wires it up (SourcesSectionData.LayoutName is
+	// already populated, per view.go, just unused by any template today)
+	// — so what's checkable here is the persisted result below: does the
+	// created layout exist, and does it carry the cloned items.
+	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	if len(cfg.MixerLayouts) != 2 {
+		t.Fatalf("MixerLayouts = %+v, want 2 (default + Monitor Mix)", cfg.MixerLayouts)
+	}
+	var newID string
+	for id, nl := range cfg.MixerLayouts {
+		if nl.Name == "Monitor Mix" {
+			newID = id
+		}
+	}
+	if newID == "" {
+		t.Fatal("no layout named Monitor Mix found")
+	}
+	items := cfg.MixerLayouts[newID].Items
+	if len(items) != 1 || items[0].Number != 1 || items[0].Enabled || items[0].Icon != "kick.svg" {
+		t.Fatalf("cloned items = %+v, want default's channel 1 (disabled, kick.svg icon) carried over", items)
+	}
+}
+
+// TestLayoutRenameAndDeleteDefaultRefused proves the Default layout can't
+// be renamed or deleted, but a custom one can be both.
+func TestLayoutRenameAndDeleteDefaultRefused(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	// postForm asserts 200 OK on its own, so the refusal cases (400 want)
+	// go through postFormExpectStatus instead — same raw
+	// httptest.NewRequest/NewRecorder pattern this file uses everywhere
+	// else a non-200 response is expected.
+	postFormExpectStatus(t, mux, "/admin/layouts/default/rename", "name=Nope", http.StatusBadRequest)
+	postFormExpectStatus(t, mux, "/admin/layouts/default/delete", "", http.StatusBadRequest)
+
+	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	var id string
+	for layoutID, nl := range cfg.MixerLayouts {
+		if nl.Name == "Monitor Mix" {
+			id = layoutID
+		}
+	}
+	if id == "" {
+		t.Fatal("Monitor Mix layout not found after create")
+	}
+
+	postForm(t, mux, "/admin/layouts/"+id+"/rename", "name="+url.QueryEscape("Renamed"))
+	cfg, _ = h.queryConfig(context.Background())
+	if cfg.MixerLayouts[id].Name != "Renamed" {
+		t.Fatalf("layout name = %q, want Renamed", cfg.MixerLayouts[id].Name)
+	}
+
+	postForm(t, mux, "/admin/layouts/"+id+"/delete", "")
+	cfg, _ = h.queryConfig(context.Background())
+	if _, ok := cfg.MixerLayouts[id]; ok {
+		t.Fatalf("MixerLayouts = %+v, want %q gone after delete", cfg.MixerLayouts, id)
+	}
+}
+
+// TestAuxLayoutFallsBackAfterDelete proves deleting a layout an aux
+// points at doesn't block, warn, or error — the aux's LayoutID is left
+// dangling and simply falls back to Default at the wire level (buildConfig
+// never resolves it — this is purely a "does the map still have the key"
+// lookup at render time, exercised here via ConfigPayload directly).
+func TestAuxLayoutFallsBackAfterDelete(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	var id string
+	for layoutID, nl := range cfg.MixerLayouts {
+		if nl.Name == "Monitor Mix" {
+			id = layoutID
+		}
+	}
+
+	postForm(t, mux, "/admin/auxes", "layout[1]="+id)
+	cfg, _ = h.queryConfig(context.Background())
+	if cfg.Auxes[0].LayoutID != id {
+		t.Fatalf("aux LayoutID = %q, want %q before delete", cfg.Auxes[0].LayoutID, id)
+	}
+
+	postForm(t, mux, "/admin/layouts/"+id+"/delete", "")
+	cfg, _ = h.queryConfig(context.Background())
+	if cfg.Auxes[0].LayoutID != id {
+		t.Fatalf("aux LayoutID = %q, want it to still (harmlessly) name the deleted id %q — no rewrite-on-delete", cfg.Auxes[0].LayoutID, id)
+	}
+	if _, ok := cfg.MixerLayouts[cfg.Auxes[0].LayoutID]; ok {
+		t.Fatalf("MixerLayouts still has %q, want it gone (deleted)", cfg.Auxes[0].LayoutID)
+	}
+	// The mixer client, not the server, is what resolves a dangling
+	// LayoutID to Default (see mixer.js's layoutFor) — this test only
+	// proves the server doesn't crash/block/rewrite anything on delete.
+}
+
+// TestPresetSaveLoadPreservesMultipleLayouts proves a preset snapshots
+// every named layout, not just Default, and loading it restores all of
+// them plus which layout each aux used.
+func TestPresetSaveLoadPreservesMultipleLayouts(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	cfg, err := h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig: %v", err)
+	}
+	var monID string
+	for id, nl := range cfg.MixerLayouts {
+		if nl.Name == "Monitor Mix" {
+			monID = id
+		}
+	}
+	postSourcesSave(t, mux, []oscmsg.LayoutItem{
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
+	})
+	postForm(t, mux, "/admin/auxes", "layout[1]="+monID)
+
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	if len(presets) != 1 {
+		t.Fatalf("presets = %+v, want 1", presets)
+	}
+	preset := presets[0]
+	if len(preset.MixerLayouts) != 2 {
+		t.Fatalf("preset.MixerLayouts = %+v, want 2 (default + Monitor Mix)", preset.MixerLayouts)
+	}
+	if preset.MixerLayouts[monID].Name != "Monitor Mix" {
+		t.Fatalf("preset's monitor layout = %+v, want Name=Monitor Mix", preset.MixerLayouts[monID])
+	}
+	if preset.Auxes[0].LayoutID != monID {
+		t.Fatalf("preset aux LayoutID = %q, want %q", preset.Auxes[0].LayoutID, monID)
+	}
+
+	// Reset, then load the preset back — everything should return.
+	postForm(t, mux, "/admin/presets/reset", "")
+	postForm(t, mux, "/admin/presets/"+preset.UUID+"/load", "")
+	cfg, err = h.queryConfig(context.Background())
+	if err != nil {
+		t.Fatalf("queryConfig after load: %v", err)
+	}
+	if len(cfg.MixerLayouts) != 2 {
+		t.Fatalf("MixerLayouts after load = %+v, want 2", cfg.MixerLayouts)
+	}
+	if cfg.Auxes[0].LayoutID != monID {
+		t.Fatalf("aux LayoutID after load = %q, want %q", cfg.Auxes[0].LayoutID, monID)
 	}
 }

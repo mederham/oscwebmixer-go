@@ -154,6 +154,178 @@ func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleSourcesView switches which layout the Sources tab is viewing/
+// editing — a plain GET (no mutation), re-rendering the section scoped to
+// whichever layout id was requested. A missing id falls back to Default,
+// same as every other "layoutId defaults to Default" spot in this
+// package (see formLayoutID) — an id that no longer exists in
+// MixerLayouts (e.g. a stale link to a since-deleted layout) renders an
+// empty list rather than erroring, since the picker itself only ever
+// offers ids that currently exist.
+func (h *Handler) handleSourcesView(w http.ResponseWriter, r *http.Request) {
+	layoutID := r.URL.Query().Get("layout")
+	if layoutID == "" {
+		layoutID = oscmsg.DefaultLayoutID
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderSourcesSection(w, cfg, layoutID, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// handleLayoutCreate adds a new named layout, cloning the layout named by
+// the posted layoutId (the Sources tab's currently-viewed layout — see
+// sources.html.tmpl's new-layout form) as a starting point, then switches
+// the Sources tab to it.
+func (h *Handler) handleLayoutCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">Layout name is required.</p>`)
+		return
+	}
+	fromID := formLayoutID(r)
+
+	id, err := config.NewID()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	source := state.MixerLayouts[fromID]
+	state.MixerLayouts[id] = config.NamedLayout{
+		Name:  name,
+		Items: append([]config.LayoutItem(nil), source.Items...),
+	}
+	if err := h.cfg.SaveState(state); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.applyState(state)
+
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderSourcesSection(w, cfg, id, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// handleLayoutRename renames one custom layout — refused for "default",
+// which always displays as "Default" (see config.DefaultLayoutID's doc
+// comment).
+func (h *Handler) handleLayoutRename(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == oscmsg.DefaultLayoutID {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">The Default layout can't be renamed.</p>`)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">Layout name is required.</p>`)
+		return
+	}
+
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	nl, ok := state.MixerLayouts[id]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	nl.Name = name
+	state.MixerLayouts[id] = nl
+	if err := h.cfg.SaveState(state); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.applyState(state)
+
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderSourcesSection(w, cfg, id, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+// handleLayoutDelete removes one custom layout — refused for "default".
+// Any aux whose LayoutID pointed at the deleted layout is left as-is
+// (still storing the now-dangling id): buildConfig's map lookup simply
+// misses and falls back to Default for that aux, same as an aux that
+// never had a custom layout (see the design doc's "delete-in-use" note —
+// no usage check, no warning). Switches the Sources tab back to Default,
+// since the layout it was viewing no longer exists.
+func (h *Handler) handleLayoutDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == oscmsg.DefaultLayoutID {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">The Default layout can't be deleted.</p>`)
+		return
+	}
+
+	state, err := h.cfg.LoadStateOrDefault()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	delete(state.MixerLayouts, id)
+	if err := h.cfg.SaveState(state); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.applyState(state)
+
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderSourcesSection(w, cfg, oscmsg.DefaultLayoutID, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
 // handleSectionAdd creates a new section marker — at the end of the
 // layout by default (the bottom "+ Add section" form), or immediately
 // before a specific row when "beforeKey" is posted (the hover "+" button
