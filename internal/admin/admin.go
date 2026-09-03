@@ -257,7 +257,15 @@ func (h *Handler) saveLayout(ctx context.Context, layoutID string, items []confi
 	if err != nil {
 		return oscmsg.ConfigPayload{}, err
 	}
-	nl := state.MixerLayouts[layoutID]
+	nl, ok := state.MixerLayouts[layoutID]
+	if !ok {
+		// layoutID names a layout that no longer exists (e.g. a stale
+		// browser tab still holding a since-deleted layout's id) — fall
+		// back to Default rather than silently resurrecting a nameless
+		// "ghost" entry under the dead id.
+		layoutID = config.DefaultLayoutID
+		nl = state.MixerLayouts[config.DefaultLayoutID]
+	}
 	nl.Items = items
 	state.MixerLayouts[layoutID] = nl
 	state.Auxes = auxes

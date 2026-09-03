@@ -861,13 +861,15 @@ func TestLayoutCreateClonesAndSwitches(t *testing.T) {
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
 	})
 
-	// postForm asserts 200 OK on its own. The rendered body doesn't name
-	// the new layout yet — sources.html.tmpl has no layout picker/name to
-	// render until Task 6 wires it up (SourcesSectionData.LayoutName is
-	// already populated, per view.go, just unused by any template today)
-	// — so what's checkable here is the persisted result below: does the
-	// created layout exist, and does it carry the cloned items.
-	postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	// postForm asserts 200 OK on its own. The Sources tab now has a layout
+	// picker/rename box (sources.html.tmpl, wired up in a later task), so
+	// the response itself can confirm the switch: the rename box's value
+	// attribute renders SourcesSectionData.LayoutName, which is only
+	// "Monitor Mix" once the response is scoped to the new layout.
+	rec := postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
+	if !strings.Contains(rec.Body.String(), `value="Monitor Mix"`) {
+		t.Errorf("response does not show the new layout as selected: %s", rec.Body.String())
+	}
 
 	cfg, err := h.queryConfig(context.Background())
 	if err != nil {
@@ -1102,10 +1104,8 @@ func TestAuxesTabRendersLayoutSelect(t *testing.T) {
 	if !strings.Contains(body, `name="layout[1]"`) {
 		t.Fatalf("auxes tab missing layout select: %s", body)
 	}
-	if !strings.Contains(body, `value="`+id+`" selected`) && !strings.Contains(body, `value="`+id+`" selected`) {
-		// tmpl attribute order: value before the conditional "selected"
-		if !strings.Contains(body, id+`" selected`) {
-			t.Errorf("aux 1's layout select doesn't preselect %q: %s", id, body)
-		}
+	// tmpl attribute order: value before the conditional "selected"
+	if !strings.Contains(body, id+`" selected`) {
+		t.Errorf("aux 1's layout select doesn't preselect %q: %s", id, body)
 	}
 }

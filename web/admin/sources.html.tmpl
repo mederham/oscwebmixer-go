@@ -9,7 +9,7 @@
 			<option value="{{.ID}}" {{if eq .ID $.LayoutID}}selected{{end}}>{{.Name}}</option>
 			{{end}}
 		</select>
-		{{if ne .LayoutID "default"}}
+		{{if not .IsDefault}}
 		<input type="text" class="layout-name-field" name="name" value="{{.LayoutName}}" hx-post="/admin/layouts/{{.LayoutID}}/rename" hx-target="#section-sources" hx-swap="outerHTML" hx-trigger="change" />
 		<button type="button" class="danger" hx-post="/admin/layouts/{{.LayoutID}}/delete" hx-target="#section-sources" hx-swap="outerHTML" hx-confirm="Delete this layout? Any aux using it falls back to Default.">Delete layout</button>
 		{{end}}

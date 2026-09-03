@@ -51,6 +51,7 @@ type SourcesSectionData struct {
 	Items      []SourceListItem
 	LayoutID   string
 	LayoutName string
+	IsDefault  bool // layoutID == oscmsg.DefaultLayoutID — the rename/delete controls hide for it
 	Layouts    []LayoutOption
 	OOB        bool
 }
@@ -146,7 +147,11 @@ func toSourcesSectionData(items []oscmsg.LayoutItem, layoutID, layoutName string
 			Label: it.Label, Enabled: it.Enabled, Stereo: it.Stereo, Icon: it.Icon,
 		}}
 	}
-	return SourcesSectionData{Items: rows, LayoutID: layoutID, LayoutName: layoutName, Layouts: layouts, OOB: oob}
+	return SourcesSectionData{
+		Items: rows, LayoutID: layoutID, LayoutName: layoutName,
+		IsDefault: layoutID == oscmsg.DefaultLayoutID,
+		Layouts:   layouts, OOB: oob,
+	}
 }
 
 // layoutOptions returns every layout's id+name from a queried config,
@@ -160,7 +165,12 @@ func layoutOptions(layouts map[string]oscmsg.NamedLayout) []LayoutOption {
 		}
 		opts = append(opts, LayoutOption{ID: id, Name: nl.Name})
 	}
-	sort.Slice(opts, func(i, j int) bool { return opts[i].Name < opts[j].Name })
+	sort.Slice(opts, func(i, j int) bool {
+		if opts[i].Name != opts[j].Name {
+			return opts[i].Name < opts[j].Name
+		}
+		return opts[i].ID < opts[j].ID
+	})
 	name := "Default"
 	if nl, ok := layouts[oscmsg.DefaultLayoutID]; ok && nl.Name != "" {
 		name = nl.Name

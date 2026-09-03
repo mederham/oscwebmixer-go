@@ -210,7 +210,15 @@ func (h *Handler) handleLayoutCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	source := state.MixerLayouts[fromID]
+	source, ok := state.MixerLayouts[fromID]
+	if !ok {
+		// fromID names a layout that no longer exists (e.g. a stale
+		// browser tab's hidden layoutId field pointing at a since-deleted
+		// layout) — clone from Default rather than silently creating an
+		// empty layout, matching the plan's "clones the layout currently
+		// being viewed (not empty)" intent.
+		source = state.MixerLayouts[config.DefaultLayoutID]
+	}
 	state.MixerLayouts[id] = config.NamedLayout{
 		Name:  name,
 		Items: append([]config.LayoutItem(nil), source.Items...),
