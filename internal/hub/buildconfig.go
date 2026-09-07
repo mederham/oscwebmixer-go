@@ -8,25 +8,7 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
-// buildConfig assembles what a mixer client needs to render itself: live
-// desk-reported data (names, aux stereo/mono, counts) as the base, with the
-// admin-editable overlay (h.layouts/h.auxOverrides, from config/state.json)
-// layered on top for enabled/icon/colour and — for each entry in h.layouts
-// — the actual display sequence itself. A source not otherwise mentioned in
-// a given layout defaults to enabled (unless its live name matches that
-// type's auto-hide patterns — see matchesAny and config.Global's
-// AutoHide*Patterns fields), no icon, and is appended at the end in
-// natural desk-reported order (channels then groups) — see buildLayout
-// below, run once per named layout.
 func (h *Hub) buildConfig() oscmsg.ConfigPayload {
-	// matchesAny is the fallback-only "should a not-yet-customized entry
-	// start visible" check — see config.Global's AutoHide*Patterns doc
-	// comment. Never consulted for an entry already present in
-	// h.layouts/h.auxOverrides; those always keep their stored Enabled.
-	// Patterns are checked per source type (not one shared list) because
-	// names collide by convention across types — an aux bus "Hall" and its
-	// return channel "Hall Ret" both contain "Hall", but only one should
-	// actually be hidden.
 	matchesAny := func(label string, patterns []string) bool {
 		if label == "" {
 			return false
@@ -78,9 +60,6 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 
 	groupModes, haveGroupModes := h.cache["/Console/Group_Outputs/modes"]
 
-	// liveSource looks up live desk-reported label/stereo for one
-	// channel/group — shared by both the laid-out walk below and the
-	// natural-order fallback for anything a layout doesn't mention.
 	liveSource := func(sourceType string, number int) (label string, stereo bool) {
 		if sourceType == "group" {
 			if nameMsg, ok := h.cache[fmt.Sprintf("/Group_Outputs/%d/Buss_Trim/name", number)]; ok && len(nameMsg.Args) > 0 {
@@ -107,11 +86,6 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 		return number >= 1 && number <= h.channelCount
 	}
 
-	// buildLayout runs the merge (live label/stereo overlay, natural-
-	// order fallback for anything items doesn't mention) for one named
-	// layout's Items — called once per entry in h.layouts below, so every
-	// layout is independently sparse and gets the same fallback treatment
-	// the single global layout got before named layouts existed.
 	buildLayout := func(items []config.LayoutItem) []oscmsg.LayoutItem {
 		layout := make([]oscmsg.LayoutItem, 0, len(items)+h.channelCount+h.groupCount)
 		placed := make(map[string]bool, len(items))
@@ -123,11 +97,6 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 				continue
 			}
 			if !exists(item.Type, item.Number) {
-				// Session changed to fewer channels/groups than this entry
-				// references (confirmed live: sessions can differ in channel
-				// count) — drop it rather than render a source that no longer
-				// exists on the desk. It simply reappears if a future session
-				// has that channel again and the admin re-adds it.
 				continue
 			}
 			label, stereo := liveSource(item.Type, item.Number)

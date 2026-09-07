@@ -1,12 +1,3 @@
-// probe is the Phase 0 throwaway CLI for validating github.com/mederham/osc
-// against the real desk: send one OSC query, print everything that comes
-// back within a timeout window (a reply's address often differs from the
-// query's — e.g. "/Console/Channels/?" answers as "/Console/Input_Channels"
-// — so probe does not filter for an exact address match). -listen instead
-// sends nothing and prints whatever arrives, unprompted, until Ctrl+C —
-// for watching what the desk sends on its own initiative (e.g. does it
-// really send /Console/Session/! on a session change, per the plan's
-// Phase 4 assumption) rather than in reply to a query.
 package main
 
 import (
@@ -39,9 +30,6 @@ func main() {
 	defer conn.Close()
 
 	go func() {
-		// Run exits with an error once Close() is called on shutdown (via
-		// the deferred conn.Close() above); that's expected at process
-		// exit, not a failure worth reporting for this throwaway probe.
 		_ = conn.Run(context.Background())
 	}()
 
@@ -79,10 +67,6 @@ func main() {
 	}
 }
 
-// formatArgs renders each argument with its Go type so int32 vs float32
-// (indistinguishable via fmt's default %v for whole-number floats) is
-// visible — the whole point of this probe is nailing down that distinction
-// per address.
 func formatArgs(args []any) string {
 	s := "["
 	for i, a := range args {

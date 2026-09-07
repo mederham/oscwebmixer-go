@@ -160,9 +160,7 @@ func TestUpdatePreset(t *testing.T) {
 }
 
 func TestSaveGlobalIsAtomic(t *testing.T) {
-	// Regression coverage for the plan's explicit atomicity requirement:
-	// writing must go through a temp file + rename, never truncate the
-	// target file in place.
+
 	m := New(t.TempDir())
 	if err := m.SaveGlobal(Global{OSC: OSCConfig{Port: 1}}); err != nil {
 		t.Fatalf("first save: %v", err)
@@ -179,10 +177,6 @@ func TestSaveGlobalIsAtomic(t *testing.T) {
 	}
 }
 
-// TestLoadStateOrDefaultAlwaysHasDefaultLayout proves ensureDefaultLayout's
-// invariant holds for a brand-new (missing) state.json — every caller
-// downstream (hub, admin) relies on MixerLayouts[DefaultLayoutID] existing
-// without a nil-check.
 func TestLoadStateOrDefaultAlwaysHasDefaultLayout(t *testing.T) {
 	m := New(t.TempDir())
 	s, err := m.LoadStateOrDefault()
@@ -198,10 +192,6 @@ func TestLoadStateOrDefaultAlwaysHasDefaultLayout(t *testing.T) {
 	}
 }
 
-// TestLoadStateLegacyMixerLayoutShim proves a pre-rename state.json (the
-// old singular "mixerLayout" array, no "mixerLayouts" object at all) is
-// migrated into MixerLayouts[DefaultLayoutID] on load rather than silently
-// dropped — see LoadStateOrDefault's ponytail-commented shim.
 func TestLoadStateLegacyMixerLayoutShim(t *testing.T) {
 	dir := t.TempDir()
 	legacyJSON := `{
@@ -231,8 +221,6 @@ func TestLoadStateLegacyMixerLayoutShim(t *testing.T) {
 	}
 }
 
-// TestLoadPresetsLegacyMixerLayoutShim mirrors
-// TestLoadStateLegacyMixerLayoutShim for presets.json's per-entry shim.
 func TestLoadPresetsLegacyMixerLayoutShim(t *testing.T) {
 	dir := t.TempDir()
 	legacyJSON := `[{
@@ -259,9 +247,6 @@ func TestLoadPresetsLegacyMixerLayoutShim(t *testing.T) {
 	}
 }
 
-// TestMultipleNamedLayoutsRoundTrip proves State can hold more than one
-// named layout (the "default" plus a custom one) and both survive a
-// save/load cycle independently, each with its own Name and Items.
 func TestMultipleNamedLayoutsRoundTrip(t *testing.T) {
 	m := New(t.TempDir())
 	want := State{

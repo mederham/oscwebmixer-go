@@ -6,12 +6,6 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
-// Each render* method executes exactly one named section template — the
-// same blocks layout.html.tmpl composes for the full page are reused here
-// as htmx partial-swap responses, so there's one source of truth per
-// section rather than a full-page template and a set of near-duplicate
-// fragment templates.
-
 func (h *Handler) renderSourcesSection(w io.Writer, cfg oscmsg.ConfigPayload, layoutID string, oob bool) error {
 	return h.tmpl.ExecuteTemplate(w, "sources-section", sourcesSectionData(cfg, layoutID, oob))
 }

@@ -21,34 +21,20 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/pipeline"
 )
 
-// scriptedDesk is a minimal fake DiGiCo desk for testing the startup
-// sequencer without real hardware. Reply shapes (int32 counts/modes,
-// float32 continuous values, a name reply carrying zero args when unset)
-// mirror what was confirmed live against the real desk in Phase 0.
 type scriptedDesk struct {
 	inbound      chan desk.InboundMessage
-	sent         chan oscmsg.Message // records every message passed to Send (nil if the test doesn't need it)
-	sentExternal chan externalSend   // records every message passed to SendTo (nil if the test doesn't need it)
+	sent         chan oscmsg.Message
+	sentExternal chan externalSend
 
 	channelCount, auxCount, groupCount int
-	channelNames, auxNames, groupNames map[int]string // missing key = unnamed
-	channelStereo                      map[int]bool   // missing key = mono
+	channelNames, auxNames, groupNames map[int]string
+	channelStereo                      map[int]bool
 
-	// deskIP, when set, is the source address reply() attaches to every
-	// simulated desk reply — must match Options.DeskIP for hub's
-	// default-deny source gate (handleDeskMessage) to accept them, exactly
-	// as a real desk's UDP replies carry its real address. Left empty in
-	// tests that also leave Options.DeskIP empty.
 	deskIP string
 
 	mu       sync.Mutex
-	dropOnce map[string]bool // query address -> drop the next reply to it once, simulating lost UDP
+	dropOnce map[string]bool
 
-	// remoteCalls/rebindCalls record every SetRemote/Rebind call, for
-	// TestAdminNetworkApply* to assert against — both the values passed
-	// and, just as importantly, how many times each was called (proving
-	// an unchanged field doesn't trigger a redundant rebind/address
-	// change). setRemoteErr/rebindErr let a test force a failure.
 	remoteCalls  []remoteCall
 	rebindCalls  []int
 	setRemoteErr error
@@ -60,10 +46,6 @@ type remoteCall struct {
 	port int
 }
 
-// simulateDroppedReply marks address so its next query is answered with
-// silence instead of a reply — exactly once — to test the startup retry
-// ticker's recovery from a lost UDP packet (confirmed live against the
-// real desk: see startupRetryInterval's doc comment in hub.go).
 func (d *scriptedDesk) simulateDroppedReply(address string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -73,8 +55,6 @@ func (d *scriptedDesk) simulateDroppedReply(address string) {
 	d.dropOnce[address] = true
 }
 
-// consumeDrop reports whether address's next reply should be dropped,
-// clearing the flag so only the first attempt is affected.
 func (d *scriptedDesk) consumeDrop(address string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -100,7 +80,7 @@ func (d *scriptedDesk) Send(msg oscmsg.Message) error {
 		}
 	}
 	if d.consumeDrop(msg.Address) {
-		return nil // simulated lost packet: no reply this time
+		return nil
 	}
 	switch {
 	case msg.Address == "/Console/Channels/?":
@@ -131,14 +111,11 @@ func (d *scriptedDesk) Send(msg oscmsg.Message) error {
 	return nil
 }
 
-// externalSend records one SendTo call for test assertions.
 type externalSend struct {
 	Message oscmsg.Message
 	Addr    *net.UDPAddr
 }
 
-// SendTo satisfies DeskSender's external-device relay method, recording
-// each call onto d.sentExternal (nil if the test doesn't need it).
 func (d *scriptedDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
 	if d.sentExternal != nil {
 		select {
@@ -175,8 +152,6 @@ func (d *scriptedDesk) rebindCallsSnapshot() []int {
 	return append([]int(nil), d.rebindCalls...)
 }
 
-// replyName sends a populated name reply, or a zero-arg reply when name is
-// empty — matching the real desk's confirmed behavior for an unset label.
 func (d *scriptedDesk) replyName(address, name string) {
 	if name == "" {
 		d.reply(address)
@@ -217,7 +192,7 @@ func TestStartupSequenceWithGroups(t *testing.T) {
 		groupCount:   2,
 		channelNames: map[int]string{1: "Kick", 2: "Snare"},
 		auxNames:     map[int]string{1: "Mon 1", 2: "Mon 2"},
-		groupNames:   map[int]string{2: "Drums"}, // group 1 intentionally left unnamed
+		groupNames:   map[int]string{2: "Drums"},
 	}
 
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
@@ -258,7 +233,7 @@ func TestUnnamedBusCachesAsZeroArgs(t *testing.T) {
 		groupCount:   1,
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
-		groupNames:   map[int]string{}, // group 1 unnamed
+		groupNames:   map[int]string{},
 	}
 
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
@@ -273,10 +248,6 @@ func TestUnnamedBusCachesAsZeroArgs(t *testing.T) {
 		t.Fatal("startup did not complete within timeout")
 	}
 
-	// Give the healthy-triggering message's own cache write a moment to
-	// land before we assert on it — Ready() fires from inside the same
-	// synchronous call that already wrote the cache, so this is really
-	// just documenting that no extra wait is needed, not racing the hub.
 	cached, ok := h.cache["/Group_Outputs/1/Buss_Trim/name"]
 	if !ok {
 		t.Fatal("unnamed group's name address was not cached at all")
@@ -286,9 +257,6 @@ func TestUnnamedBusCachesAsZeroArgs(t *testing.T) {
 	}
 }
 
-// countingInterceptor counts how many messages actually reach the
-// pipeline. Uses atomic.Int64 since Handle runs on the hub goroutine while
-// the test reads the count from its own goroutine.
 type countingInterceptor struct{ n atomic.Int64 }
 
 func (c *countingInterceptor) Handle(msg oscmsg.Message) (oscmsg.Message, bool) {
@@ -296,15 +264,6 @@ func (c *countingInterceptor) Handle(msg oscmsg.Message) (oscmsg.Message, bool) 
 	return msg, true
 }
 
-// waitForQuiet polls counter until it stops changing for quietFor, then
-// returns its value — used instead of reading counter.n right after
-// Ready() fires, because the fire-and-forget snapshot query's reply
-// (advanceStartup's last step) is sent before Ready() but not necessarily
-// processed until after: Ready() fires synchronously mid-call, while the
-// reply it triggered still has to go all the way back around through
-// Run()'s select loop. Reading the counter immediately after Ready()
-// sometimes wins that race and sometimes loses it — this waits it out
-// instead of guessing with a fixed sleep.
 func waitForQuiet(counter *countingInterceptor, timeout, quietFor time.Duration) int64 {
 	deadline := time.Now().Add(timeout)
 	last := counter.n.Load()
@@ -324,15 +283,6 @@ func waitForQuiet(counter *countingInterceptor, timeout, quietFor time.Duration)
 	return last
 }
 
-// TestDuplicateResendIsStillRelayed is the regression test for a real bug
-// found by debug-tracing a live iPad-through-webmixer-to-desk session: an
-// exact repeat of an already-cached value was being dropped before it ever
-// reached the pipeline or broadcast() — which silently ate replies to an
-// external device's own query whenever that value happened to already be
-// cached from webmixer's own earlier query of the same address (see
-// handleDeskMessage's doc comment). A value-dedup must never gate relay —
-// every message reaches the pipeline and gets broadcast, whether its value
-// is new or an exact repeat.
 func TestDuplicateResendIsStillRelayed(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -356,23 +306,15 @@ func TestDuplicateResendIsStillRelayed(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("startup did not complete within timeout")
 	}
-	// The fire-and-forget snapshot query's reply can land just after
-	// Ready() fires (see waitForQuiet's doc comment) — settle first so it
-	// doesn't get miscounted as one of this test's own two messages below.
 	afterStartup := waitForQuiet(counter, 2*time.Second, 20*time.Millisecond)
 
-	// Resend the exact same channel-1-name value the desk already sent
-	// during startup — must still reach the pipeline (and be relayed).
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: "/Input_Channels/1/Channel_Input/name", Args: []any{"Kick"}},
 	}
-	// A genuinely new value on the same address must reach the pipeline too.
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: "/Input_Channels/1/Channel_Input/name", Args: []any{"Renamed"}},
 	}
 
-	// Drain deterministically: push a distinguishable sentinel through the
-	// same serialized queue and wait for it, rather than sleeping.
 	sentinelDone := make(chan struct{})
 	go func() {
 		for counter.n.Load() < afterStartup+2 {
@@ -391,9 +333,6 @@ func TestDuplicateResendIsStillRelayed(t *testing.T) {
 	}
 }
 
-// drainN reads exactly n envelopes off ch, failing the test if any read
-// times out — used to consume a client's known initial status+config pair
-// before making assertions about what arrives afterward.
 func drainN(t *testing.T, ch <-chan oscmsg.Envelope, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
@@ -405,12 +344,6 @@ func drainN(t *testing.T, ch <-chan oscmsg.Envelope, n int) {
 	}
 }
 
-// drainQuiet discards envelopes on ch until it goes quiet for quietWindow —
-// for sweeping up a still-in-flight straggler after drainN's exact count
-// (the fire-and-forget snapshot query's reply, broadcast to clients as a
-// plain OSC envelope once status is Healthy, can still be in transit right
-// after a client connects — same race as drainAllSent/drainAllSentExternal,
-// here on the per-client envelope channel instead of the desk-facing ones).
 func drainQuiet(ch <-chan oscmsg.Envelope) {
 	quietSince := time.Now()
 	for time.Since(quietSince) < quietWindow {
@@ -422,20 +355,11 @@ func drainQuiet(ch <-chan oscmsg.Envelope) {
 	}
 }
 
-// quietPollInterval/quietWindow tune drainAllSent/drainAllSentExternal's
-// wait for the fire-and-forget snapshot query's reply — it can still be in
-// flight (not yet on the channel at all) right when Ready() fires, so a
-// single non-blocking drain pass isn't enough to catch it; this waits for
-// the channel to go quiet instead of assuming whatever's already sitting
-// there is everything.
 const (
 	quietPollInterval = time.Millisecond
 	quietWindow       = 20 * time.Millisecond
 )
 
-// drainAllSent empties d.sent of whatever accumulated during startup,
-// waiting for a quiet period so a still-in-flight straggler is caught too —
-// so a later "desk received nothing new" assertion has a clean baseline.
 func drainAllSent(d *scriptedDesk) {
 	quietSince := time.Now()
 	for time.Since(quietSince) < quietWindow {
@@ -447,11 +371,6 @@ func drainAllSent(d *scriptedDesk) {
 	}
 }
 
-// drainAllSentExternal is drainAllSent's counterpart for d.sentExternal —
-// needed because the fire-and-forget snapshot query's reply arrives (and
-// gets broadcast to external devices) asynchronously, sometimes after
-// Ready() fires, so it can otherwise still be sitting in the channel when
-// a later test starts asserting on it.
 func drainAllSentExternal(d *scriptedDesk) {
 	quietSince := time.Now()
 	for time.Since(quietSince) < quietWindow {
@@ -495,12 +414,6 @@ func newTestHubWithOneOfEach(t *testing.T) (*Hub, *scriptedDesk, chan ClientEven
 	return h, fakeDesk, clientEvents
 }
 
-// TestStartupRecoversFromLostReply proves the retry ticker actually
-// recovers startup after a simulated dropped UDP packet — this is a
-// regression test for a real bug found live: the real desk startup
-// stalled permanently, twice, on ordinary packet loss before this ticker
-// existed (advanceStartup only re-ran reactively on new messages, so a
-// lost reply with no other traffic arriving meant it just hung forever).
 func TestStartupRecoversFromLostReply(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -511,8 +424,6 @@ func TestStartupRecoversFromLostReply(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	// Simulate the exact failure mode observed live: the reply to a
-	// mid-sequence query (channel 2's name) never arrives the first time.
 	fakeDesk.simulateDroppedReply("/Input_Channels/2/Channel_Input/name/?")
 
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 30 * time.Millisecond})
@@ -528,19 +439,6 @@ func TestStartupRecoversFromLostReply(t *testing.T) {
 	}
 }
 
-// TestAdvanceStartupDoesNotResendPendingQuery is the regression test for a
-// real bug found live: advanceStartup is re-invoked reactively on every
-// inbound message, not just the one it's actually waiting on — with no
-// guard against re-sending an already-outstanding query, a backlog of
-// unrelated desk traffic arriving while one query was in flight caused a
-// resend per backlogged message, and the desk dutifully answered every one
-// (confirmed live: a single reply's count grew from 1, sent right at boot
-// before any backlog existed, to 14 deep into the startup walk after a
-// large backlog had built up). This was silent before — the old
-// value-dedup absorbed every redundant reply after the first — and only
-// became visible once removing that dedup (see handleDeskMessage's doc
-// comment) let every one of those replies through. queryOnce is the actual
-// fix; this proves the guard holds under exactly that backlog condition.
 func TestAdvanceStartupDoesNotResendPendingQuery(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -550,9 +448,6 @@ func TestAdvanceStartupDoesNotResendPendingQuery(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	// Drop the very first reply so /Console/Channels/? stays genuinely
-	// pending — a long retry interval keeps the ticker itself from sending
-	// a legitimate second attempt during this test's short window.
 	fakeDesk.simulateDroppedReply("/Console/Channels/?")
 
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 5 * time.Second})
@@ -569,9 +464,6 @@ func TestAdvanceStartupDoesNotResendPendingQuery(t *testing.T) {
 		t.Fatal("initial query was never sent")
 	}
 
-	// Flood in unrelated backlog traffic while the reply is still pending —
-	// each one re-invokes advanceStartup via handleDeskMessage's status
-	// gate, same as real desk chatter arriving during a real startup walk.
 	for i := 0; i < 20; i++ {
 		fakeDesk.inbound <- desk.InboundMessage{
 			Message: oscmsg.Message{Address: "/Meters/clear", Args: []any{}},
@@ -658,19 +550,7 @@ func TestClientMessageBroadcastsToOthersNotSender(t *testing.T) {
 	}
 }
 
-// TestChronicallyFullClientGetsDisconnected proves sendTo's backpressure
-// policy actually cuts a stuck client loose (closing its outbound channel)
-// once it's gone maxConsecutiveDrops messages without draining a single
-// one, instead of retrying/logging forever — and that hub keeps serving
-// every other client normally throughout. This is the fix for CPU pinning
-// observed on real RB5009 hardware: a backgrounded/wedged client used to
-// cost hub a synchronous log write on every single subsequent broadcast.
 func TestChronicallyFullClientGetsDisconnected(t *testing.T) {
-	// Built directly rather than via newTestHubWithOneOfEach: that helper
-	// caps hub.Run's context at 5s, which this test's message volume can
-	// brush up against under a loaded/parallel `go test ./...` run — the
-	// symptom is indistinguishable from the bug this test checks for (hub
-	// goes quiet, stuck's channel never closes), so give it real headroom.
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
 		sent:         make(chan oscmsg.Message, 4096),
@@ -691,25 +571,17 @@ func TestChronicallyFullClientGetsDisconnected(t *testing.T) {
 	}
 
 	sender := make(chan oscmsg.Envelope, 8)
-	stuck := make(chan oscmsg.Envelope, 4) // small and never drained below
+	stuck := make(chan oscmsg.Envelope, 4)
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "sender", Outbound: sender}
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "stuck", Outbound: stuck}
-	drainN(t, sender, 2) // sender's own status+config
-	drainQuiet(sender)   // sweep up the boot snapshot query's straggler reply, if any
+	drainN(t, sender, 2)
+	drainQuiet(sender)
 
-	// Comfortably more than maxConsecutiveDrops — not tuned to the exact
-	// count, so a stray extra broadcast (e.g. the boot snapshot reply)
-	// landing on "stuck" doesn't make this test brittle.
 	moveMsg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
 	for i := 0; i < maxConsecutiveDrops*3; i++ {
 		clientEvents <- ClientEvent{Kind: ClientMessage, ClientID: "sender", Message: moveMsg}
 	}
 
-	// stuck's channel should end up closed: drain whatever made it into the
-	// buffer, then the channel read must report closed rather than block
-	// forever waiting for a message that will never come. One shared
-	// deadline (not one per read) so this stays reliable under a loaded,
-	// parallel `go test ./...` run rather than flaking on scheduling delay.
 	closed := false
 	deadline := time.After(5 * time.Second)
 readLoop:
@@ -728,8 +600,6 @@ readLoop:
 		t.Fatal("stuck client's outbound channel was never closed")
 	}
 
-	// hub must still be alive and serving other clients after cutting the
-	// stuck one loose.
 	other := make(chan oscmsg.Envelope, 8)
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "other", Outbound: other}
 	drainN(t, other, 2)
@@ -779,13 +649,6 @@ func TestClientQueryRespondsFromCacheOnly(t *testing.T) {
 	}
 }
 
-// TestExternalDeviceMessagesAreForwardedToDesk is the regression test for a
-// real bug found by asking "are the iPad's OSC messages routed to the
-// console and vice versa" against the live desk: a message arriving on the
-// shared OSC socket from a registered external device (a different IP than
-// the desk) was being unconditionally treated as "from the desk" and
-// therefore never forwarded to the actual console. See broadcastSource's
-// doc comment and broadcast() in client.go.
 func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 	const deskIP = "10.0.0.18"
 	const ipadIP = "10.0.0.12"
@@ -817,8 +680,6 @@ func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 	}
 	drainAllSent(fakeDesk)
 
-	// A message arriving from the iPad's IP — not the desk's — must still
-	// reach the desk.
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: "/Console/Name/?", Args: []any{}},
 		From:    &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000},
@@ -834,11 +695,6 @@ func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 	}
 }
 
-// TestUnregisteredSourceMessagesAreDropped confirms the default-deny gate:
-// a packet arriving on the shared socket from an IP that is neither the
-// desk nor a registered external device must never be processed or
-// relayed — an unrecognized sender (a stray device, a scanner, a spoofed
-// packet) is not implicitly trusted.
 func TestUnregisteredSourceMessagesAreDropped(t *testing.T) {
 	const deskIP = "10.0.0.18"
 	const strangerIP = "10.0.0.99"
@@ -879,10 +735,6 @@ func TestUnregisteredSourceMessagesAreDropped(t *testing.T) {
 	}
 }
 
-// TestExternalDeviceMessagesAreDroppedWhenBroadcastDisabled confirms a
-// registered device with Broadcast: false is gated on ingress too — its
-// packets must never reach the desk, not just never be relayed back out to
-// it (see TestExternalDeviceMessagesAreForwardedToDesk for the enabled case).
 func TestExternalDeviceMessagesAreDroppedWhenBroadcastDisabled(t *testing.T) {
 	const deskIP = "10.0.0.18"
 	const ipadIP = "10.0.0.12"
@@ -926,9 +778,6 @@ func TestExternalDeviceMessagesAreDroppedWhenBroadcastDisabled(t *testing.T) {
 	}
 }
 
-// TestDeskRepliesAreNotEchoedBackToDesk confirms the other half stays
-// correct: a message whose sender IP matches the configured desk must NOT
-// be sent straight back to it.
 func TestDeskRepliesAreNotEchoedBackToDesk(t *testing.T) {
 	const deskIP = "10.0.0.18"
 
@@ -968,9 +817,6 @@ func TestDeskRepliesAreNotEchoedBackToDesk(t *testing.T) {
 	}
 }
 
-// TestExternalDeviceLoopbackExclusion confirms an external device doesn't
-// receive an echo of its own message back (Loopback: false), while a
-// different external device still gets it normally.
 func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 	const deskIP = "10.0.0.18"
 	const ipadIP = "10.0.0.12"
@@ -1012,11 +858,6 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 		From:    &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000},
 	}
 
-	// Filter by address too, not just drain-before: the fire-and-forget
-	// snapshot query's reply can arrive and get broadcast to external
-	// devices asynchronously, sometimes racing this assertion — ignoring
-	// anything but the message this test actually sent keeps the
-	// assertion meaningful regardless of that timing.
 	var gotOther bool
 	deadline := time.After(time.Second)
 	for !gotOther {
@@ -1037,16 +878,6 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 	}
 }
 
-// TestDeskEchoSuppressedShortlyAfterClientDrivenChange is the regression
-// test for the fader-jump bug (see deskEchoSuppressWindow's doc comment,
-// client.go): a WS client's own change to an address is relayed to other
-// clients immediately; the desk's own echo of that same change arrives
-// later — via a full send-to-desk-and-back round trip — and re-relaying
-// it made the fader visibly jump backward to the stale echoed value on
-// every other client's screen before catching back up (confirmed live,
-// viewed from a second client while a first client dragged a fader). The
-// desk's echo of a just-client-driven address must be suppressed within
-// the window, then relayed normally again once it elapses.
 func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
 	const deskIP = "10.0.0.18"
 	const addr = "/Some/Fader/Value"
@@ -1079,8 +910,6 @@ func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
 	drainN(t, outB, 2)
 	drainAllSent(fakeDesk)
 
-	// A drives the fader — B gets the immediate client-to-client relay
-	// right away.
 	clientEvents <- ClientEvent{Kind: ClientMessage, ClientID: "A", Message: oscmsg.Message{Address: addr, Args: []any{float32(-6)}}}
 	select {
 	case env := <-outB:
@@ -1090,12 +919,10 @@ func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("B never received the client-driven relay")
 	}
-	drainAllSent(fakeDesk) // the relayed fader move landing on the (fake) desk
+	drainAllSent(fakeDesk)
 
-	// The desk's own echo of that same address, arriving inside the
-	// window, must not reach B a second time.
 	fakeDesk.inbound <- desk.InboundMessage{
-		Message: oscmsg.Message{Address: addr, Args: []any{float32(-6.02)}}, // close but not identical — the desk's own quantization
+		Message: oscmsg.Message{Address: addr, Args: []any{float32(-6.02)}},
 		From:    &net.UDPAddr{IP: net.ParseIP(deskIP), Port: 9000},
 	}
 	select {
@@ -1104,7 +931,6 @@ func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	// Once the window has elapsed, the next desk echo reconciles normally.
 	time.Sleep(deskEchoSuppressWindow)
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: addr, Args: []any{float32(-6.02)}},
@@ -1120,16 +946,6 @@ func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
 	}
 }
 
-// TestExternalDeviceGetsReplyEvenWhenValueMatchesCache is the regression
-// test for the actual live-session bug (see handleDeskMessage's doc
-// comment): an external device relayed through webmixer as if it were the
-// desk (e.g. an iPad) sends its own /Console/Channels/? during its connect
-// handshake. webmixer had already cached the reply address
-// (/Console/Input_Channels) from its own earlier startup query with the
-// same value — the old value-dedup swallowed the reply before it ever
-// reached broadcast(), so the iPad's query silently went unanswered and its
-// own handshake stalled. The reply must always reach the external device,
-// whether or not its value is new to webmixer's cache.
 func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 	const deskIP = "10.0.0.18"
 	const ipadIP = "10.0.0.12"
@@ -1162,9 +978,6 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 	}
 	drainAllSentExternal(fakeDesk)
 
-	// Re-query the exact address webmixer's own startup already cached —
-	// scriptedDesk.Send answers /Console/Channels/? with
-	// /Console/Input_Channels carrying the same channelCount value.
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: "/Console/Channels/?", Args: []any{}},
 		From:    &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000},
@@ -1175,7 +988,7 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 		select {
 		case sent := <-fakeDesk.sentExternal:
 			if sent.Message.Address == "/Console/Input_Channels" && sent.Addr.IP.String() == ipadIP {
-				return // relayed, as required
+				return
 			}
 		case <-deadline:
 			t.Fatal("the iPad's query for an already-cached value never got a relayed reply")
@@ -1183,22 +996,6 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 	}
 }
 
-// TestSessionChangeReQueriesFreshTopology is the regression test for Phase
-// 4's session-reload handling: confirmed live (two packet captures) that a
-// session change on the real desk never pushes topology (counts, names,
-// modes, channel stereo) unprompted — the desk floods ~700 value updates
-// but not that, and the real iPad app itself explicitly re-queries it
-// fresh. This proves handleSessionChange's cache reset actually forces a
-// real re-query rather than advanceStartup seeing stale-but-present cache
-// entries and silently no-op'ing through to Healthy — by changing what the
-// (fake) desk reports mid-test and confirming the reload picks up the new
-// values, not the old ones.
-//
-// Deliberately observed only through a connected client's own envelope
-// stream (status: reloading, then status: healthy + fresh config) rather
-// than reading hub's internal fields directly — hub state is only safe to
-// read from its own goroutine (see package doc), and this is exactly the
-// request/response-shaped channel hub already provides for the purpose.
 func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1225,11 +1022,9 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 
 	out := make(chan oscmsg.Envelope, 16)
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "c1", Outbound: out}
-	drainN(t, out, 2) // initial status(healthy) + config, reflecting session 1
-	drainQuiet(out)   // sweep up the boot snapshot query's straggler reply, if any
+	drainN(t, out, 2)
+	drainQuiet(out)
 
-	// Change what the "desk" reports — simulating a different session:
-	// more channels, different names, channel 1 now stereo.
 	fakeDesk.channelCount = 2
 	fakeDesk.channelNames = map[int]string{1: "Vocal L", 2: "Vocal R"}
 	fakeDesk.channelStereo = map[int]bool{1: true}
@@ -1269,7 +1064,7 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 	}
 
 	sources := configEnv.Config.MixerLayouts["default"].Items
-	if len(sources) != 3 { // 2 channels + 1 group
+	if len(sources) != 3 {
 		t.Fatalf("mixer layout = %+v, want 3 (2 channels + 1 group, session 2's counts)", sources)
 	}
 	byNumber := map[int]oscmsg.LayoutItem{}
@@ -1289,10 +1084,6 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 	}
 }
 
-// TestSessionChangeDropsClientMessages confirms the owner's explicit
-// decision: a client-originated change arriving while Reloading is dropped
-// outright, not queued or forwarded — a channel/aux number it targets may
-// no longer mean the same thing once a different session has loaded.
 func TestSessionChangeDropsClientMessages(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1302,8 +1093,6 @@ func TestSessionChangeDropsClientMessages(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	// A long retry interval plus a dropped first reply keeps hub stuck in
-	// Reloading for the test's duration — deterministic, not timing-luck.
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 5 * time.Second})
 	clientEvents := make(chan ClientEvent, 8)
 
@@ -1323,7 +1112,7 @@ func TestSessionChangeDropsClientMessages(t *testing.T) {
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "B", Outbound: outB}
 	drainN(t, outA, 2)
 	drainN(t, outB, 2)
-	drainQuiet(outA) // sweep up the boot snapshot query's straggler reply, if any
+	drainQuiet(outA)
 	drainQuiet(outB)
 	drainAllSent(fakeDesk)
 
@@ -1332,9 +1121,6 @@ func TestSessionChangeDropsClientMessages(t *testing.T) {
 		Message: oscmsg.Message{Address: sessionChangeAddress, Args: []any{int32(0)}},
 	}
 
-	// handleSessionChange pushes status:reloading to every connected
-	// client, not just the one about to send a message — both A and B get
-	// it, so both need draining before checking "nothing further arrives."
 	select {
 	case env := <-outA:
 		if env.Kind != oscmsg.KindStatus || env.Status == nil || env.Status.Desk != string(StatusReloading) {
@@ -1351,7 +1137,7 @@ func TestSessionChangeDropsClientMessages(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("did not receive status:reloading on B — reload never started")
 	}
-	drainAllSent(fakeDesk) // the re-triggered (and dropped) /Console/Channels/? query
+	drainAllSent(fakeDesk)
 
 	moveMsg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
 	clientEvents <- ClientEvent{Kind: ClientMessage, ClientID: "A", Message: moveMsg}
@@ -1368,16 +1154,6 @@ func TestSessionChangeDropsClientMessages(t *testing.T) {
 	}
 }
 
-// TestDeskTimeoutDeclaresDegradedAndRecovers is the regression test for the
-// desk-timeout half of the Healthcheck redesign (plan: "internal/health"):
-// checkDeskHealth must actively probe the desk during a quiet period — a
-// genuinely idle-but-alive desk (no fader moves, no meter flood) must not be
-// misjudged as unresponsive just because nothing unprompted arrived — and
-// declare Degraded once nothing at all, probe reply included, has arrived
-// for degradedAfterMisses intervals. Recovery must be immediate the instant
-// desk traffic actually resumes, not deferred to the next tick, and must
-// push a fresh status+config since a client may be holding data from before
-// the outage.
 func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1407,11 +1183,8 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "c1", Outbound: out}
 	drainN(t, out, 2)
 	drainQuiet(out)
-	drainAllSent(fakeDesk) // clear the startup query traffic
+	drainAllSent(fakeDesk)
 
-	// Go quiet: nothing sent into fakeDesk.inbound, so scriptedDesk never
-	// replies to the health ticker's own probes either — exactly like a
-	// real disconnect.
 	var degradedEnv oscmsg.Envelope
 	select {
 	case degradedEnv = <-out:
@@ -1422,8 +1195,6 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 		t.Fatalf("envelope after silence = %+v, want status:degraded", degradedEnv)
 	}
 
-	// Confirm the health ticker was actively probing during the silence,
-	// not just passively waiting for unprompted traffic to stop.
 	select {
 	case sent := <-fakeDesk.sent:
 		if sent.Address != healthProbeAddress {
@@ -1433,7 +1204,6 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 		t.Fatal("health ticker never probed the desk during silence")
 	}
 
-	// Desk traffic resumes.
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: "/Console/Name", Args: []any{"Console"}},
 	}
@@ -1457,10 +1227,6 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	}
 }
 
-// TestClientMessageDroppedWhileDegraded confirms the plan's Degraded
-// behavior ("drop, don't queue — a fader move made while offline has no
-// meaningful catch-up semantics"): a client-originated message arriving
-// while Degraded must not reach the desk or get broadcast to other clients.
 func TestClientMessageDroppedWhileDegraded(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1506,10 +1272,6 @@ func TestClientMessageDroppedWhileDegraded(t *testing.T) {
 		}
 	}
 
-	// Drain whatever's already queued on fakeDesk.sent — the startup
-	// sequence's own queries plus however many health-ticker probes fired
-	// while waiting for Degraded above — so the assertion below only sees
-	// traffic caused by the moveMsg sent after this point.
 	drainAny := time.After(100 * time.Millisecond)
 drain:
 	for {
@@ -1529,10 +1291,6 @@ drain:
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	// fakeDesk.sent keeps receiving the health ticker's own unanswered
-	// probes throughout this window (every HealthCheckInterval) — those
-	// must be ignored; only a non-probe message (i.e. moveMsg leaking
-	// through) is a failure.
 	deadline := time.After(200 * time.Millisecond)
 	for {
 		select {
@@ -1546,14 +1304,6 @@ drain:
 	}
 }
 
-// TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned proves
-// AdminApply's Layout field actually reaches buildConfig(): explicitly
-// laid-out items (a source, a section marker, another source) come back
-// in exactly that order with the marker sitting inline between them, and
-// a channel the layout never mentions (channel 1) is appended at the end
-// in natural desk order rather than silently dropped — see
-// config.LayoutItem's doc comment for why membership/order both come from
-// this one sequence, not a separately-stored field.
 func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1574,8 +1324,6 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 		t.Fatal("startup did not complete")
 	}
 
-	// Channel 1 is deliberately never mentioned — proving the natural-
-	// order fallback for anything the layout doesn't reference.
 	adminEvents <- AdminEvent{
 		Kind: AdminApply,
 		Layouts: map[string]config.NamedLayout{
@@ -1590,8 +1338,6 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 		},
 	}
 
-	// Same channel as the AdminApply above — FIFO within one channel
-	// guarantees the query is processed after the apply lands.
 	reply := make(chan oscmsg.ConfigPayload, 1)
 	adminEvents <- AdminEvent{Kind: AdminQuery, Reply: reply}
 
@@ -1619,14 +1365,6 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 	}
 }
 
-// TestAutoHidePatternsHideUnmentionedMatches proves config.Global's
-// AutoHideChannelPatterns/AutoHideGroupPatterns/AutoHideAuxPatterns (see
-// their doc comment) only change the natural-order fallback's default,
-// scoped strictly per source type: a group whose name matches but is
-// explicitly laid out with Enabled: true stays enabled (explicit beats the
-// pattern), and an aux named "Hall" being hidden must not also hide a
-// channel named "Hall Ret" even though it contains the same substring —
-// the exact false-positive this per-type scoping exists to prevent.
 func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1648,10 +1386,6 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 		t.Fatal("startup did not complete")
 	}
 
-	// Group 1 ("Master") is explicitly laid out and enabled, despite
-	// matching the group pattern below — explicit always wins. Group 2
-	// ("Drums"), both channels, and the aux ("Hall") are all left to the
-	// fallback.
 	adminEvents <- AdminEvent{
 		Kind: AdminApply,
 		Layouts: map[string]config.NamedLayout{
@@ -1697,14 +1431,6 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 	}
 }
 
-// TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic proves
-// DeskStatusInfo.LastSeen stays the zero value (which the admin panel
-// renders as "never") until real desk traffic has actually arrived at
-// least once, rather than misreporting "just now" from lastDeskSeen's
-// construction-time initialization (see Hub.lastDeskSeen's doc comment).
-// Calls handleAdminEvent/handleDeskMessage directly rather than running
-// the full Run() goroutine — deterministic, and a faithful test of the
-// same handler methods Run's select loop itself dispatches to.
 func TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic(t *testing.T) {
 	fakeDesk := &scriptedDesk{inbound: make(chan desk.InboundMessage, 64)}
 	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.5"})
@@ -1724,13 +1450,6 @@ func TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic(t *testing.T) {
 	}
 }
 
-// TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged proves
-// AdminNetworkApply reaches h.desk via SetRemote/Rebind, and — critically
-// — only for the field that actually changed: Desk IP/port and OSC
-// listen port live on the same Network form, so re-saving it with only an
-// unrelated field different must not needlessly rebind the live OSC
-// socket or reset the desk address, both of which briefly disrupt real
-// traffic (see applyNetworkChange's doc comment).
 func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),
@@ -1767,7 +1486,6 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 		}
 	}
 
-	// Desk IP/port change, OSC port unchanged — expect SetRemote only.
 	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8001, OSCPort: 9000}
 	waitForApply()
 
@@ -1778,8 +1496,6 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 		t.Fatalf("Rebind calls = %v, want none — OSC port didn't change", calls)
 	}
 
-	// Same event again (nothing changed from hub's point of view) — expect
-	// no further calls at all.
 	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8001, OSCPort: 9000}
 	waitForApply()
 
@@ -1790,7 +1506,6 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 		t.Fatalf("Rebind calls = %v after a no-op re-save, want none", calls)
 	}
 
-	// OSC port change only — expect Rebind only, no further SetRemote.
 	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8001, OSCPort: 9001}
 	waitForApply()
 
@@ -1802,10 +1517,6 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 	}
 }
 
-// TestLogSendErrThrottledSuppressesRepeats proves broadcast's send-error
-// logging (see lastSendErrLogged's doc comment) doesn't spam the log at
-// message rate for a destination that's down — every message to it fails,
-// so without throttling every single one would log a line.
 func TestLogSendErrThrottledSuppressesRepeats(t *testing.T) {
 	var buf bytes.Buffer
 	h := New(&scriptedDesk{}, nil, log.New(&buf, "", 0), Options{})
@@ -1817,13 +1528,11 @@ func TestLogSendErrThrottledSuppressesRepeats(t *testing.T) {
 		t.Fatalf("logged %d times within the throttle window, want exactly 1: %s", n, buf.String())
 	}
 
-	// A different key must not be suppressed by the first key's throttle.
 	h.logSendErrThrottled("other-device", "broadcast to external %q: boom", "other-device")
 	if n := strings.Count(buf.String(), "boom"); n != 2 {
 		t.Fatalf("logged %d times after a different key, want exactly 2: %s", n, buf.String())
 	}
 
-	// Once the interval has passed, the same key logs again.
 	h.lastSendErrLogged["dead-device"] = time.Now().Add(-sendErrLogInterval - time.Second)
 	h.logSendErrThrottled("dead-device", "broadcast to external %q: boom", "dead-device")
 	if n := strings.Count(buf.String(), "boom"); n != 3 {
@@ -1831,11 +1540,6 @@ func TestLogSendErrThrottledSuppressesRepeats(t *testing.T) {
 	}
 }
 
-// TestBuildConfigPerLayoutIndependence proves buildConfig runs its merge
-// (explicit items + natural-order fallback) once per entry in h.layouts,
-// not just for "default" — two differently-ordered/customized layouts
-// covering the same desk must each come back independently correct, and
-// an aux's LayoutID must ride through to the wire AuxConfig unchanged.
 func TestBuildConfigPerLayoutIndependence(t *testing.T) {
 	fakeDesk := &scriptedDesk{
 		inbound:      make(chan desk.InboundMessage, 64),

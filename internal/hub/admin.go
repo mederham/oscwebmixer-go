@@ -8,12 +8,6 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
-// AdminEventKind distinguishes the things internal/admin needs from hub:
-// reading the current state to render the admin UI (hub state is only
-// safe to read from Run's own goroutine — see the plan's "Concurrency
-// model" — so this goes through the same request/response-over-channel
-// pattern as everything else), applying a freshly-saved config, and
-// reading desk connectivity status for the Network tab's indicator.
 type AdminEventKind int
 
 const (
@@ -24,30 +18,17 @@ const (
 	AdminSetLocked
 )
 
-// DeskStatusInfo answers AdminStatusQuery — the Network tab's status dot
-// and "last seen" line. Kept separate from AdminQuery's ConfigPayload
-// deliberately: ConfigPayload is also the WS wire type pushed to every
-// mixer client, and desk status has no reason to ride along on that; this
-// is a distinct, admin-only, on-demand read.
 type DeskStatusInfo struct {
-	Status string
-	// LastSeen is the zero time.Time until real desk traffic has actually
-	// arrived at least once (see Hub.lastDeskSeen's doc comment). The
-	// template checks LastSeen.IsZero() and renders "never" for this case.
+	Status   string
 	LastSeen time.Time
 	Locked   bool
 }
 
-// AdminEvent is the "admin config change" member of the tagged union the
-// plan's "Concurrency model" section describes hub's Run loop processing.
-// internal/admin owns writing to disk; only the already-persisted result
-// (or a query for the current one) ever crosses into hub.
 type AdminEvent struct {
 	Kind        AdminEventKind
-	Reply       chan<- oscmsg.ConfigPayload // set for AdminQuery
-	StatusReply chan<- DeskStatusInfo       // set for AdminStatusQuery
+	Reply       chan<- oscmsg.ConfigPayload
+	StatusReply chan<- DeskStatusInfo
 
-	// The following are set for AdminApply.
 	Layouts                 map[string]config.NamedLayout
 	Auxes                   []config.Aux
 	ExternalDevices         []ExternalDevice
@@ -56,18 +37,13 @@ type AdminEvent struct {
 	AutoHideAuxPatterns     []string
 	Debug                   bool
 
-	// The following are set for AdminNetworkApply.
 	DeskIP   string
 	DeskPort int
 	OSCPort  int
 
-	// Locked is set for AdminSetLocked.
 	Locked bool
 }
 
-// sourceKey identifies a source by its stable identity (type+number) —
-// not by array/list position, since admin drag-and-drop/reorder means
-// position isn't identity (see plan: "Group buses").
 func sourceKey(sourceType string, number int) string {
 	return fmt.Sprintf("%s:%d", sourceType, number)
 }
@@ -92,9 +68,6 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.log.Printf("admin config applied: %d layout(s), %d aux override(s), %d external device(s)",
 			len(ev.Layouts), len(ev.Auxes), len(ev.ExternalDevices))
 
-		// Live, no restart, no disconnect — every connected client gets a
-		// fresh config push (see the "config on WS, push-based" decision;
-		// same mechanism used on connect).
 		cfg := oscmsg.NewConfigEnvelope(h.buildConfig())
 		for id, out := range h.clients {
 			h.sendTo(id, out, cfg)
@@ -116,13 +89,6 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 	}
 }
 
-// applyNetworkChange is AdminNetworkApply's handler — split out since it's
-// the one admin event kind that can fail (a bad IP, a port already in
-// use), each field independently, so a failure on one doesn't stop the
-// other from applying. Compares against the currently-applied values
-// first so re-saving the Network tab with only an unrelated field changed
-// (e.g. Debug) doesn't needlessly rebind the OSC socket or reset the desk
-// address, both of which briefly disrupt live traffic.
 func (h *Hub) applyNetworkChange(ev AdminEvent) {
 	if ev.DeskIP != h.deskIP || ev.DeskPort != h.deskPort {
 		if err := h.desk.SetRemote(ev.DeskIP, ev.DeskPort); err != nil {

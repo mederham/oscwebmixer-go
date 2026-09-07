@@ -24,13 +24,6 @@ import (
 
 const testVersion = "1.2.3-test"
 
-// fakeDesk is a minimal hub.DeskSender that answers just enough of the
-// startup sequence (1 channel, 1 aux, 0 groups) for hub to leave Starting.
-// These tests exercise the admin HTTP layer's persistence/apply flow, not
-// hub's startup sequencer — see internal/hub's own tests for that.
-// remoteCalls/rebindCalls record every SetRemote/Rebind call, guarded by
-// mu since they're written from hub's own goroutine (via handleAdminEvent)
-// concurrently with a test goroutine's assertions.
 type fakeDesk struct {
 	inbound chan desk.InboundMessage
 
@@ -97,20 +90,12 @@ func (d *fakeDesk) rebindCallsSnapshot() []int {
 	return append([]int(nil), d.rebindCalls...)
 }
 
-// newTestHandler builds a Handler backed by a real (but desk-less) hub and
-// a config.Manager rooted at a temp dir — the same request/response-over-
-// channel path production code uses, just with a scripted desk standing in
-// for hardware.
 func newTestHandler(t *testing.T) *Handler {
 	t.Helper()
 	handler, _ := newTestHandlerWithDesk(t)
 	return handler
 }
 
-// newTestHandlerWithDesk is newTestHandler plus the *fakeDesk backing it,
-// for tests that need to assert on SetRemote/Rebind calls (Network tab
-// live-apply) — most tests only need the handler, hence the thin
-// newTestHandler wrapper above rather than changing every existing caller.
 func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	t.Helper()
 	fd := &fakeDesk{inbound: make(chan desk.InboundMessage, 64)}
@@ -154,9 +139,6 @@ func postForm(t *testing.T, mux *http.ServeMux, path, body string) *httptest.Res
 	return rec
 }
 
-// postFormExpectStatus is postForm's counterpart for requests expected to
-// fail — postForm itself fatals on anything but 200, so a refusal path
-// (e.g. renaming/deleting the Default layout) has to be posted directly.
 func postFormExpectStatus(t *testing.T, mux *http.ServeMux, path, body string, want int) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
@@ -169,11 +151,6 @@ func postFormExpectStatus(t *testing.T, mux *http.ServeMux, path, body string, w
 	return rec
 }
 
-// postSourcesSave posts to /admin/sources/save the same way admin.js's
-// htmx:configRequest listener does in the browser: one "layout" form field
-// carrying a JSON-encoded array — see internal/admin's package doc comment
-// for why a plain named-field form can't represent an ordered, mixed-kind
-// list.
 func postSourcesSave(t *testing.T, mux *http.ServeMux, items []oscmsg.LayoutItem) *httptest.ResponseRecorder {
 	t.Helper()
 	data, err := json.Marshal(items)
@@ -183,12 +160,6 @@ func postSourcesSave(t *testing.T, mux *http.ServeMux, items []oscmsg.LayoutItem
 	return postForm(t, mux, "/admin/sources/save", url.Values{"layout": {string(data)}}.Encode())
 }
 
-// TestIndexRenders is a smoke test for the full page — layout.html.tmpl
-// composing all five section templates (tabs, Network's status-dot
-// fragment, Sources' card grid, Auxes, External devices, Presets) at once.
-// The other tests here exercise individual section fragments directly;
-// this is the one path that renders every template file in this package
-// together, catching a field-access typo none of the narrower tests would.
 func TestIndexRenders(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -209,12 +180,6 @@ func TestIndexRenders(t *testing.T) {
 	}
 }
 
-// TestAdminResponsesAreNotCached is the regression test for a live bug: a
-// plain browser reload of /admin (not a hard reload) served a stale
-// Sources tab — a cached response from before the last edit — because
-// nothing told the browser this page can change from any other request.
-// Cache-Control: no-store on every admin route (see Register's doc
-// comment) is what makes a plain reload always hit the server fresh.
 func TestAdminResponsesAreNotCached(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -254,10 +219,6 @@ func TestSectionCreateAppearsInResponse(t *testing.T) {
 	}
 }
 
-// TestSectionAddInsertsAtGivenPosition proves the hover "+" button's
-// beforeKey (see admin.js/layoutItemKey) actually places the new section
-// where clicked, not just at the end — first before a source, then before
-// another section, covering both branches of layoutItemKey's key format.
 func TestSectionAddInsertsAtGivenPosition(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -292,11 +253,6 @@ func TestSectionAddInsertsAtGivenPosition(t *testing.T) {
 	}
 }
 
-// TestSectionAddFallsBackToAppendOnUnmatchedBeforeKey proves a beforeKey
-// naming a row that no longer exists (e.g. a stale key from a page the
-// admin hasn't refreshed) doesn't error or silently drop the new
-// section — it falls back to the same append-at-the-end behavior as
-// posting no beforeKey at all.
 func TestSectionAddFallsBackToAppendOnUnmatchedBeforeKey(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -318,11 +274,6 @@ func TestSectionAddFallsBackToAppendOnUnmatchedBeforeKey(t *testing.T) {
 	}
 }
 
-// TestSourcesSavePreservesOrderAndSectionPlacement is the core new-model
-// regression test: the posted layout's exact order — a section marker
-// immediately followed by a source — must come back unchanged, proving
-// display order AND section placement both derive purely from this one
-// sequence (see oscmsg.LayoutItem's doc comment).
 func TestSourcesSavePreservesOrderAndSectionPlacement(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -344,10 +295,6 @@ func TestSourcesSavePreservesOrderAndSectionPlacement(t *testing.T) {
 	}
 }
 
-// TestSectionDeleteKeepsSourcesRemovesMarker confirms the plan's explicit
-// decision: deleting a section removes only its marker — sources are never
-// deleted, and (since membership is derived from position, not a stored
-// field) there is nothing else to update on them at all.
 func TestSectionDeleteKeepsSourcesRemovesMarker(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -369,10 +316,6 @@ func TestSectionDeleteKeepsSourcesRemovesMarker(t *testing.T) {
 	}
 }
 
-// TestSourcesReset confirms resetting clears every customization/section
-// and falls back to buildConfig's own natural-order default — proving
-// reset really is just "persist an empty layout," not something that
-// needs to reconstruct "channels then groups, ascending" itself.
 func TestSourcesReset(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -408,9 +351,6 @@ func TestSourcesSaveRoundTrip(t *testing.T) {
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "https://example.com/icon.svg"},
 	})
 
-	// The redesigned source-card markup (badge derived via the template
-	// func, not a stored field — see SourceRow) renders correctly with a
-	// real, populated card.
 	respBody := rec.Body.String()
 	for _, want := range []string{`class="source-card channel`, `class="enabled-field eye"`, "Ch 01"} {
 		if !strings.Contains(respBody, want) {
@@ -439,13 +379,9 @@ func TestAuxesSaveRoundTrip(t *testing.T) {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	body := "colour[1]=%23ff0000&icon[1]=mic.svg" // enabled[1] omitted -> disabled
+	body := "colour[1]=%23ff0000&icon[1]=mic.svg"
 	rec := postForm(t, mux, "/admin/auxes", body)
 
-	// The redesigned aux-card markup renders correctly with a real,
-	// populated row — not just an empty list — since ExecuteTemplate
-	// writes to the response as it goes and a mid-render error wouldn't
-	// change the HTTP status this test already checks in postForm.
 	respBody := rec.Body.String()
 	for _, want := range []string{`class="aux-card`, `class="eye"`, "Aux 1"} {
 		if !strings.Contains(respBody, want) {
@@ -472,10 +408,6 @@ func TestAuxesSaveRoundTrip(t *testing.T) {
 	}
 }
 
-// TestIconsListedFromEmbeddedFS is a sanity check that the aux icon
-// picker's options actually come from web/admin/icons/*.svg — guards
-// against a silently-empty dropdown if that directory or its go:embed
-// wiring ever breaks.
 func TestIconsListedFromEmbeddedFS(t *testing.T) {
 	h := newTestHandler(t)
 	if len(h.icons) == 0 {
@@ -488,10 +420,6 @@ func TestIconsListedFromEmbeddedFS(t *testing.T) {
 	}
 }
 
-// TestPresetsReset confirms the Presets tab's reset button clears both the
-// mixer layout and aux overrides back to defaults, live — the same
-// "start over" action as loading a preset, just loading the zero-value
-// default instead of a saved one.
 func TestPresetsReset(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -501,7 +429,7 @@ func TestPresetsReset(t *testing.T) {
 		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Drums"},
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
 	})
-	postForm(t, mux, "/admin/auxes", "colour[1]=%23ff0000&icon[1]=mic.svg") // enabled[1] omitted -> disabled
+	postForm(t, mux, "/admin/auxes", "colour[1]=%23ff0000&icon[1]=mic.svg")
 
 	rec := postForm(t, mux, "/admin/presets/reset", "")
 	if strings.Contains(rec.Body.String(), "Drums") {
@@ -525,11 +453,6 @@ func TestPresetsReset(t *testing.T) {
 	}
 }
 
-// TestPresetActiveAndUpdate proves loading a preset marks it Active in
-// the rendered list (see PresetRow.Active's doc comment for how that's
-// derived purely from state.UUID, no new stored field), and that Update
-// overwrites the preset's saved content with whatever the live state
-// currently is.
 func TestPresetActiveAndUpdate(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -560,7 +483,6 @@ func TestPresetActiveAndUpdate(t *testing.T) {
 	}
 	uuid := presets[0].UUID
 
-	// Saving a preset doesn't load it — nothing should be active yet.
 	if strings.Contains(indexBody(), `class="preset-card active"`) {
 		t.Fatal("a preset is marked active before any preset was loaded")
 	}
@@ -570,7 +492,6 @@ func TestPresetActiveAndUpdate(t *testing.T) {
 		t.Fatal("the loaded preset is not marked active")
 	}
 
-	// Edit the now-active live state, then Update the preset with it.
 	postSourcesSave(t, mux, []oscmsg.LayoutItem{
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
 	})
@@ -585,10 +506,6 @@ func TestPresetActiveAndUpdate(t *testing.T) {
 	}
 }
 
-// TestLockSurvivesPresetLoad proves the lock is a runtime-only kill switch,
-// not part of saved state: it isn't in config.State/config.Preset at all,
-// so loading a preset (which overwrites layout/auxes live) must leave an
-// active lock untouched rather than silently clearing it.
 func TestLockSurvivesPresetLoad(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -614,13 +531,6 @@ func TestLockSurvivesPresetLoad(t *testing.T) {
 	}
 }
 
-// TestSettingsSaveAppliesLive proves the Settings tab's per-type auto-hide
-// patterns (see config.Global's AutoHide*Patterns fields) round-trip to
-// disk and reach hub live, with no restart — fakeDesk's one channel is
-// named "Kick", so a channel pattern of "Kick" should flip it from the
-// usual default-enabled to hidden the moment the setting is saved, while
-// the same text in the aux pattern field must not affect it (per-type
-// scoping, not one shared list).
 func TestSettingsSaveAppliesLive(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -650,19 +560,12 @@ func TestSettingsSaveAppliesLive(t *testing.T) {
 	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Enabled {
 		t.Fatalf("mixer layout after settings save = %+v, want channel 1 (Kick) hidden by the channel pattern, applied live with no restart", cfg.MixerLayouts["default"].Items)
 	}
-	// fakeDesk's one aux is named "Mon 1" (see fakeDesk.Send) — unaffected
-	// by the "Kick" aux pattern, since nothing named "Kick" exists among
-	// auxes; this mainly guards against a regression that accidentally
-	// wired the channel field into the aux check or vice versa.
+
 	if len(cfg.Auxes) != 1 || !cfg.Auxes[0].Enabled {
 		t.Fatalf("auxes after settings save = %+v, want aux 1 (Mon 1) still enabled", cfg.Auxes)
 	}
 }
 
-// TestSettingsSaveAppliesDebug proves Debug logging — moved to the
-// Settings tab (see handleSettingsUpdate) — round-trips to disk and
-// reaches hub live via the same AdminApply path as the auto-hide
-// patterns, not a restart.
 func TestSettingsSaveAppliesDebug(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -681,8 +584,6 @@ func TestSettingsSaveAppliesDebug(t *testing.T) {
 		t.Fatal("persisted Debug = false, want true")
 	}
 
-	// Unchecking (an absent "debug" field, same as an unchecked checkbox
-	// submitting nothing) must turn it back off, not leave the old value.
 	rec = postForm(t, mux, "/admin/settings", "")
 	if strings.Contains(rec.Body.String(), `name="debug" checked`) {
 		t.Fatalf("settings response = %s, want the debug checkbox unchecked after omitting the field", rec.Body.String())
@@ -696,9 +597,6 @@ func TestSettingsSaveAppliesDebug(t *testing.T) {
 	}
 }
 
-// TestLockToggleAppliesLive proves POST /admin/lock reaches hub live (via
-// AdminSetLocked, reflected in queryStatus) with no disk write — locked is
-// deliberately runtime-only, see hub.Hub.locked's doc comment.
 func TestLockToggleAppliesLive(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -729,11 +627,6 @@ func TestLockToggleAppliesLive(t *testing.T) {
 	}
 }
 
-// TestNetworkUpdateAppliesLiveOnlyWhenChanged proves POST /admin/network
-// reaches h.desk via SetRemote/Rebind end-to-end through the real HTTP
-// handler (internal/hub's own tests already cover applyNetworkChange's
-// diffing in isolation — this proves the admin layer actually wires it
-// up), and that re-saving identical values doesn't re-trigger either call.
 func TestNetworkUpdateAppliesLiveOnlyWhenChanged(t *testing.T) {
 	h, fd := newTestHandlerWithDesk(t)
 	mux := http.NewServeMux()
@@ -748,7 +641,6 @@ func TestNetworkUpdateAppliesLiveOnlyWhenChanged(t *testing.T) {
 		t.Fatalf("Rebind calls = %v, want exactly one call with the new OSC port", calls)
 	}
 
-	// Same values again — nothing changed from hub's point of view.
 	postForm(t, mux, "/admin/network", "deskIP=10.0.0.5&deskPort=8000&oscPort=9000")
 
 	if calls := fd.remoteCallsSnapshot(); len(calls) != 1 {
@@ -759,10 +651,6 @@ func TestNetworkUpdateAppliesLiveOnlyWhenChanged(t *testing.T) {
 	}
 }
 
-// TestNetworkFormHasNoServerPortField is a regression guard: the HTTP
-// server port was deliberately removed from the admin panel (rebinding
-// the very listener serving this request isn't supported — see
-// OSCWEBMIXER_HTTP_PORT in main.go instead), and must stay removed.
 func TestNetworkFormHasNoServerPortField(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -808,9 +696,6 @@ func TestDotClassAndLabel(t *testing.T) {
 	}
 }
 
-// TestExternalDeviceUpdateByID proves identity survives a rename — the
-// edit URL is keyed by ID, not Name, so a second edit after renaming must
-// still find the same row.
 func TestExternalDeviceUpdateByID(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -838,7 +723,6 @@ func TestExternalDeviceUpdateByID(t *testing.T) {
 		t.Fatalf("device after update = %+v, want renamed fields with the same ID %q", d, id)
 	}
 
-	// Second update by the SAME ID, post-rename — must still find the row.
 	postForm(t, mux, "/admin/external-devices/"+id, "name=iPad Renamed Again&ip=10.0.0.51&port=8001&broadcast=on")
 	global, err = h.cfg.LoadGlobalOrDefault()
 	if err != nil {
@@ -849,9 +733,6 @@ func TestExternalDeviceUpdateByID(t *testing.T) {
 	}
 }
 
-// TestLayoutCreateClonesAndSwitches proves + New layout clones the
-// from-layout's items (not empty) and the response lands on the new
-// layout (its picker option selected, its items shown).
 func TestLayoutCreateClonesAndSwitches(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -861,11 +742,6 @@ func TestLayoutCreateClonesAndSwitches(t *testing.T) {
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
 	})
 
-	// postForm asserts 200 OK on its own. The Sources tab now has a layout
-	// picker/rename box (sources.html.tmpl, wired up in a later task), so
-	// the response itself can confirm the switch: the rename box's value
-	// attribute renders SourcesSectionData.LayoutName, which is only
-	// "Monitor Mix" once the response is scoped to the new layout.
 	rec := postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
 	if !strings.Contains(rec.Body.String(), `value="Monitor Mix"`) {
 		t.Errorf("response does not show the new layout as selected: %s", rec.Body.String())
@@ -893,17 +769,11 @@ func TestLayoutCreateClonesAndSwitches(t *testing.T) {
 	}
 }
 
-// TestLayoutRenameAndDeleteDefaultRefused proves the Default layout can't
-// be renamed or deleted, but a custom one can be both.
 func TestLayoutRenameAndDeleteDefaultRefused(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	// postForm asserts 200 OK on its own, so the refusal cases (400 want)
-	// go through postFormExpectStatus instead — same raw
-	// httptest.NewRequest/NewRecorder pattern this file uses everywhere
-	// else a non-200 response is expected.
 	postFormExpectStatus(t, mux, "/admin/layouts/default/rename", "name=Nope", http.StatusBadRequest)
 	postFormExpectStatus(t, mux, "/admin/layouts/default/delete", "", http.StatusBadRequest)
 
@@ -935,11 +805,6 @@ func TestLayoutRenameAndDeleteDefaultRefused(t *testing.T) {
 	}
 }
 
-// TestAuxLayoutFallsBackAfterDelete proves deleting a layout an aux
-// points at doesn't block, warn, or error — the aux's LayoutID is left
-// dangling and simply falls back to Default at the wire level (buildConfig
-// never resolves it — this is purely a "does the map still have the key"
-// lookup at render time, exercised here via ConfigPayload directly).
 func TestAuxLayoutFallsBackAfterDelete(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -971,14 +836,9 @@ func TestAuxLayoutFallsBackAfterDelete(t *testing.T) {
 	if _, ok := cfg.MixerLayouts[cfg.Auxes[0].LayoutID]; ok {
 		t.Fatalf("MixerLayouts still has %q, want it gone (deleted)", cfg.Auxes[0].LayoutID)
 	}
-	// The mixer client, not the server, is what resolves a dangling
-	// LayoutID to Default (see mixer.js's layoutFor) — this test only
-	// proves the server doesn't crash/block/rewrite anything on delete.
+
 }
 
-// TestPresetSaveLoadPreservesMultipleLayouts proves a preset snapshots
-// every named layout, not just Default, and loading it restores all of
-// them plus which layout each aux used.
 func TestPresetSaveLoadPreservesMultipleLayouts(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -1019,7 +879,6 @@ func TestPresetSaveLoadPreservesMultipleLayouts(t *testing.T) {
 		t.Fatalf("preset aux LayoutID = %q, want %q", preset.Auxes[0].LayoutID, monID)
 	}
 
-	// Reset, then load the preset back — everything should return.
 	postForm(t, mux, "/admin/presets/reset", "")
 	postForm(t, mux, "/admin/presets/"+preset.UUID+"/load", "")
 	cfg, err = h.queryConfig(context.Background())
@@ -1034,9 +893,6 @@ func TestPresetSaveLoadPreservesMultipleLayouts(t *testing.T) {
 	}
 }
 
-// TestSourcesTabRendersLayoutPicker proves the Sources tab's layout
-// picker/new-layout form render, and that a non-default layout shows
-// rename/delete controls Default itself never shows.
 func TestSourcesTabRendersLayoutPicker(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -1077,8 +933,6 @@ func TestSourcesTabRendersLayoutPicker(t *testing.T) {
 	}
 }
 
-// TestAuxesTabRendersLayoutSelect proves each aux card's layout select
-// lists every layout and preselects the aux's current LayoutID.
 func TestAuxesTabRendersLayoutSelect(t *testing.T) {
 	h := newTestHandler(t)
 	mux := http.NewServeMux()
@@ -1104,7 +958,7 @@ func TestAuxesTabRendersLayoutSelect(t *testing.T) {
 	if !strings.Contains(body, `name="layout[1]"`) {
 		t.Fatalf("auxes tab missing layout select: %s", body)
 	}
-	// tmpl attribute order: value before the conditional "selected"
+
 	if !strings.Contains(body, id+`" selected`) {
 		t.Errorf("aux 1's layout select doesn't preselect %q: %s", id, body)
 	}

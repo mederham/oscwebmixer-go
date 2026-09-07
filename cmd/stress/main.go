@@ -1,11 +1,3 @@
-// stress is a throwaway load-testing CLI: floods a running oscwebmixer
-// instance with continuous Aux_Send/N level updates for channels 1..48 (a
-// sine wave swept across all channels at once, so they move like a wave) to
-// see how much CPU the hub goroutine burns under sustained fader-move
-// traffic. Sends directly to oscwebmixer's OSC.Port — the same socket the
-// real desk and any external device share (see internal/desk/conn.go and
-// hub's broadcastSource doc comment) — so it exercises the exact
-// pipeline/cache/broadcast path real fader moves do.
 package main
 
 import (
@@ -53,7 +45,7 @@ func main() {
 	for i := range addresses {
 		addresses[i] = fmt.Sprintf("/Input_Channels/%d/Aux_Send/%d/send_level", i+1, *aux)
 	}
-	phaseStep := 2 * math.Pi / float64(*channels) // spreads the wave visibly across channels
+	phaseStep := 2 * math.Pi / float64(*channels)
 
 	tick := time.NewTicker(time.Duration(float64(time.Second) / *rateHz))
 	defer tick.Stop()

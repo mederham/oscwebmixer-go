@@ -23,8 +23,6 @@ func sendUDP(t *testing.T, port int, payload []byte) {
 	}
 }
 
-// assertReceivesPing reads exactly one packet off sock and confirms it's
-// the /ping message pingPayload (below) encodes.
 func assertReceivesPing(t *testing.T, sock *net.UDPConn) {
 	t.Helper()
 	sock.SetReadDeadline(time.Now().Add(time.Second))
@@ -51,16 +49,7 @@ func pingPayload(t *testing.T) []byte {
 	return oscMsg.Bytes()
 }
 
-// TestRebindContinuesReceivingOnNewPort proves Rebind lets the same Run
-// goroutine — and the same Inbound() channel a caller may already be
-// reading from — pick up traffic on a new local port in place, rather
-// than requiring the reader goroutine to be torn down and restarted (see
-// Run's doc comment for how a deliberate Rebind close is told apart from
-// a real socket failure).
 func TestRebindContinuesReceivingOnNewPort(t *testing.T) {
-	// Fixed, not ephemeral: the test needs to send packets *to* these
-	// ports from outside the Conn, and Conn has no way to report back
-	// which port net.ListenUDP(...Port:0) would have picked.
 	const oldPort, newPort = 29191, 29192
 
 	c, err := Listen(oldPort, "127.0.0.1", 29999)
@@ -111,9 +100,6 @@ func TestRebindContinuesReceivingOnNewPort(t *testing.T) {
 	}
 }
 
-// TestSetRemoteChangesSendTarget proves SetRemote redirects Send without
-// touching the local socket at all — see SetRemote's doc comment for why
-// this needs no rebind, unlike the local-port case above.
 func TestSetRemoteChangesSendTarget(t *testing.T) {
 	recv1, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
 	if err != nil {
@@ -178,13 +164,6 @@ func TestListenWithoutDeskIPThenSetRemote(t *testing.T) {
 	assertReceivesPing(t, recv)
 }
 
-// TestSendToUnreachableAddrDoesNotBreakOtherSends reproduces the
-// "almost all messages dropped" bug: on a shared unconnected UDP socket, an
-// ICMP error triggered by one unreachable destination (e.g. an external
-// device that's off the network) is latched onto the socket by the OS and
-// surfaces on the *next* send call — even to a completely different,
-// reachable address. SendTo must isolate each destination on its own
-// socket so this can't happen.
 func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
 	recv, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
 	if err != nil {
@@ -193,15 +172,12 @@ func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
 	defer recv.Close()
 	recvAddr := recv.LocalAddr().(*net.UDPAddr)
 
-	// A closed UDP port on loopback: nothing listens here, so the kernel
-	// answers with ICMP port-unreachable, the same class of OS-level
-	// "destination unreachable" error a genuinely offline device produces.
 	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 	if err != nil {
 		t.Fatalf("listen deadSock: %v", err)
 	}
 	deadAddr := deadSock.LocalAddr().(*net.UDPAddr)
-	deadSock.Close() // now nothing is listening on deadAddr
+	deadSock.Close()
 
 	c, err := Listen(0, "", 0)
 	if err != nil {
@@ -211,9 +187,6 @@ func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
 
 	msg := oscmsg.Message{Address: "/ping", Args: []any{}}
 
-	// Send repeatedly to the dead address to give the ICMP error time to
-	// land, then confirm a send to the healthy address right after still
-	// gets through.
 	for i := 0; i < 5; i++ {
 		c.SendTo(msg, deadAddr)
 	}

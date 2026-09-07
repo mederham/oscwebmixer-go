@@ -1,7 +1,3 @@
-// wsclient is a throwaway Phase 2 validation tool: it plays the role of
-// the mixer browser page over the real WebSocket protocol (not HTTP/OSC
-// directly), so the full chain — browser-shaped client -> hub -> desk —
-// can be verified end-to-end without an actual browser.
 package main
 
 import (
@@ -31,7 +27,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Read and print the first two envelopes (status, then config).
 	for i := 0; i < 2; i++ {
 		var env oscmsg.Envelope
 		if err := conn.ReadJSON(&env); err != nil {
@@ -48,7 +43,6 @@ func main() {
 	}
 	fmt.Printf("-> sent %s = %v\n", address, *levelDb)
 
-	// Give the round trip a moment, then print anything else that arrives.
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
 		var env oscmsg.Envelope

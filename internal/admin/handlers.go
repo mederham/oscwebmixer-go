@@ -14,11 +14,6 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
-// formLayoutID reads the posted layoutId field, defaulting to the Default
-// layout — every Sources-tab request that doesn't explicitly name a
-// layout (or names an empty one) targets Default, matching the picker's
-// own "Default" option carrying id "default". Requires r.ParseForm to
-// have already been called.
 func formLayoutID(r *http.Request) string {
 	if id := r.FormValue("layoutId"); id != "" {
 		return id
@@ -26,11 +21,6 @@ func formLayoutID(r *http.Request) string {
 	return oscmsg.DefaultLayoutID
 }
 
-// queryLayoutID reads the "layout" URL query param GET requests for the
-// Sources tab use (handleIndex, handleSourcesView) — admin.js keeps it in
-// the address bar (see its htmx:afterSwap listener) so a page reload lands
-// back on whatever layout was selected instead of always falling back to
-// Default.
 func queryLayoutID(r *http.Request) string {
 	if id := r.URL.Query().Get("layout"); id != "" {
 		return id
@@ -88,16 +78,6 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSourcesSave is the single endpoint for everything the Sources
-// tab's one <form> can produce: reordering (Sortable's onEnd), the enabled
-// toggle, and renaming a section (its "change" event, which only fires
-// once the value actually differs — see admin.js) all auto-submit and
-// apply immediately, no separate Save button — every edit here is just
-// "the Sources form was submitted," this one endpoint either way. The
-// posted "layout" field is a JSON
-// array (built by admin.js's collectLayout, injected via htmx:configRequest
-// — see this package's doc comment for why a plain named-field form can't
-// represent an ordered, mixed-kind list) mirroring oscmsg.LayoutItem.
 func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -129,17 +109,6 @@ func (h *Handler) handleSourcesSave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSourcesReset clears the mixer layout entirely. buildConfig's own
-// fallback for anything not mentioned in the layout — walk channels 1..N
-// ascending, then groups 1..M ascending, in natural desk order — already
-// produces exactly "all channels then groups, ascending" once there's
-// nothing explicit to override it with, so resetting is just persisting
-// an empty layout; there's no default sequence to construct here.
-//
-// Deliberately a full clear, not a "drop only stale/out-of-range entries"
-// repair: after a real session change, the old layout usually doesn't
-// apply anymore anyway (different channel names/counts/purpose), so
-// starting over is faster than hunting down what's still relevant.
 func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -166,14 +135,6 @@ func (h *Handler) handleSourcesReset(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSourcesView switches which layout the Sources tab is viewing/
-// editing — a plain GET (no mutation), re-rendering the section scoped to
-// whichever layout id was requested. A missing id falls back to Default,
-// same as every other "layoutId defaults to Default" spot in this
-// package (see formLayoutID) — an id that no longer exists in
-// MixerLayouts (e.g. a stale link to a since-deleted layout) renders an
-// empty list rather than erroring, since the picker itself only ever
-// offers ids that currently exist.
 func (h *Handler) handleSourcesView(w http.ResponseWriter, r *http.Request) {
 	layoutID := queryLayoutID(r)
 
@@ -191,10 +152,6 @@ func (h *Handler) handleSourcesView(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLayoutCreate adds a new named layout, cloning the layout named by
-// the posted layoutId (the Sources tab's currently-viewed layout — see
-// sources.html.tmpl's new-layout form) as a starting point, then switches
-// the Sources tab to it.
 func (h *Handler) handleLayoutCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -221,11 +178,7 @@ func (h *Handler) handleLayoutCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	source, ok := state.MixerLayouts[fromID]
 	if !ok {
-		// fromID names a layout that no longer exists (e.g. a stale
-		// browser tab's hidden layoutId field pointing at a since-deleted
-		// layout) — clone from Default rather than silently creating an
-		// empty layout, matching the plan's "clones the layout currently
-		// being viewed (not empty)" intent.
+
 		source = state.MixerLayouts[config.DefaultLayoutID]
 	}
 	state.MixerLayouts[id] = config.NamedLayout{
@@ -251,9 +204,6 @@ func (h *Handler) handleLayoutCreate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLayoutRename renames one custom layout — refused for "default",
-// which always displays as "Default" (see config.DefaultLayoutID's doc
-// comment).
 func (h *Handler) handleLayoutRename(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == oscmsg.DefaultLayoutID {
@@ -303,13 +253,6 @@ func (h *Handler) handleLayoutRename(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLayoutDelete removes one custom layout — refused for "default".
-// Any aux whose LayoutID pointed at the deleted layout is left as-is
-// (still storing the now-dangling id): buildConfig's map lookup simply
-// misses and falls back to Default for that aux, same as an aux that
-// never had a custom layout (see the design doc's "delete-in-use" note —
-// no usage check, no warning). Switches the Sources tab back to Default,
-// since the layout it was viewing no longer exists.
 func (h *Handler) handleLayoutDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == oscmsg.DefaultLayoutID {
@@ -343,16 +286,6 @@ func (h *Handler) handleLayoutDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSectionAdd creates a new section marker — at the end of the
-// layout by default (the bottom "+ Add section" form), or immediately
-// before a specific row when "beforeKey" is posted (the hover "+" button
-// on a source-card — see admin.js; section-markers don't render one, but
-// layoutItemKey/matching below stays general rather than source-only, so
-// a "section:id" key still works if ever posted some other way), so a
-// section can land exactly where it's wanted without a drag across a
-// layout that's often taller than the viewport. beforeKey matches
-// layoutItemKey's format exactly; an empty or unmatched key falls back to
-// appending at the end.
 func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -408,10 +341,6 @@ func (h *Handler) handleSectionAdd(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// layoutItemKey identifies one layout item the same way admin.js's
-// data-before-key attributes do (see sources.html.tmpl) — "source:type:
-// number" or "section:id" — so handleSectionAdd can find exactly which
-// row a hover "+" button was clicked on.
 func layoutItemKey(it config.LayoutItem) string {
 	if it.Kind == config.LayoutKindSection {
 		return "section:" + it.SectionID
@@ -419,10 +348,6 @@ func layoutItemKey(it config.LayoutItem) string {
 	return "source:" + it.Type + ":" + strconv.Itoa(it.Number)
 }
 
-// handleSectionDelete removes one section marker; nothing else needs
-// adjusting — the sources that were "in" it were only ever derived from
-// their position relative to this marker, not linked to it by a stored
-// field, so removing the marker alone is the whole operation.
 func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := r.ParseForm(); err != nil {
@@ -459,12 +384,6 @@ func (h *Handler) handleSectionDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAuxesSave saves the whole Auxes form in one request — every field
-// (enabled/colour/icon) auto-submits it on change, no Save button (see
-// admin.js), same as Sources. Array position is already the channel
-// identity (configAuxesFromPayload's existing Auxes[i].Channel == i+1
-// convention), so no hidden tracking fields are needed here at all,
-// unlike Sources.
 func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -499,15 +418,6 @@ func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNetworkUpdate saves Desk IP/Desk port/OSC listen port and applies
-// all three live via AdminNetworkApply — no restart needed (see
-// hub.applyNetworkChange, which only actually touches the desk connection
-// for whichever field really changed). The HTTP server port isn't on this
-// form at all: rebinding the very listener serving this request, from
-// inside a handler of that same listener, isn't something to support —
-// set it via the OSCWEBMIXER_HTTP_PORT environment variable instead (see
-// main.go), which does need a restart, same as before. Debug logging
-// lives on the Settings tab (see handleSettingsUpdate), not here.
 func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -534,8 +444,7 @@ func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 		DeskIP: global.Desk.IP, DeskPort: global.Desk.Port, OSCPort: global.OSC.Port,
 	}:
 	default:
-		// The saved file is already correct regardless — see applyState's
-		// identical fallback for why this only means "not live yet."
+
 		h.log.Printf("admin apply: event channel full, network settings saved to disk but not yet applied live")
 	}
 
@@ -553,9 +462,6 @@ func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNetworkStatus renders just the status-dot fragment — polled by
-// network.html.tmpl every 5s (hx-trigger="load, every 5s") so the
-// indicator stays live without disturbing the rest of the form.
 func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
@@ -570,10 +476,6 @@ func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLockUpdate toggles the personal-mixing kill switch live — no disk
-// write (see hub.Hub.locked's doc comment: deliberately runtime-only) and
-// no config reload, just a direct AdminSetLocked event and a re-render of
-// the topbar's lock-toggle fragment reflecting the new state.
 func (h *Handler) handleLockUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -593,12 +495,6 @@ func (h *Handler) handleLockUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSettingsUpdate saves the auto-hide name patterns (see
-// config.Global's AutoHide*Patterns fields) and Debug logging, and applies
-// both live via the same AdminApply path as external devices — no socket
-// involved here, unlike the Network tab's Desk IP/port/OSC listen port
-// (see handleNetworkUpdate/AdminNetworkApply), so this just rides the
-// existing state-apply flow rather than needing its own event kind.
 func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -628,8 +524,6 @@ func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// parsePatterns splits a comma-separated form field into trimmed,
-// non-empty patterns.
 func parsePatterns(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, ",") {
@@ -685,9 +579,6 @@ func (h *Handler) handleExternalDeviceAdd(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// handleExternalDeviceUpdate saves one row's edited fields in place —
-// keyed by ID (not Name) so renaming a device doesn't invalidate its own
-// edit URL mid-edit.
 func (h *Handler) handleExternalDeviceUpdate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := r.ParseForm(); err != nil {
@@ -800,10 +691,6 @@ func (h *Handler) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePresetLoad changes both the mixer layout and auxes at once, but
-// only the presets section is the actual hx-target — the other rides
-// along as an htmx out-of-band swap in the same response (see
-// SourcesSectionData/AuxesSectionData's OOB field).
 func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	preset, err := h.cfg.GetPresetByID(uuid)
@@ -824,7 +711,7 @@ func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
-	cfg, err := h.queryConfig(ctx) // fresh labels post-apply
+	cfg, err := h.queryConfig(ctx)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.renderPresetsSection(w); err != nil {
@@ -840,14 +727,6 @@ func (h *Handler) handlePresetLoad(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePresetUpdate overwrites an existing preset's saved content with
-// the current live state — the counterpart to Load, which goes the other
-// direction (discard live edits, revert to what's saved). Only shown in
-// the UI for the currently active preset (see PresetRow.Active), but not
-// restricted to that here — nothing about the update itself depends on
-// this preset being the one currently loaded. Doesn't touch state.json or
-// push anything to hub: the live state itself isn't changing, only what's
-// saved under this preset's UUID.
 func (h *Handler) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 
@@ -875,13 +754,6 @@ func (h *Handler) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePresetsReset clears the current mixer layout and aux overrides
-// back to defaults and applies it live — the same "start over" action as
-// loading a preset, just loading the zero-value default instead of a
-// saved one (mirrors handlePresetLoad's OOB-update shape since it changes
-// sources and auxes too, not just the presets list). Deliberately scoped
-// to state.json only: saved presets, external devices, and network
-// settings are untouched, and the running process is not restarted.
 func (h *Handler) handlePresetsReset(w http.ResponseWriter, r *http.Request) {
 	def := config.NewDefaultState()
 	if err := h.cfg.SaveState(def); err != nil {

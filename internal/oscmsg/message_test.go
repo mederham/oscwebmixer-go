@@ -56,11 +56,6 @@ func TestStatusEnvelopeRoundTrip(t *testing.T) {
 	}
 }
 
-// TestConfigPayloadMixerLayoutsRoundTrip guards the wire shape itself:
-// MixerLayouts must marshal as a JSON object keyed by layout id (not an
-// array), each value carrying both name and items, and AuxConfig must
-// carry layoutId — this is what mixer.js's onMessage/admin's queryConfig
-// both parse.
 func TestConfigPayloadMixerLayoutsRoundTrip(t *testing.T) {
 	cfg := ConfigPayload{
 		MixerLayouts: map[string]NamedLayout{

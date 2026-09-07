@@ -5,9 +5,6 @@ import (
 	"math"
 )
 
-// generateColour produces a hex colour for the index-th of total items,
-// evenly spaced around the hue wheel — a Go port of the JS version's
-// generateColour (lib/utils/utils.js), which used hsl(hue, 50%, 40%).
 func generateColour(total, index int) string {
 	if total <= 0 {
 		total = 1
