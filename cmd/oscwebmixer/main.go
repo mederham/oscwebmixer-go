@@ -51,7 +51,7 @@ func main() {
 	// has leaned on heavily so far.
 	deskIPFlag := flag.String("desk-ip", "", "override desk IP")
 	deskPortFlag := flag.Int("desk-port", 0, "override desk port")
-	listenPortFlag := flag.Int("listen-port", 0, "override local OSC listen port")
+	oscPortFlag := flag.Int("osc-port", 0, "override local OSC listen port")
 	configDir := flag.String("config-dir", "config", "directory for global.json/state.json/presets.json")
 	runFor := flag.Duration("run-for", 0, "exit automatically after this long (0 = run until interrupted)")
 	versionFlag := flag.Bool("version", false, "print version and exit")
@@ -75,13 +75,12 @@ func main() {
 	// env var or this hardcoded default is the only source of truth,
 	// resolved fresh on every start.
 	httpPort := defaultHTTPPort
-	if v := os.Getenv("OSCWEBMIXER_HTTP_PORT"); v != "" {
-		port, err := strconv.Atoi(v)
+	if v, ok, err := envInt("OSCWEBMIXER_HTTP_PORT"); ok {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "OSCWEBMIXER_HTTP_PORT=%q: %v\n", v, err)
+			fmt.Fprintf(os.Stderr, "OSCWEBMIXER_HTTP_PORT: %v\n", err)
 			os.Exit(1)
 		}
-		httpPort = port
+		httpPort = v
 	}
 
 	if *healthcheckFlag {
@@ -113,16 +112,21 @@ func main() {
 		logger.Fatalf("load state: %v", err)
 	}
 
+	// Priority: CLI flag > env var > config/global.json — same three-tier
+	// override chain as OSCWEBMIXER_HTTP_PORT above, applied here per
+	// field so a Docker deployment can set these via environment (no CLI
+	// flags in a container entrypoint) while ad hoc local testing can
+	// still override with flags.
 	provided := map[string]bool{}
 	flag.Visit(func(f *flag.Flag) { provided[f.Name] = true })
-	if provided["desk-ip"] {
-		global.Desk.IP = *deskIPFlag
+	if v, ok := resolveString(provided["desk-ip"], *deskIPFlag, "OSCWEBMIXER_DESK_IP"); ok {
+		global.Desk.IP = v
 	}
-	if provided["desk-port"] {
-		global.Desk.Port = *deskPortFlag
+	if v, ok := resolveInt(provided["desk-port"], *deskPortFlag, "OSCWEBMIXER_DESK_PORT", logger); ok {
+		global.Desk.Port = v
 	}
-	if provided["listen-port"] {
-		global.OSC.Port = *listenPortFlag
+	if v, ok := resolveInt(provided["osc-port"], *oscPortFlag, "OSCWEBMIXER_OSC_PORT", logger); ok {
+		global.OSC.Port = v
 	}
 	// No desk IP is a normal starting state, not an error — the router
 	// container is expected to boot with none set and get pointed at a
@@ -225,6 +229,49 @@ func main() {
 		logger.Fatalf("hub: %v", err)
 	}
 	logger.Printf("shutting down (%v)", err)
+}
+
+// envInt reads key as an int. ok is false if the env var is unset; err is
+// non-nil only if it's set but not a valid int — callers distinguish
+// "nothing to override" from "bad override" so they can report the latter
+// and exit rather than silently ignoring a typo'd value.
+func envInt(key string) (val int, ok bool, err error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return 0, false, nil
+	}
+	n, err := strconv.Atoi(v)
+	return n, true, err
+}
+
+// resolveString implements the CLI-flag > env-var priority for one string
+// setting: flagVal if provided is true (the flag was explicitly passed),
+// else the env var if set, else ok=false so the caller leaves the existing
+// config value untouched.
+func resolveString(provided bool, flagVal string, envKey string) (string, bool) {
+	if provided {
+		return flagVal, true
+	}
+	if v := os.Getenv(envKey); v != "" {
+		return v, true
+	}
+	return "", false
+}
+
+// resolveInt is resolveString for an int setting — a bad env var value is
+// fatal (logged via logger) rather than silently ignored, same as envInt's
+// contract.
+func resolveInt(provided bool, flagVal int, envKey string, logger *log.Logger) (int, bool) {
+	if provided {
+		return flagVal, true
+	}
+	if v, ok, err := envInt(envKey); ok {
+		if err != nil {
+			logger.Fatalf("%s: %v", envKey, err)
+		}
+		return v, true
+	}
+	return 0, false
 }
 
 // healthcheck backs the --healthcheck flag: a plain HTTP GET against this
