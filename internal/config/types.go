@@ -42,7 +42,6 @@ type LayoutItem struct {
 	Type    string `json:"type,omitempty"`
 	Number  int    `json:"number,omitempty"`
 	Enabled bool   `json:"enabled,omitempty"`
-	Icon    string `json:"icon,omitempty"`
 
 	SectionID   string `json:"sectionId,omitempty"`
 	SectionName string `json:"sectionName,omitempty"`

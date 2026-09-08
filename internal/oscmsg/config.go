@@ -15,7 +15,6 @@ type LayoutItem struct {
 	Label   string `json:"label"`
 	Enabled bool   `json:"enabled"`
 	Stereo  bool   `json:"stereo"`
-	Icon    string `json:"icon"`
 
 	SectionID   string `json:"sectionId"`
 	SectionName string `json:"sectionName"`

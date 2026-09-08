@@ -323,7 +323,7 @@ func TestSourcesReset(t *testing.T) {
 
 	postSourcesSave(t, mux, []oscmsg.LayoutItem{
 		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Drums"},
-		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
 	})
 
 	postForm(t, mux, "/admin/sources/reset", "")
@@ -337,8 +337,8 @@ func TestSourcesReset(t *testing.T) {
 			t.Fatalf("mixer layout after reset = %+v, want no section markers", cfg.MixerLayouts["default"].Items)
 		}
 	}
-	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Number != 1 || !cfg.MixerLayouts["default"].Items[0].Enabled || cfg.MixerLayouts["default"].Items[0].Icon != "" {
-		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled, no icon)", cfg.MixerLayouts["default"].Items)
+	if len(cfg.MixerLayouts["default"].Items) != 1 || cfg.MixerLayouts["default"].Items[0].Number != 1 || !cfg.MixerLayouts["default"].Items[0].Enabled {
+		t.Fatalf("mixer layout after reset = %+v, want channel 1 back to defaults (enabled)", cfg.MixerLayouts["default"].Items)
 	}
 }
 
@@ -348,7 +348,7 @@ func TestSourcesSaveRoundTrip(t *testing.T) {
 	h.Register(mux)
 
 	rec := postSourcesSave(t, mux, []oscmsg.LayoutItem{
-		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "https://example.com/icon.svg"},
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
 	})
 
 	respBody := rec.Body.String()
@@ -368,9 +368,6 @@ func TestSourcesSaveRoundTrip(t *testing.T) {
 	s := cfg.MixerLayouts["default"].Items[0]
 	if s.Enabled {
 		t.Fatal("enabled = true, want false")
-	}
-	if s.Icon != "https://example.com/icon.svg" {
-		t.Fatalf("icon = %q, want the posted URL", s.Icon)
 	}
 }
 
@@ -427,7 +424,7 @@ func TestPresetsReset(t *testing.T) {
 
 	postSourcesSave(t, mux, []oscmsg.LayoutItem{
 		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Drums"},
-		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
 	})
 	postForm(t, mux, "/admin/auxes", "colour[1]=%23ff0000&icon[1]=mic.svg")
 
@@ -739,7 +736,7 @@ func TestLayoutCreateClonesAndSwitches(t *testing.T) {
 	h.Register(mux)
 
 	postSourcesSave(t, mux, []oscmsg.LayoutItem{
-		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false, Icon: "kick.svg"},
+		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
 	})
 
 	rec := postForm(t, mux, "/admin/layouts", "name="+url.QueryEscape("Monitor Mix")+"&layoutId=default")
@@ -764,8 +761,8 @@ func TestLayoutCreateClonesAndSwitches(t *testing.T) {
 		t.Fatal("no layout named Monitor Mix found")
 	}
 	items := cfg.MixerLayouts[newID].Items
-	if len(items) != 1 || items[0].Number != 1 || items[0].Enabled || items[0].Icon != "kick.svg" {
-		t.Fatalf("cloned items = %+v, want default's channel 1 (disabled, kick.svg icon) carried over", items)
+	if len(items) != 1 || items[0].Number != 1 || items[0].Enabled {
+		t.Fatalf("cloned items = %+v, want default's channel 1 (disabled) carried over", items)
 	}
 }
 

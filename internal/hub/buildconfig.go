@@ -102,7 +102,7 @@ func (h *Hub) buildConfig() oscmsg.ConfigPayload {
 			label, stereo := liveSource(item.Type, item.Number)
 			layout = append(layout, oscmsg.LayoutItem{
 				Kind: oscmsg.LayoutKindSource, Type: item.Type, Number: item.Number,
-				Label: label, Enabled: item.Enabled, Stereo: stereo, Icon: item.Icon,
+				Label: label, Enabled: item.Enabled, Stereo: stereo,
 			})
 			placed[sourceKey(item.Type, item.Number)] = true
 		}
