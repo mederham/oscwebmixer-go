@@ -39,13 +39,13 @@ const DefaultLayoutID = "default"
 type LayoutItem struct {
 	Kind string `json:"kind"`
 
-	Type    string `json:"type"`
-	Number  int    `json:"number"`
-	Enabled bool   `json:"enabled"`
-	Icon    string `json:"icon"`
+	Type    string `json:"type,omitempty"`
+	Number  int    `json:"number,omitempty"`
+	Enabled bool   `json:"enabled,omitempty"`
+	Icon    string `json:"icon,omitempty"`
 
-	SectionID   string `json:"sectionId"`
-	SectionName string `json:"sectionName"`
+	SectionID   string `json:"sectionId,omitempty"`
+	SectionName string `json:"sectionName,omitempty"`
 }
 
 type NamedLayout struct {
@@ -55,21 +55,21 @@ type NamedLayout struct {
 
 type State struct {
 	UUID         string                 `json:"uuid"`
-	Name         string                 `json:"name"`
-	SessionName  string                 `json:"sessionName"`
+	Name         string                 `json:"name,omitempty"`
+	SessionName  string                 `json:"sessionName,omitempty"`
 	Auxes        []Aux                  `json:"auxes"`
 	MixerLayouts map[string]NamedLayout `json:"mixerLayouts"`
 }
 
 type Aux struct {
 	Enabled bool   `json:"enabled"`
-	Colour  string `json:"colour"`
-	Icon    string `json:"icon"`
+	Colour  string `json:"colour,omitempty"`
+	Icon    string `json:"icon,omitempty"`
 
-	LayoutID string `json:"layoutId"`
+	LayoutID string `json:"layoutId,omitempty"`
 }
 
 type Preset struct {
 	State
-	LastChanged string `json:"lastChanged"`
+	LastChanged string `json:"lastChanged,omitempty"`
 }
