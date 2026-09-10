@@ -10,7 +10,12 @@ test:
     - docker
   script:
     - go vet ./...
-    - go test ./...
+    - go install gotest.tools/gotestsum@v1.13.0
+    - gotestsum --junitfile report.xml -- ./...
+  artifacts:
+    reports:
+      junit: report.xml
+    when: always
 
 build:
   stage: build
@@ -71,7 +76,9 @@ publish:arm64:
 
 publish:manifest:
   stage: publish
-  image: mplatform/manifest-tool:alpine
+  image:
+    name: mplatform/manifest-tool:alpine
+    entrypoint: [""]
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   tags:
