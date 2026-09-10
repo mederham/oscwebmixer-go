@@ -62,7 +62,6 @@ type SourceRow struct {
 	Label   string
 	Enabled bool
 	Stereo  bool
-	Icon    string
 }
 
 func (r SourceRow) Key() string { return fmt.Sprintf("%s:%d", r.Type, r.Number) }
@@ -101,7 +100,7 @@ func toSourcesSectionData(items []oscmsg.LayoutItem, layoutID, layoutName string
 		}
 		rows[i] = SourceListItem{Source: SourceRow{
 			Type: it.Type, Number: it.Number,
-			Label: it.Label, Enabled: it.Enabled, Stereo: it.Stereo, Icon: it.Icon,
+			Label: it.Label, Enabled: it.Enabled, Stereo: it.Stereo,
 		}}
 	}
 	return SourcesSectionData{
@@ -172,7 +171,7 @@ func layoutFromPayload(layout []oscmsg.LayoutItem) []config.LayoutItem {
 		}
 		out[i] = config.LayoutItem{
 			Kind: config.LayoutKindSource, Type: it.Type, Number: it.Number,
-			Enabled: it.Enabled, Icon: it.Icon,
+			Enabled: it.Enabled,
 		}
 	}
 	return out
