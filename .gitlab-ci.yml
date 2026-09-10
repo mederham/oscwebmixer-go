@@ -37,14 +37,15 @@ build:
     entrypoint: [""]
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-  tags:
-    - docker
   before_script:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf "%s:%s" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
 
 publish:amd64:
   extends: .publish_arch
+  tags:
+    - docker
+    - amd64
   script:
     - /kaniko/executor
         --context "$CI_PROJECT_DIR"
@@ -52,11 +53,13 @@ publish:amd64:
         --build-arg TARGETOS=linux
         --build-arg TARGETARCH=amd64
         --build-arg VERSION=$(cat VERSION)
-        --custom-platform=linux/amd64
         --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-amd64"
 
 publish:arm64:
   extends: .publish_arch
+  tags:
+    - docker
+    - arm64
   script:
     - /kaniko/executor
         --context "$CI_PROJECT_DIR"
@@ -64,7 +67,6 @@ publish:arm64:
         --build-arg TARGETOS=linux
         --build-arg TARGETARCH=arm64
         --build-arg VERSION=$(cat VERSION)
-        --custom-platform=linux/arm64
         --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-arm64"
 
 publish:manifest:
