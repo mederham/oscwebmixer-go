@@ -202,6 +202,9 @@ func (h *Handler) handleLayoutCreate(w http.ResponseWriter, r *http.Request) {
 	if err := h.renderSourcesSection(w, cfg, id, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
+	if err := h.renderAuxesSection(w, cfg, true); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
 }
 
 func (h *Handler) handleLayoutRename(w http.ResponseWriter, r *http.Request) {
@@ -251,6 +254,9 @@ func (h *Handler) handleLayoutRename(w http.ResponseWriter, r *http.Request) {
 	if err := h.renderSourcesSection(w, cfg, id, false); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
+	if err := h.renderAuxesSection(w, cfg, true); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
 }
 
 func (h *Handler) handleLayoutDelete(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +288,9 @@ func (h *Handler) handleLayoutDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.renderSourcesSection(w, cfg, oscmsg.DefaultLayoutID, false); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+	if err := h.renderAuxesSection(w, cfg, true); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
