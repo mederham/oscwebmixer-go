@@ -1,0 +1,94 @@
+stages:
+  - test
+  - build
+  - publish
+
+test:
+  stage: test
+  image: golang:1.27-alpine
+  tags:
+    - docker
+  script:
+    - go vet ./...
+    - go test ./...
+
+build:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main"
+  tags:
+    - docker
+  script:
+    - /kaniko/executor
+        --context "$CI_PROJECT_DIR"
+        --dockerfile "$CI_PROJECT_DIR/Dockerfile"
+        --build-arg TARGETOS=linux
+        --build-arg TARGETARCH=amd64
+        --build-arg VERSION=$(cat VERSION)
+        --no-push
+
+.publish_arch:
+  stage: publish
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  tags:
+    - docker
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf "%s:%s" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+
+publish:amd64:
+  extends: .publish_arch
+  script:
+    - /kaniko/executor
+        --context "$CI_PROJECT_DIR"
+        --dockerfile "$CI_PROJECT_DIR/Dockerfile"
+        --build-arg TARGETOS=linux
+        --build-arg TARGETARCH=amd64
+        --build-arg VERSION=$(cat VERSION)
+        --custom-platform=linux/amd64
+        --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-amd64"
+
+publish:arm64:
+  extends: .publish_arch
+  script:
+    - /kaniko/executor
+        --context "$CI_PROJECT_DIR"
+        --dockerfile "$CI_PROJECT_DIR/Dockerfile"
+        --build-arg TARGETOS=linux
+        --build-arg TARGETARCH=arm64
+        --build-arg VERSION=$(cat VERSION)
+        --custom-platform=linux/arm64
+        --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-arm64"
+
+publish:manifest:
+  stage: publish
+  image: mplatform/manifest-tool:alpine
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  tags:
+    - docker
+  needs:
+    - publish:amd64
+    - publish:arm64
+  script:
+    - manifest-tool
+        --username "$CI_REGISTRY_USER"
+        --password "$CI_REGISTRY_PASSWORD"
+        push from-args
+        --platforms linux/amd64,linux/arm64
+        --template "$CI_REGISTRY_IMAGE:$(cat VERSION)-ARCH"
+        --target "$CI_REGISTRY_IMAGE:$(cat VERSION)"
+    - manifest-tool
+        --username "$CI_REGISTRY_USER"
+        --password "$CI_REGISTRY_PASSWORD"
+        push from-args
+        --platforms linux/amd64,linux/arm64
+        --template "$CI_REGISTRY_IMAGE:$(cat VERSION)-ARCH"
+        --target "$CI_REGISTRY_IMAGE:latest"
