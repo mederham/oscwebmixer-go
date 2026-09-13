@@ -80,9 +80,10 @@ type Hub struct {
 	pipeline *pipeline.Pipeline
 	log      *log.Logger
 
-	deskIP   string
-	deskPort int
-	oscPort  int
+	deskIP         string
+	deskPort       int
+	oscPort        int
+	trustedDeskIPs map[string]bool
 
 	cache  map[string]oscmsg.Message
 	status Status
@@ -126,6 +127,10 @@ type Hub struct {
 	locked bool
 }
 
+func (h *Hub) isDeskSource(ip string) bool {
+	return ip == h.deskIP || h.trustedDeskIPs[ip]
+}
+
 func (h *Hub) debugf(format string, args ...any) {
 	if h.debug {
 		h.log.Printf("[debug] "+format, args...)
@@ -136,6 +141,9 @@ type Options struct {
 	DeskIP   string
 	DeskPort int
 	OSCPort  int
+
+	// List of additional IPs to count as console source IPs (e.g. when using NAT)
+	TrustedDeskIPs []string
 
 	StartupRetryInterval time.Duration
 
@@ -158,6 +166,10 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 	if healthCheckInterval <= 0 {
 		healthCheckInterval = 24 * time.Hour
 	}
+	trustedDeskIPs := make(map[string]bool, len(opts.TrustedDeskIPs))
+	for _, ip := range opts.TrustedDeskIPs {
+		trustedDeskIPs[ip] = true
+	}
 	return &Hub{
 		desk:                    d,
 		pipeline:                pipe,
@@ -165,6 +177,7 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 		deskIP:                  opts.DeskIP,
 		deskPort:                opts.DeskPort,
 		oscPort:                 opts.OSCPort,
+		trustedDeskIPs:          trustedDeskIPs,
 		cache:                   make(map[string]oscmsg.Message),
 		status:                  StatusStarting,
 		ready:                   make(chan Snapshot, 1),
@@ -260,7 +273,7 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 		h.debugf("desk-path %s from %s", msg.Address, fromIP)
 	}
 
-	if fromIP != h.deskIP {
+	if !h.isDeskSource(fromIP) {
 		var device *ExternalDevice
 		for i := range h.externalDevices {
 			if h.externalDevices[i].Addr.IP.String() == fromIP {
@@ -282,7 +295,7 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 		}
 	}
 
-	if fromIP == h.deskIP {
+	if h.isDeskSource(fromIP) {
 		h.lastDeskSeen = time.Now()
 		if h.status == StatusDegraded {
 			h.status = StatusHealthy
