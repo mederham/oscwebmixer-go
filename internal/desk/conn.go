@@ -117,11 +117,17 @@ func (c *Conn) Run(ctx context.Context) error {
 func (c *Conn) Send(msg oscmsg.Message) error {
 	c.mu.Lock()
 	raddr := c.raddr
+	sock := c.sock
 	c.mu.Unlock()
 	if raddr == nil {
 		return fmt.Errorf("desk: no desk configured")
 	}
-	return c.SendTo(msg, raddr)
+	oscMsg, err := toOSC(msg)
+	if err != nil {
+		return err
+	}
+	_, err = sock.WriteToUDP(oscMsg.Bytes(), raddr)
+	return err
 }
 
 func (c *Conn) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
