@@ -110,6 +110,7 @@ func main() {
 		DeskIP:                  global.Desk.IP,
 		DeskPort:                global.Desk.Port,
 		OSCPort:                 global.OSC.Port,
+		TrustedDeskIPs:          envStringList("OSCWEBMIXER_DESK_TRUSTED_IPS"),
 		StartupRetryInterval:    2 * time.Second,
 		HealthCheckInterval:     3 * time.Second,
 		InitialLayouts:          state.MixerLayouts,
@@ -184,6 +185,20 @@ func envInt(key string) (val int, ok bool, err error) {
 	}
 	n, err := strconv.Atoi(v)
 	return n, true, err
+}
+
+func envStringList(key string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func resolveString(provided bool, flagVal string, envKey string) (string, bool) {

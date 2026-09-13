@@ -51,13 +51,17 @@ services:
     image: registry.mederham.at/audio/oscwebmixer-go:latest
     restart: unless-stopped
     ports:
-      - "80:80"           # admin panel + mixer UI
-      - "8000:8000/udp"   # OSC listen port
+      - "8080:80"           # admin panel + mixer UI
+      - "8000:8000/udp"     # OSC listen port
     volumes:
       - ./config:/webmixer/config
     environment:
       OSCWEBMIXER_DESK_IP: <your_desk_ip>
       OSCWEBMIXER_DESK_PORT: <your_desk_port>
+      # OSCWEBMIXER_DESK_TRUSTED_IPS: 192.168.65.1
 ```
 
 When the environment variables `OSCWEBMIXER_DESK_IP` and `OSCWEBMIXER_DESK_PORT` are set, the application reconfigures the desk connection on every restart to use the values provided. They can still be changed in the admin panel, but reset once the container is restarted.
+
+Docker Desktop (Mac/Windows) masks the desk's real IP with its VM gateway address. The masked IP address is not trusted by OSCWebMixer per default.
+Uncomment the `OSCWEBMIXER_DESK_TRUSTED_IPS` variable to trust the VM gateway IP(s) if you use Docker Desktop (default is `192.168.65.1`).

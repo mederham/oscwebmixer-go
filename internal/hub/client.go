@@ -95,7 +95,7 @@ func (h *Hub) sendTo(id string, out chan<- oscmsg.Envelope, env oscmsg.Envelope)
 }
 
 func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
-	fromDesk := source.clientID == "" && source.ip == h.deskIP
+	fromDesk := source.clientID == "" && h.isDeskSource(source.ip)
 	if h.debug {
 		h.debugf("broadcast %s: source.ip=%q source.clientID=%q deskIP=%q fromDesk=%v externalDevices=%d",
 			msg.Address, source.ip, source.clientID, h.deskIP, fromDesk, len(h.externalDevices))
