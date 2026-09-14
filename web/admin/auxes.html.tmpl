@@ -10,22 +10,34 @@
 			<div class="aux-card{{if .Stereo}} stereo{{end}}">
 				<span class="badge">Aux {{.Channel}}</span>
 				<span class="label">{{.Label}}</span>
-				<input type="checkbox" class="eye" title="Enabled" name="enabled[{{.Channel}}]" {{if .Enabled}}checked{{end}} />
-				<input type="color" name="colour[{{.Channel}}]" value="{{.Colour}}" />
-				<span class="icon-picker">
-					<select name="icon[{{.Channel}}]" class="icon-select">
-						<option value="">No icon</option>
-						{{range $.Icons}}
-						<option value="{{.}}" {{if eq . $aux.Icon}}selected{{end}}>{{iconLabel .}}</option>
-						{{end}}
-					</select>
-					<img class="icon-preview" src="{{if .Icon}}/admin/icons/{{.Icon}}{{end}}" alt="" />
+				<span class="aux-controls">
+					<span class="control-group">
+						<span class="layout-label">Layout</span>
+						<select name="layout[{{.Channel}}]" class="layout-select" title="Mixer layout">
+							{{range $.Layouts}}
+							<option value="{{.ID}}" {{if eq .ID $aux.LayoutID}}selected{{end}}>{{.Name}}</option>
+							{{end}}
+						</select>
+					</span>
+					<span class="control-group">
+						<input type="color" name="colour[{{.Channel}}]" value="{{.Colour}}" />
+						<span class="icon-picker">
+							<button type="button" class="icon-picker-btn" popovertarget="icon-popup-{{.Channel}}" title="Icon">
+								<img class="icon-preview" src="{{if .Icon}}/admin/icons/{{.Icon}}{{end}}" alt="" />
+							</button>
+							<input type="hidden" class="icon-value" name="icon[{{.Channel}}]" value="{{.Icon}}" />
+							<div id="icon-popup-{{.Channel}}" popover class="icon-popup">
+								<button type="button" class="icon-option{{if not .Icon}} selected{{end}}" data-icon="">No icon</button>
+								{{range $.Icons}}
+								<button type="button" class="icon-option{{if eq . $aux.Icon}} selected{{end}}" data-icon="{{.}}" title="{{iconLabel .}}">
+									<img src="/admin/icons/{{.}}" alt="{{iconLabel .}}" />
+								</button>
+								{{end}}
+							</div>
+						</span>
+					</span>
 				</span>
-				<select name="layout[{{.Channel}}]" class="layout-select" title="Mixer layout">
-					{{range $.Layouts}}
-					<option value="{{.ID}}" {{if eq .ID $aux.LayoutID}}selected{{end}}>{{.Name}}</option>
-					{{end}}
-				</select>
+				<input type="checkbox" class="eye" title="Enabled" name="enabled[{{.Channel}}]" {{if .Enabled}}checked{{end}} />
 			</div>
 			{{end}}
 		</div>

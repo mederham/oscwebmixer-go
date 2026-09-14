@@ -17,6 +17,10 @@
 		{{else}}
 		<input type="text" class="layout-name-field" name="name" value="{{.LayoutName}}" hx-post="/admin/layouts/{{.LayoutID}}/rename" hx-target="#section-sources" hx-swap="outerHTML" hx-trigger="change" />
 		<button type="button" class="danger" hx-post="/admin/layouts/{{.LayoutID}}/delete" hx-target="#section-sources" hx-swap="outerHTML" hx-confirm="Delete this layout? Any aux using it falls back to Default.">Delete layout</button>
+		<form hx-post="/admin/layouts" hx-target="#section-sources" hx-swap="outerHTML" hx-include="[name='layoutId']" class="inline-form">
+			<input type="hidden" name="name" value="{{.LayoutName}} copy" />
+			<button type="submit">+ New layout</button>
+		</form>
 		{{end}}
 	</div>
 
