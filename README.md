@@ -35,15 +35,19 @@ More screenshots: [docs/screenshots.md](docs/screenshots.md)
 
 The easiest way to run OSCWebMixer-Go is via Docker. Currently only this method is documented here.
 
-### Using Docker CLI
+### Environment variables
 
-```bash
-docker run -p 80:80 -p 8000:8000/udp -v ./config:/webmixer/config registry.mederham.at/audio/oscwebmixer-go:latest
-```
+Variable | Default | Description
+---|---|---
+`OSCWEBMIXER_HTTP_PORT` | `80` | Port for the admin panel and mixer UI.
+`OSCWEBMIXER_DESK_IP` | _(none)_ | Desk IP address. Reconfigures the desk connection on every restart; see note below.
+`OSCWEBMIXER_DESK_PORT` | `9000` | Desk port. Same restart behavior as `OSCWEBMIXER_DESK_IP`.
+`OSCWEBMIXER_OSC_PORT` | `8000` | Local UDP port the app listens on for OSC from the desk.
+`OSCWEBMIXER_DESK_TRUSTED_IPS` | _(none)_ | Comma-separated list of extra source IPs to treat as the desk, e.g. `192.168.65.1,192.168.65.2`. For Docker Desktop only — see note below.
 
-This command runs the container image with the web interface at `http://<host-ip>` and UDP port 8000 as the OSC listen port. To configure the desk connection, visit the admin panel under `http://<host-ip>/admin`.
+`OSCWEBMIXER_DESK_IP` and `OSCWEBMIXER_DESK_PORT` can still be changed afterwards in the admin panel, but reset to the environment value on every container restart. To keep a connection configured via the admin UI instead, remove those two variables. `OSCWEBMIXER_DESK_TRUSTED_IPS` is not exposed in the admin panel.
 
-### Using Docker-Compose
+### Using Docker Compose (recommended)
 
 ```yaml
 services:
@@ -51,7 +55,7 @@ services:
     image: registry.mederham.at/audio/oscwebmixer-go:latest
     restart: unless-stopped
     ports:
-      - "8080:80"           # admin panel + mixer UI
+      - "80:80"           # admin panel + mixer UI
       - "8000:8000/udp"     # OSC listen port
     volumes:
       - ./config:/webmixer/config
@@ -61,7 +65,19 @@ services:
       # OSCWEBMIXER_DESK_TRUSTED_IPS: 192.168.65.1
 ```
 
-When the environment variables `OSCWEBMIXER_DESK_IP` and `OSCWEBMIXER_DESK_PORT` are set, the application reconfigures the desk connection on every restart to use the values provided. They can still be changed in the admin panel, but reset once the container is restarted.
+```bash
+docker compose up -d
+```
+
+### Using Docker CLI
+
+```bash
+docker run -p 80:80 -p 8000:8000/udp -v ./config:/webmixer/config registry.mederham.at/audio/oscwebmixer-go:latest
+```
+
+This runs the OSCWebMixer-Go container without any environment variables.
+
+### Note for Docker Desktop
 
 Docker Desktop (Mac/Windows) masks the desk's real IP with its VM gateway address. The masked IP address is not trusted by OSCWebMixer per default.
-Uncomment the `OSCWEBMIXER_DESK_TRUSTED_IPS` variable to trust the VM gateway IP(s) if you use Docker Desktop (default is `192.168.65.1`).
+Set `OSCWEBMIXER_DESK_TRUSTED_IPS` to trust the VM gateway IP(s) if you use Docker Desktop (default is `192.168.65.1`) - uncomment it in the Compose example above, or add `-e OSCWEBMIXER_DESK_TRUSTED_IPS=192.168.65.1` to the CLI command.
