@@ -112,19 +112,27 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
 	}
 });
 
-// Aux icon picker: the <select> already lists every option server-side
-// (see auxes.html.tmpl), so this is just keeping the adjacent preview
-// image in sync with whatever's currently selected — event delegation on
-// document.body means it works after any htmx swap of the auxes section
-// too, no re-init needed.
-document.body.addEventListener("change", function (e) {
-	if (e.target.classList.contains("icon-select")) {
-		const img = e.target.parentElement.querySelector(".icon-preview");
-		if (img) img.src = e.target.value ? "/admin/icons/" + e.target.value : "";
-		// No return: icon-select lives inside #auxes-form, and its change
-		// still needs to fall through to the auto-submit below.
-	}
+// Aux icon popup: positions the popover next to its trigger button.
+// "beforetoggle" is a Popover API event (not a plain DOM event), so it
+// doesn't bubble — capture:true still catches it on the way down to the
+// popover itself, before it becomes visible.
+document.addEventListener("beforetoggle", function (e) {
+	if (!e.target.classList.contains("icon-popup") || e.newState !== "open") return;
+	const btn = document.querySelector(`[popovertarget="${e.target.id}"]`);
+	if (!btn) return;
+	const rect = btn.getBoundingClientRect();
+	const popup = e.target;
+	popup.style.position = "fixed";
+	popup.style.inset = "auto";
+	popup.style.margin = "0";
+	// ponytail: clamps right/bottom overflow only, doesn't flip above/left —
+	// fine for a grid of buttons near a card list, revisit if a trigger ever
+	// sits close to the right/bottom edge on a small viewport.
+	popup.style.left = Math.min(rect.left, window.innerWidth - 240 - 8) + "px";
+	popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 256 - 8) + "px";
+}, true);
 
+document.body.addEventListener("change", function (e) {
 	// Every field on the Sources and Auxes tabs applies immediately —
 	// no Save button on either. "change" (not "blur") on a text input only
 	// fires when the value actually differs from what it was on focus, so
@@ -147,6 +155,16 @@ function toggleAllEnabled(scopeSelector, checkboxSelector) {
 }
 
 document.body.addEventListener("click", function (e) {
+	const opt = e.target.closest(".icon-option");
+	if (opt) {
+		const picker = opt.closest(".icon-picker");
+		picker.querySelector(".icon-value").value = opt.dataset.icon;
+		picker.querySelector(".icon-preview").src = opt.dataset.icon ? "/admin/icons/" + opt.dataset.icon : "";
+		for (const o of picker.querySelectorAll(".icon-option")) o.classList.toggle("selected", o === opt);
+		opt.closest(".icon-popup").hidePopover();
+		htmx.trigger(document.getElementById("auxes-form"), "submit");
+		return;
+	}
 	if (e.target.id === "sources-toggle-all") {
 		toggleAllEnabled("#sources-list", ".enabled-field");
 		// Setting .checked in JS doesn't fire "change", so this toggle

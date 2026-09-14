@@ -101,22 +101,57 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 2px; }
 .layout-picker .inline-form { margin-top: 0; }
 .layout-picker button.danger { margin-bottom: 0; }
 
-.icon-picker { display: flex; align-items: center; gap: 0.4rem; }
-.icon-picker .layout-select { width: auto; min-width: 8rem; }
-.icon-picker .icon-select { width: auto; min-width: 8rem; }
+.icon-picker { display: inline-flex; }
+.icon-picker-btn {
+	width: 2.1rem;
+	height: 1.6rem;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: none;
+	border: 1px solid #3a3a3a;
+}
+.icon-picker-btn:hover { background: none; }
 .icon-preview {
 	width: 1.4rem;
 	height: 1.4rem;
 	object-fit: contain;
 	filter: invert(1); /* icons are dark-on-transparent; body is dark too */
 }
-/* An empty src="" resolves to the current document URL, not "no image" —
-   Firefox in particular shows its broken-image placeholder for that
-   rather than nothing. visibility:hidden (not display:none) so the row
-   still reserves the same space either way — display:none let the
-   surrounding flex row reflow narrower, shifting the row whenever an aux
-   with no icon sat next to one that had one. */
+
 .icon-preview[src=""] { visibility: hidden; }
+
+.icon-popup {
+	width: 15rem;
+	max-height: 16rem;
+	overflow-y: auto;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 0.3rem;
+	padding: 0.5rem;
+	margin: 0;
+	background: #1c1c1c;
+	border: 1px solid #3a3a3a;
+	border-radius: 4px;
+}
+
+.icon-popup:popover-open { display: grid; }
+.icon-option {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.2rem;
+	padding: 0.3rem 0.2rem;
+	background: none;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	font-size: 0.65rem;
+	line-height: 1.1;
+	text-align: center;
+}
+.icon-option img { width: 1.6rem; height: 1.6rem; object-fit: contain; filter: invert(1); }
+.icon-option:hover { background: #2a4a6a; }
+.icon-option.selected { border-color: #4a90d9; }
 
 button {
 	background: #2a4a6a;
@@ -133,9 +168,6 @@ button:hover { background: #3a5a7a; }
 button.danger { background: #5a2a2a; border-color: #7a3a3a; margin-bottom: 0.5rem; }
 button.danger:hover { background: #7a3a3a; }
 
-/* Standalone "Show/Hide all" buttons need the same trailing gap that
-   button.danger gets — on Sources it rides along on the danger button's
-   line, but Auxes has no danger button ahead of it to provide one. */
 #sources-toggle-all, #auxes-toggle-all { margin-bottom: 0.5rem; }
 
 .drag-handle {
@@ -147,13 +179,8 @@ button.danger:hover { background: #7a3a3a; }
 }
 .drag-handle:hover { opacity: 0.9; }
 
-/* #sources-form wraps #sources-list (a vertical stack) + the Save button —
-   forms are block-level by default, this just says so explicitly since
-   the old blanket "section > form" flex-wrap rule is gone (replaced by
-   .field-grid/.cards/.device-card, each scoped to what actually needs it). */
 #sources-form { display: block; }
 
-/* Shared vertical-list container — auxes' and external-devices' card lists. */
 .cards {
 	display: flex;
 	flex-direction: column;
@@ -164,12 +191,6 @@ button.danger:hover { background: #7a3a3a; }
 	margin-bottom: 0.5rem;
 }
 
-/* #sources-list (the Sortable drag target): a responsive grid so a long
-   channel/group list uses the window's width on desktop instead of one
-   endless column. Cards fall into row-major DOM order regardless of
-   column count, so drag order stays unambiguous; section-markers span
-   every column (see .section-marker) so a section still reads as a full
-   dividing line, not just another grid cell. */
 #sources-list {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
@@ -195,20 +216,19 @@ button.danger:hover { background: #7a3a3a; }
 }
 .source-card.channel { border-left-color: #4a90d9; } /* DiGiCo input-channel blue */
 .source-card.group { border-left-color: #c0392b; }   /* DiGiCo group-bus red */
-.aux-card { border-left-color: #9b59b6; }             /* purple, distinct from channel/group */
+.aux-card { border-left-color: #9b59b6; gap: 1rem; }  /* purple, distinct from channel/group */
+.aux-card .aux-controls { display: inline-flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.aux-card .control-group { display: inline-flex; align-items: center; gap: 0.4rem; }
 
-/* Whole card dims when its own eye toggle is off — a live CSS relationship
-   via :has(), not a class baked in at render time, so it updates the
-   instant the checkbox is clicked (including via Show/Hide all), before
-   any Save round trip. */
+@media (max-width: 30rem) {
+	.aux-card .aux-controls { order: 1; flex-basis: 100%; }
+}
+
 .source-card:has(.eye:not(:checked)), .aux-card:has(.eye:not(:checked)) {
 	opacity: 0.5;
 	transition: opacity 0.15s;
 }
 
-/* Stereo: a doubled border line instead of a text label — the same visual
-   system as the type-color border (color = type, line count = channels),
-   not a second, text-based indicator next to it. */
 .source-card.stereo, .aux-card.stereo { border-left-width: 6px; border-left-style: double; }
 
 .source-card .badge, .aux-card .badge {
@@ -217,16 +237,10 @@ button.danger:hover { background: #7a3a3a; }
 	min-width: 3.2rem;
 }
 .source-card .label, .aux-card .label, .preset-card .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aux-card .layout-label { font-size: 0.75rem; opacity: 0.6; white-space: nowrap; }
 .source-card input[type="text"] { width: 8rem; }
 .preset-card .preset-meta { opacity: 0.6; font-size: 0.8rem; }
-/* The currently-loaded preset — see PresetRow.Active's doc comment for
-   how that's derived. Green matches the status dot's existing "healthy/
-   current" color semantics elsewhere in this admin panel. */
 .preset-card.active { border-left-color: #2ecc40; border-left-width: 4px; }
-/* Groups Load+Delete as one flex item so wrapping (on a narrow card)
-   moves them to the next line together instead of splitting between
-   them — button.danger's own margin-bottom (meant for a button standing
-   alone, e.g. Reset to defaults) doesn't apply inside this row. */
 .preset-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .preset-actions button.danger { margin-bottom: 0; }
 
@@ -243,10 +257,6 @@ button.danger:hover { background: #7a3a3a; }
 }
 .section-marker .section-name-field { flex: 1; font-weight: 600; }
 
-/* Adds a section immediately above this source-card — no drag across a
-   layout that's often taller than the viewport (see handleSectionAdd/
-   admin.js). Section-markers don't get one — no visual clutter on rows
-   that are already sections. */
 .add-section-btn {
 	font-size: 0.8rem;
 	padding: 0.2rem 0.5rem;
@@ -263,15 +273,6 @@ button.danger:hover { background: #7a3a3a; }
 .source-card.sortable-ghost, .section-marker.sortable-ghost { opacity: 0.3; background: #2a4a6a; }
 .source-card.sortable-chosen, .section-marker.sortable-chosen { background: #1c2a3a; }
 
-/* Enabled: styled as an eye — open when on, slashed when off. Real
-   checkbox throughout (keyboard/screen-reader accessible via its title),
-   just re-skinned — same appearance:none technique as the Broadcast
-   toggle below, different metaphor since Enabled genuinely does control
-   whether this source/aux is visible on the mixer page at all (see
-   mixer.js). Flat inline-SVG icons via background-image, not an emoji
-   (inconsistent glyph across platforms/fonts) and not ::before (undefined
-   by spec on replaced elements like <input> — background-image has no
-   such ambiguity, works the same everywhere). */
 input.eye {
 	appearance: none;
 	width: 1.6rem;
@@ -289,11 +290,6 @@ input.eye:checked {
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23eee' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
 }
 
-/* Broadcast toggle switch — plain checkbox visually, standard CSS-only
-   thumb-and-track technique, no JS/library needed. Kept distinct from the
-   eye icon above: Broadcast gates desk-relay traffic, a different concept
-   from Enabled's mixer-page visibility, even though both are effectively
-   an on/off for the row. */
 input.toggle {
 	appearance: none;
 	width: 2.2rem;
@@ -319,23 +315,13 @@ input.toggle::before {
 input.toggle:checked { background: #2a6a3a; }
 input.toggle:checked::before { left: 1.15rem; }
 
-/* External devices: each card is itself the auto-save form (hx-post on
-   the .device-card div/form — see external-devices.html.tmpl), fields
-   stacked rather than a fixed-width row so it holds up on a phone screen. */
 .device-card .device-fields { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 8rem; }
 .device-card .device-address { display: flex; gap: 0.4rem; }
 .device-card .loopback { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; }
 .device-card.add-device { border-left-color: #3a6a9a; }
-/* .device-card's own display:flex (a class selector) otherwise beats the
-   UA stylesheet's [hidden] { display: none } in the cascade — same bug as
-   #pan-toggle-wrap earlier, fixed the same way: an explicit, higher-
-   specificity rule that wins regardless of source order. */
 .device-card.add-device[hidden] { display: none; }
 
-/* Lock toggle: same input.toggle switch as everywhere else, but checked
-   reads as "locked" (a warning state), not "on/enabled" — red instead of
-   the usual green, so a glance at the topbar tells you mixing is off for
-   everyone. */
+
 .lock-toggle label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer; }
 .lock-toggle input.toggle:checked { background: #a33; }
 .lock-toggle.locked { color: #e88; }
@@ -363,16 +349,9 @@ input.toggle:checked::before { left: 1.15rem; }
 	align-items: center;
 	margin-top: 0.25rem;
 }
-/* The text input's global width:100% otherwise fights the button for
-   space in this nowrap flex row, squeezing the button below its natural
-   width until its label wraps onto two lines instead of shrinking the
-   input (which is what should give way). */
+
 .inline-form button { flex-shrink: 0; white-space: nowrap; }
 
-/* Network's settings form — a responsive grid instead of the ragged
-   flex-wrap this used to be: fields snap into however many columns fit
-   (2 on a typical desktop admin window, 1 on a phone), rather than
-   wrapping mid-row wherever the viewport happens to cut them off. */
 .field-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
@@ -385,20 +364,12 @@ input.toggle:checked::before { left: 1.15rem; }
 	gap: 0.2rem;
 	font-size: 0.85rem;
 }
-/* A toggle switch reads label-then-control on the same line, not stacked
-   like a text field's label above its input — :has() scopes this to just
-   the toggle case without a template-side class. */
 .field-grid label:has(.toggle) {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.5rem;
 }
 .field-grid button { grid-column: 1 / -1; justify-self: start; }
-/* Settings' subsection headers/hint (General, Auto-hide — see
-   settings.html.tmpl) span the full grid width instead of taking one
-   column slot like a field would — h3/.hint's own margins are unchanged. */
 .field-grid h3, .field-grid p { grid-column: 1 / -1; }
 .field-grid h3:first-child { margin-top: 0; }
-/* Pull a hint up against the subsection heading it explains, rather than
-   the h3's usual 0.4rem plus the hint's own 0.25rem top margin stacking. */
 .field-grid h3 + .hint { margin-top: 0; }
