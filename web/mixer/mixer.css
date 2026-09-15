@@ -194,7 +194,7 @@ h2 {
    thumb/track), sized from --value the same "set a CSS custom property on
    input" input events already do — see sliderChange/onMessage in
    mixer.js. Positioned with a negative z-index so it sits behind the
-   input, which stays fully clickable/draggable across the whole row. */
+   input. */
 .fader-row {
 	position: relative;
 	height: 3.5rem;
@@ -203,6 +203,15 @@ h2 {
 	border-radius: 4px;
 	overflow: hidden;
 }
+/* pointer-events:none on the track (auto again on just the thumb below):
+   a range input's default touch handling grabs the whole element the
+   instant a touch lands anywhere on it — including jumping the value to
+   the touch position on Chrome/Android, before any move even happens —
+   which fights a touch that only meant to scroll the (vertical) channel
+   list past a fader. With the track excluded, a touch anywhere except the
+   thumb is never the slider's business at all and reaches the page as a
+   plain scroll, natively, with no ambiguity to resolve. Same technique
+   the previous OSCWebMixer used. */
 .fader-row input[type="range"] {
 	appearance: none;
 	-webkit-appearance: none;
@@ -212,7 +221,7 @@ h2 {
 	height: 100%;
 	margin: 0;
 	background: transparent;
-	cursor: pointer;
+	pointer-events: none;
 }
 /* Thumb height is a fixed rem, not 100%: percentage heights on a slider
    thumb pseudo-element aren't reliably resolved on mobile WebKit/Blink —
@@ -222,24 +231,35 @@ h2 {
    tracking, matching exactly the "tap jumps, drag doesn't work" symptom.
    3.5rem duplicates .fader-row's own height above (no shared custom
    property — the two are simple enough that one would be more ceremony
-   than the duplication it avoids). Width bumped from the original 0.6rem
-   too, for a more reliably grabbable touch target. */
+   than the duplication it avoids). pointer-events:auto re-enables just
+   this pseudo-element after the track disabled it above; touch-action:
+   pan-y is a fallback for the rare case a scroll gesture starts exactly
+   on the thumb rather than the track (the norm — see the pointer-events
+   comment above). No border/box-sizing trick to widen the hit area
+   beyond this visible box: browsers use the thumb's full box (border
+   included) to compute its position along the track, so a bigger box
+   shifts the visible thumb relative to the fill and clamps its border-
+   radius — tried, reverted, not worth the visual regression. */
 .fader-row input[type="range"]::-webkit-slider-thumb {
 	appearance: none;
 	-webkit-appearance: none;
-	width: 1.75rem;
+	width: 2rem;
 	height: 3.5rem;
 	background: #fff;
 	border-radius: 2px;
 	cursor: pointer;
+	pointer-events: auto;
+	touch-action: pan-y;
 }
 .fader-row input[type="range"]::-moz-range-thumb {
-	width: 1.75rem;
+	width: 2rem;
 	height: 3.5rem;
 	background: #fff;
 	border: none;
 	border-radius: 2px;
 	cursor: pointer;
+	pointer-events: auto;
+	touch-action: pan-y;
 }
 .fader-row input[type="range"]::-moz-range-track {
 	background: transparent;
