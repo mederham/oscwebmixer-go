@@ -28,6 +28,13 @@ function sliderToDb(value) {
 }
 
 function dbToSlider(db) {
+	// Mirrors sliderToDb's own floor special-case (value 0 -> -150) so the
+	// two are true inverses at the bottom of the range. Without this, a
+	// desk-echoed "fader all the way down" (-150, or anything at/below the
+	// desk's own off/floor convention) comes back as a small positive
+	// fraction instead of exact 0 — invisible as a value, but real enough
+	// to show as a hairline sliver of fill colour behind the thumb.
+	if (db <= -150) return 0;
 	return Math.pow(100, (db + 90) / 100) / 100;
 }
 
