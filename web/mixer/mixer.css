@@ -13,16 +13,6 @@ body {
 	min-height: 100vh;
 }
 
-/* Status banners: only one ::before renders per element, so declaration
-   order below is a real priority decision, not just source order — most-
-   certain-problem-wins. A starting/reloading or degraded desk state can
-   still be the last thing known while the socket itself later drops, so
-   "disconnected" (no live connection at all, nothing else can be trusted)
-   is declared last and always wins over a possibly-stale desk-status
-   class. locked sits above the desk-state messages (an admin's explicit
-   "hands off" beats "connecting…"/"desk offline") but below disconnected,
-   since a client with no live connection can't know the lock is even
-   still in effect. */
 body.status-starting::before,
 body.status-reloading::before,
 body.status-degraded::before,
@@ -72,9 +62,6 @@ header {
 	flex: 1;
 }
 
-/* :not([hidden]) — an ID selector otherwise outranks the UA stylesheet's
-   own [hidden] { display: none }, so without this the toggle would stay
-   visible even mono auxes, where mixer.js sets the hidden attribute. */
 #pan-toggle-wrap:not([hidden]) {
 	display: flex;
 	align-items: center;
@@ -84,11 +71,6 @@ header {
 	font-size: 0.9rem;
 }
 
-/* Aux picker: the landing screen for a client with no valid saved aux (a
-   new device, or one whose saved aux no longer exists), and reachable any
-   time via the header button. Full-screen overlay with one big tappable,
-   tinted, icon+label button per aux — not a native <select>, matching the
-   legacy app's picker rather than a dropdown. */
 #aux-picker {
 	display: none;
 	position: fixed;
@@ -127,9 +109,6 @@ body.picking-aux #aux-picker { display: flex; }
 	filter: invert(1);
 }
 
-/* Two-column picker once there's width for two 24rem buttons side by side.
-   Grid (not flex-wrap) so it stays capped at exactly 2 columns instead of
-   wrapping a 3rd in once the container is wider than 3 buttons. */
 @media (min-width: 700px) {
 	body.picking-aux #aux-picker {
 		display: grid;
@@ -139,30 +118,12 @@ body.picking-aux #aux-picker { display: flex; }
 	}
 }
 
-/* Channels/faders only ever show once the desk is confirmed healthy, the
-   socket is actually open, the aux picker isn't covering them, and personal
-   mixing isn't admin-locked — a starting/reloading/degraded/disconnected/
-   locked client has nothing meaningful (or nothing it's allowed) to fade,
-   so there's no slider UI to misread as live. */
 #channels { display: none; padding: 0 1rem 1rem; }
 body.status-healthy:not(.disconnected):not(.picking-aux):not(.locked) #channels {
 	display: block;
 }
 
-/* Two-column faders once there's landscape room for them — iPad landscape
-   (1024x768) is just the size reference, not a device check, so this also
-   applies to a desktop window that size or bigger. min-height (not just
-   min-width) is what keeps a phone turned sideways single-column, since
-   its landscape height stays well under 700px regardless of width.
-   A grid (row-major fill, like #sources-list in admin.css), not
-   column-count — that fills column-first (1,3,5 / 2,4,6), whereas this
-   should read left-to-right, top-to-bottom (1,2 / 3,4 / 5,6). Section
-   h2s span both columns so they still read as a full dividing line. */
-@media (orientation: landscape) and (min-width: 900px) and (min-height: 700px) {
-	/* Same selector that gates #channels' display:block above — not a
-	   bare #channels rule, which would tie its specificity and let source
-	   order alone decide, showing the grid even while channels should
-	   stay hidden (disconnected / still picking an aux). */
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 560px) {
 	body.status-healthy:not(.disconnected):not(.picking-aux):not(.locked) #channels {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
@@ -188,13 +149,6 @@ h2 {
 	white-space: nowrap;
 }
 
-/* Big faders: a tall, filled touch target rather than the browser's
-   default thin track. The fill is a pseudo-element on the wrapping row
-   (not the input itself, whose own pseudo-elements are limited to
-   thumb/track), sized from --value the same "set a CSS custom property on
-   input" input events already do — see sliderChange/onMessage in
-   mixer.js. Positioned with a negative z-index so it sits behind the
-   input. */
 .fader-row {
 	position: relative;
 	height: 3.5rem;
@@ -203,15 +157,7 @@ h2 {
 	border-radius: 4px;
 	overflow: hidden;
 }
-/* pointer-events:none on the track (auto again on just the thumb below):
-   a range input's default touch handling grabs the whole element the
-   instant a touch lands anywhere on it — including jumping the value to
-   the touch position on Chrome/Android, before any move even happens —
-   which fights a touch that only meant to scroll the (vertical) channel
-   list past a fader. With the track excluded, a touch anywhere except the
-   thumb is never the slider's business at all and reaches the page as a
-   plain scroll, natively, with no ambiguity to resolve. Same technique
-   the previous OSCWebMixer used. */
+
 .fader-row input[type="range"] {
 	appearance: none;
 	-webkit-appearance: none;
@@ -223,23 +169,7 @@ h2 {
 	background: transparent;
 	pointer-events: none;
 }
-/* Thumb height is a fixed rem, not 100%: percentage heights on a slider
-   thumb pseudo-element aren't reliably resolved on mobile WebKit/Blink —
-   worst case it silently collapses to an effectively zero-height hit
-   target, so touch always lands on the bare track (the browser's default
-   tap-to-jump) and there's no real thumb left for a touchmove to keep
-   tracking, matching exactly the "tap jumps, drag doesn't work" symptom.
-   3.5rem duplicates .fader-row's own height above (no shared custom
-   property — the two are simple enough that one would be more ceremony
-   than the duplication it avoids). pointer-events:auto re-enables just
-   this pseudo-element after the track disabled it above; touch-action:
-   pan-y is a fallback for the rare case a scroll gesture starts exactly
-   on the thumb rather than the track (the norm — see the pointer-events
-   comment above). No border/box-sizing trick to widen the hit area
-   beyond this visible box: browsers use the thumb's full box (border
-   included) to compute its position along the track, so a bigger box
-   shifts the visible thumb relative to the fill and clamps its border-
-   radius — tried, reverted, not worth the visual regression. */
+
 .fader-row input[type="range"]::-webkit-slider-thumb {
 	appearance: none;
 	-webkit-appearance: none;
@@ -275,20 +205,10 @@ h2 {
 	z-index: -1;
 }
 
-/* A fixed reference line at center (balanced pan) — a background-image on
-   the row itself, not another pseudo-element (::before/::after are both
-   already the left/right fill above), so it's unaffected by their z-index
-   stacking and always paints as part of the row's own background,
-   visible right through the input's transparent background. */
 .pan-row {
 	background-image: linear-gradient(to right, transparent calc(50% - 1px), rgba(255, 255, 255, 0.5) calc(50% - 1px), rgba(255, 255, 255, 0.5) calc(50% + 1px), transparent calc(50% + 1px));
 }
 
-/* Pan fills from the center toward whichever side the value leans — two
-   pseudo-elements, one anchored each side of 50%, since exactly one of
-   the two calc()s below is ever positive (the other collapses to 0 width,
-   which CSS clamps rather than rendering negative) depending on
-   direction. */
 .pan-row::before {
 	content: "";
 	position: absolute;
@@ -310,9 +230,6 @@ h2 {
 	z-index: -1;
 }
 
-/* Pan toggle switches which row is visible per source — both always exist
-   in the DOM (see buildSources in mixer.js) so flipping the toggle never
-   needs a rebuild, just this. */
 .pan-row { display: none; }
 body.panning .volume-row { display: none; }
 body.panning .pan-row { display: block; }
