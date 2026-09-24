@@ -1,8 +1,13 @@
+{{define "aux-send-on-button"}}<button type="button" id="aux-send-on-btn" hx-post="/admin/auxes/send-on" hx-target="this" hx-swap="outerHTML" title="Turn on the aux send for every enabled aux's visible sources on the desk">Set assigned sends to ON</button>{{end}}
+
+{{define "aux-send-on-result"}}<button type="button" id="aux-send-on-btn" class="success" hx-get="/admin/auxes/send-on/reset" hx-trigger="load delay:5s" hx-target="this" hx-swap="outerHTML">Successfully set {{.}} aux send(s) to ON.</button>{{end}}
+
 {{define "auxes-section"}}
 <section id="section-auxes"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Auxes</h2>
 	<p class="hint">Auxes are the desk's mix buses - each one can become a personal mix a user can pick in the mixer app.</p>
 	<button type="button" id="auxes-toggle-all">Show/Hide all</button>
+	{{template "aux-send-on-button"}}
 	<form id="auxes-form" hx-post="/admin/auxes" hx-target="#section-auxes" hx-swap="outerHTML">
 		<div class="cards">
 			{{range .Auxes}}

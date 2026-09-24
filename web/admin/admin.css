@@ -168,6 +168,9 @@ button:hover { background: #3a5a7a; }
 button.danger { background: #5a2a2a; border-color: #7a3a3a; margin-bottom: 0.5rem; }
 button.danger:hover { background: #7a3a3a; }
 
+button.success { background: #2a4a2a; border-color: #4a7a4a; }
+button.success:hover { background: #2a4a2a; }
+
 #sources-toggle-all, #auxes-toggle-all { margin-bottom: 0.5rem; }
 
 .drag-handle {

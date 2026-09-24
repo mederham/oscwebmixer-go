@@ -75,6 +75,12 @@ func clientSource(id string) broadcastSource {
 	return broadcastSource{clientID: id}
 }
 
+// adminSource marks a message as not desk-originated regardless of h.deskIP,
+// so broadcast always forwards it to the desk even when no desk IP is configured yet.
+func adminSource() broadcastSource {
+	return broadcastSource{clientID: "admin"}
+}
+
 type Hub struct {
 	desk     DeskSender
 	pipeline *pipeline.Pipeline
