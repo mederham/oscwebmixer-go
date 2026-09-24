@@ -965,14 +965,14 @@ func TestAuxSendOnReachesDeskAndExternalDevices(t *testing.T) {
 	postForm(t, mux, "/admin/external-devices", "name=iPad&ip=10.0.0.50&port=8000&broadcast=on")
 
 	rec := postForm(t, mux, "/admin/auxes/send-on", "")
-	if !strings.Contains(rec.Body.String(), `class="success"`) || !strings.Contains(rec.Body.String(), "Sent 1 aux send(s) on.") {
+	if !strings.Contains(rec.Body.String(), `class="success"`) || !strings.Contains(rec.Body.String(), "Successfully set 1 aux send(s) to ON.") {
 		t.Fatalf("send-on response = %s, want the button swapped to its green success state", rec.Body.String())
 	}
 
 	resetRec := httptest.NewRecorder()
 	mux.ServeHTTP(resetRec, httptest.NewRequest(http.MethodGet, "/admin/auxes/send-on/reset", nil))
 	resetBody := resetRec.Body.String()
-	if strings.Contains(resetBody, "success") || !strings.Contains(resetBody, "Set sends to on") {
+	if strings.Contains(resetBody, "success") || !strings.Contains(resetBody, "Set assigned sends to ON") {
 		t.Fatalf("send-on reset response = %s, want the plain button restored", resetBody)
 	}
 
