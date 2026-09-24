@@ -16,6 +16,7 @@ const (
 	AdminStatusQuery
 	AdminNetworkApply
 	AdminSetLocked
+	AdminSendAuxOn
 )
 
 type DeskStatusInfo struct {
@@ -42,6 +43,8 @@ type AdminEvent struct {
 	OSCPort  int
 
 	Locked bool
+
+	Messages []oscmsg.Message
 }
 
 func sourceKey(sourceType string, number int) string {
@@ -86,6 +89,11 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.locked = ev.Locked
 		h.log.Printf("admin: personal mixing locked = %v", h.locked)
 		h.pushStatus()
+
+	case AdminSendAuxOn:
+		for _, msg := range ev.Messages {
+			h.broadcast(msg, adminSource())
+		}
 	}
 }
 

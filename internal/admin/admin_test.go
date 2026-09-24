@@ -27,14 +27,21 @@ const testVersion = "1.2.3-test"
 type fakeDesk struct {
 	inbound chan desk.InboundMessage
 
-	mu          sync.Mutex
-	remoteCalls []remoteCall
-	rebindCalls []int
+	mu           sync.Mutex
+	remoteCalls  []remoteCall
+	rebindCalls  []int
+	sentMessages []oscmsg.Message
+	sentTo       []sentToCall
 }
 
 type remoteCall struct {
 	ip   string
 	port int
+}
+
+type sentToCall struct {
+	msg  oscmsg.Message
+	addr *net.UDPAddr
 }
 
 func (d *fakeDesk) reply(address string, args ...any) {
@@ -45,6 +52,9 @@ func (d *fakeDesk) reply(address string, args ...any) {
 }
 
 func (d *fakeDesk) Send(msg oscmsg.Message) error {
+	d.mu.Lock()
+	d.sentMessages = append(d.sentMessages, msg)
+	d.mu.Unlock()
 	switch msg.Address {
 	case "/Console/Channels/?":
 		d.reply("/Console/Input_Channels", int32(1))
@@ -62,7 +72,12 @@ func (d *fakeDesk) Send(msg oscmsg.Message) error {
 	return nil
 }
 
-func (d *fakeDesk) SendTo(oscmsg.Message, *net.UDPAddr) error { return nil }
+func (d *fakeDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
+	d.mu.Lock()
+	d.sentTo = append(d.sentTo, sentToCall{msg: msg, addr: addr})
+	d.mu.Unlock()
+	return nil
+}
 
 func (d *fakeDesk) SetRemote(ip string, port int) error {
 	d.mu.Lock()
@@ -88,6 +103,18 @@ func (d *fakeDesk) rebindCallsSnapshot() []int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return append([]int(nil), d.rebindCalls...)
+}
+
+func (d *fakeDesk) sentMessagesSnapshot() []oscmsg.Message {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]oscmsg.Message(nil), d.sentMessages...)
+}
+
+func (d *fakeDesk) sentToSnapshot() []sentToCall {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]sentToCall(nil), d.sentTo...)
 }
 
 func newTestHandler(t *testing.T) *Handler {
@@ -926,6 +953,58 @@ func TestSourcesTabRendersLayoutPicker(t *testing.T) {
 	for _, want := range []string{"Delete layout", `value="Monitor Mix"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("custom layout view missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestAuxSendOnReachesDeskAndExternalDevices(t *testing.T) {
+	h, fd := newTestHandlerWithDesk(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/external-devices", "name=iPad&ip=10.0.0.50&port=8000&broadcast=on")
+
+	rec := postForm(t, mux, "/admin/auxes/send-on", "")
+	if !strings.Contains(rec.Body.String(), `class="success"`) || !strings.Contains(rec.Body.String(), "Sent 1 aux send(s) on.") {
+		t.Fatalf("send-on response = %s, want the button swapped to its green success state", rec.Body.String())
+	}
+
+	resetRec := httptest.NewRecorder()
+	mux.ServeHTTP(resetRec, httptest.NewRequest(http.MethodGet, "/admin/auxes/send-on/reset", nil))
+	resetBody := resetRec.Body.String()
+	if strings.Contains(resetBody, "success") || !strings.Contains(resetBody, "Set sends to on") {
+		t.Fatalf("send-on reset response = %s, want the plain button restored", resetBody)
+	}
+
+	const wantAddr = "/Input_Channels/1/Aux_Send/1/send_on"
+	var foundDeskSend bool
+	for _, m := range fd.sentMessagesSnapshot() {
+		if m.Address == wantAddr {
+			foundDeskSend = true
+		}
+	}
+	if !foundDeskSend {
+		t.Fatalf("desk sends = %+v, want %q", fd.sentMessagesSnapshot(), wantAddr)
+	}
+
+	sentTo := fd.sentToSnapshot()
+	if len(sentTo) != 1 || sentTo[0].msg.Address != wantAddr || sentTo[0].addr.IP.String() != "10.0.0.50" {
+		t.Fatalf("external device sends = %+v, want one send of %q to 10.0.0.50", sentTo, wantAddr)
+	}
+}
+
+func TestAuxSendOnSkipsDisabledAux(t *testing.T) {
+	h, fd := newTestHandlerWithDesk(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/auxes", "") // omits enabled[1] => aux 1 disabled
+
+	postForm(t, mux, "/admin/auxes/send-on", "")
+
+	for _, m := range fd.sentMessagesSnapshot() {
+		if strings.Contains(m.Address, "send_on") {
+			t.Fatalf("desk sends = %+v, want no send_on messages (aux disabled)", fd.sentMessagesSnapshot())
 		}
 	}
 }

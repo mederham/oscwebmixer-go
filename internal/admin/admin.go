@@ -122,6 +122,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/sections", noStore(h.handleSectionAdd))
 	mux.HandleFunc("POST /admin/sections/{id}/delete", noStore(h.handleSectionDelete))
 	mux.HandleFunc("POST /admin/auxes", noStore(h.handleAuxesSave))
+	mux.HandleFunc("POST /admin/auxes/send-on", noStore(h.handleAuxSendOn))
+	mux.HandleFunc("GET /admin/auxes/send-on/reset", noStore(h.handleAuxSendOnReset))
 	mux.HandleFunc("POST /admin/network", noStore(h.handleNetworkUpdate))
 	mux.HandleFunc("GET /admin/network/status", noStore(h.handleNetworkStatus))
 	mux.HandleFunc("POST /admin/settings", noStore(h.handleSettingsUpdate))

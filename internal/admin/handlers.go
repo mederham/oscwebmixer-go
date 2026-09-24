@@ -427,6 +427,42 @@ func (h *Handler) handleAuxesSave(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) handleAuxSendOn(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	cfg, err := h.queryConfig(ctx)
+	if err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	msgs := buildAuxSendOnMessages(cfg)
+	select {
+	case h.adminEvents <- hub.AdminEvent{Kind: hub.AdminSendAuxOn, Messages: msgs}:
+	default:
+		h.log.Printf("admin aux send-on: event channel full, not sent")
+	}
+
+	// adminEvents is a single FIFO channel drained by one goroutine, so this second
+	// round trip blocks until the send-on event above has actually been processed.
+	if _, err := h.queryConfig(ctx); err != nil {
+		http.Error(w, "hub not responding: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "aux-send-on-result", len(msgs)); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+func (h *Handler) handleAuxSendOnReset(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "aux-send-on-button", nil); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
 func (h *Handler) handleNetworkUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
