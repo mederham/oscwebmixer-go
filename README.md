@@ -46,6 +46,8 @@ More screenshots: [docs/screenshots.md](docs/screenshots.md)
 >
 > As OSCWebMixer-Go is designed to mainly run on these routers, you get a complete system that is tested for reliability, along with custom network configuration matching your setup. On top of that, you get support for both the app and the MikroTik configuration.
 >
+> OSCWebMixer-Go is free and open source, so buying a router is also a great way to support its development.
+>
 > Contact me at [sound@mederham.at](mailto:sound@mederham.at) to order or ask questions.
 
 ## Manual installation
@@ -99,3 +101,9 @@ This runs the OSCWebMixer-Go container without any environment variables.
 Docker Desktop (Mac/Windows) masks the desk's real IP with its VM gateway address. The masked IP address is not trusted by OSCWebMixer per default.
 
 Set `OSCWEBMIXER_DESK_TRUSTED_IPS` to trust the VM gateway IP(s) if you use Docker Desktop (default is `192.168.65.1`) - uncomment it in the Compose example above, or add `-e OSCWEBMIXER_DESK_TRUSTED_IPS=192.168.65.1` to the CLI command.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
+
+Instrument icons in [web/admin/icons/](web/admin/icons/) are from [castles/OSCWebMixer2](https://github.com/castles/OSCWebMixer2), MIT License, Copyright (c) 2024 Marc.
