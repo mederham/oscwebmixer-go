@@ -34,7 +34,6 @@
 		hx-confirm="Reset this layout to all channels then groups, ascending? This clears every section and customization."
 	>Reset layout</button>
 	<button type="button" id="sources-toggle-all">Show/Hide all</button>
-	<button type="button" id="sources-select-mode" title="Tap cards to multi-select (for touch/mobile — on desktop, ctrl/cmd-click or shift-click a drag handle instead)">Select</button>
 
 	<form id="sources-form" hx-post="/admin/sources/save" hx-target="#section-sources" hx-swap="outerHTML">
 		<input type="hidden" name="layoutId" value="{{.LayoutID}}" />

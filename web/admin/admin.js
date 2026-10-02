@@ -1,56 +1,33 @@
 "use strict";
 
-let sourcesSortable = null;
 function initSourcesSortable() {
 	const el = document.getElementById("sources-list");
 	if (!el) return;
-	sourcesSortable = new Sortable(el, {
+	new Sortable(el, {
 		animation: 150,
 		handle: ".drag-handle",
 		multiDrag: true,
 		selectedClass: "multiselected",
-		multiDragKey: "ctrl",
 		onEnd: function () {
 			htmx.trigger(document.getElementById("sources-form"), "submit");
 		},
 	});
-	setSourcesSelectMode(false);
-}
-
-let sourcesSelectMode = false;
-function setSourcesSelectMode(on) {
-	sourcesSelectMode = on;
-	const list = document.getElementById("sources-list");
-	const btn = document.getElementById("sources-select-mode");
-	if (list) list.classList.toggle("select-mode", on);
-	if (btn) btn.classList.toggle("active", on);
-
-	if (sourcesSortable && sourcesSortable.multiDrag) sourcesSortable.multiDrag.multiDragKeyDown = on;
-	if (!on && list) {
-		for (const el of list.querySelectorAll(".multiselected")) {
-			Sortable.utils.deselect(el);
-		}
-	}
 }
 
 document.body.addEventListener("click", function (e) {
-	if (e.target.id === "sources-select-mode") {
-		setSourcesSelectMode(!sourcesSelectMode);
-		return;
-	}
-	if (!sourcesSelectMode) return;
-	const card = e.target.closest("#sources-list > [data-kind]");
-	if (!card || e.target.closest("input, button, select, textarea, .drag-handle")) return;
-	if (card.classList.contains("multiselected")) {
-		Sortable.utils.deselect(card);
-	} else {
-		Sortable.utils.select(card);
+	if (!e.target.closest("#sources-list") || e.target.closest("#sources-list > [data-kind]")) return;
+	for (const el of document.querySelectorAll("#sources-list .multiselected")) {
+		Sortable.utils.deselect(el);
 	}
 });
 
 function collectLayout() {
 	const items = [];
+	const seen = new Set();
 	for (const el of document.querySelectorAll("#sources-list > [data-kind]")) {
+		const key = el.dataset.kind === "section" ? "section:" + el.dataset.id : "source:" + el.dataset.type + ":" + el.dataset.number;
+		if (seen.has(key)) continue;
+		seen.add(key);
 		if (el.dataset.kind === "section") {
 			items.push({
 				kind: "section",
