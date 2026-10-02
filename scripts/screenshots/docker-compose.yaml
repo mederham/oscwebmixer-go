@@ -1,0 +1,26 @@
+# To take screenshots and destroy the containers afterwards, use this command:
+#   docker compose -f scripts/screenshots/docker-compose.yaml up --build \
+#     --abort-on-container-exit --exit-code-from playwright
+# Results land directly in docs/screenshots/.
+services:
+  oscwebmixer:
+    image: registry.mederham.at/audio/oscwebmixer-go:latest
+    ports:
+      - "8080:80"
+      - "8000:8000/udp"
+    volumes:
+      - ./config:/webmixer/config:ro
+    environment:
+      OSCWEBMIXER_DESK_IP: 10.0.0.28
+      OSCWEBMIXER_DESK_PORT: 9000
+      OSCWEBMIXER_DESK_TRUSTED_IPS: 192.168.65.1
+
+  playwright:
+    build: .
+    depends_on:
+      oscwebmixer:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://oscwebmixer
+    volumes:
+      - ../../docs/screenshots:/output

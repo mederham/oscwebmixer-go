@@ -44,4 +44,6 @@ Landscape | Portrait
 
 ### Aux select
 
-![Aux select](screenshots/oscwebmixer-go_mixer_auxselect_landscape.png)
+Landscape | Portrait
+:---:|:---:
+![Aux select landscape](screenshots/oscwebmixer-go_mixer_auxselect_landscape.png) | ![Aux select portrait](screenshots/oscwebmixer-go_mixer_auxselect_portrait.png)
