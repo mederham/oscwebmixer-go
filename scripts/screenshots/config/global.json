@@ -1,0 +1,42 @@
+{
+  "debug": false,
+  "osc": {
+    "port": 8000
+  },
+  "desk": {
+    "ip": "172.16.72.128",
+    "port": 9000
+  },
+  "externalDevices": [
+    {
+      "id": "2c918208-4640-4cfc-ba13-ea51ebf032ba",
+      "name": "iPad 1",
+      "ip": "10.0.0.12",
+      "port": 9000,
+      "broadcast": true,
+      "loopback": false
+    },
+    {
+      "id": "202e1d2f-a3fb-4244-92d9-9905f47c50b8",
+      "name": "iPad 2",
+      "ip": "10.0.0.13",
+      "port": 9000,
+      "broadcast": true,
+      "loopback": false
+    }
+  ],
+  "autoHideChannelPatterns": [
+    "Ret",
+    "Ch"
+  ],
+  "autoHideGroupPatterns": [
+    "Master",
+    "Rec"
+  ],
+  "autoHideAuxPatterns": [
+    "Sub",
+    "Hall",
+    "Dly",
+    "Room"
+  ]
+}

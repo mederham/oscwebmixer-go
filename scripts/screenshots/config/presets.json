@@ -1,0 +1,2562 @@
+[
+  {
+    "uuid": "36671111-6100-4e43-bd4d-a1d371886107",
+    "name": "Band 1",
+    "auxes": [
+      {
+        "enabled": true,
+        "colour": "#993333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993733",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993b33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994033",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994433",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994933",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994d33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995233",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995633",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995a33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#995f33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996833",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996c33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997133",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997533",
+        "layoutId": "default"
+      }
+    ],
+    "mixerLayouts": {
+      "default": {
+        "name": "Default",
+        "items": [
+          {
+            "kind": "section",
+            "sectionId": "0bf49c65-00a0-4b98-9a26-7bc2e1497dfc",
+            "sectionName": "Drums"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 1,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 2,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 3,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 4,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 5,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 6,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 7,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "372fa98b-54e7-441c-aa17-0ebd395c7c89",
+            "sectionName": "Band"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 11,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 12,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "09cff3ab-05a8-4556-9c80-8a81695577e5",
+            "sectionName": "Brass"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 13,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 14,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 15,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 16,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 17,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 18,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 19,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 20,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 21,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 22,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 23,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 24,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "ab85199d-d583-40ba-a50d-89ef6a7f1ef0",
+            "sectionName": "Vocals"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 25,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 26,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 27,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 28,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "eb5828bd-77b5-4a2d-b793-9ac0d43eb634",
+            "sectionName": "Misc"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 29,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 30,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 31
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 32
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 33
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 34
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 35
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 36
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 37
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 38
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 39
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 40
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 41
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 42
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 43
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 44
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 45
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 46
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 47
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 48
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 49
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 50
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 51
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 52
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 53
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 54
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 55
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 56
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 57
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 58
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 59
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 60
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 1
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 2
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 3
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 4
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 5
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 6
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 7
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 11
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 12
+          }
+        ]
+      }
+    },
+    "lastChanged": "2026-09-14T18:22:10Z"
+  },
+  {
+    "uuid": "dfa349be-b227-4a9c-8fa7-a87a1dad546d",
+    "name": "Band 2",
+    "auxes": [
+      {
+        "enabled": true,
+        "colour": "#993333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993733",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993b33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994033",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994433",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994933",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994d33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995233",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995633",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995a33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#995f33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996833",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996c33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997133",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997533",
+        "layoutId": "default"
+      }
+    ],
+    "mixerLayouts": {
+      "default": {
+        "name": "Default",
+        "items": [
+          {
+            "kind": "section",
+            "sectionId": "0bf49c65-00a0-4b98-9a26-7bc2e1497dfc",
+            "sectionName": "Drums"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 1,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 2,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 3,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 4,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 5,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 6,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 7,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "372fa98b-54e7-441c-aa17-0ebd395c7c89",
+            "sectionName": "Band"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 11,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 12,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "09cff3ab-05a8-4556-9c80-8a81695577e5",
+            "sectionName": "Brass"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 13,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 14,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 15,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 16,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 17,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 18,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 19,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 20,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 21,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 22,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 23,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 24,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "ab85199d-d583-40ba-a50d-89ef6a7f1ef0",
+            "sectionName": "Vocals"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 25,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 26,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 27,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 28,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "eb5828bd-77b5-4a2d-b793-9ac0d43eb634",
+            "sectionName": "Misc"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 29,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 30,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 31
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 32
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 33
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 34
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 35
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 36
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 37
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 38
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 39
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 40
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 41
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 42
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 43
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 44
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 45
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 46
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 47
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 48
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 49
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 50
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 51
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 52
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 53
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 54
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 55
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 56
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 57
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 58
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 59
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 60
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 1
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 2
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 3
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 4
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 5
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 6
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 7
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 11
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 12
+          }
+        ]
+      }
+    },
+    "lastChanged": "2026-08-29T17:17:00Z"
+  },
+  {
+    "uuid": "25b84128-de3f-4bee-8c1f-99e9f4c76484",
+    "name": "Example Preset 1",
+    "auxes": [
+      {
+        "enabled": true,
+        "colour": "#993333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993733",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993b33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994033",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994433",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994933",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994d33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995233",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995633",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995a33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#995f33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996833",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996c33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997133",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997533",
+        "layoutId": "default"
+      }
+    ],
+    "mixerLayouts": {
+      "default": {
+        "name": "Default",
+        "items": [
+          {
+            "kind": "section",
+            "sectionId": "0bf49c65-00a0-4b98-9a26-7bc2e1497dfc",
+            "sectionName": "Drums"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 1,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 2,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 3,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 4,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 5,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 6,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 7,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "372fa98b-54e7-441c-aa17-0ebd395c7c89",
+            "sectionName": "Band"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 11,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 12,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "09cff3ab-05a8-4556-9c80-8a81695577e5",
+            "sectionName": "Brass"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 13,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 14,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 15,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 16,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 17,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 18,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 19,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 20,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 21,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 22,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 23,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 24,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "ab85199d-d583-40ba-a50d-89ef6a7f1ef0",
+            "sectionName": "Vocals"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 25,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 26,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 27,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 28,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "eb5828bd-77b5-4a2d-b793-9ac0d43eb634",
+            "sectionName": "Misc"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 29,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 30,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 31
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 32
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 33
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 34
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 35
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 36
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 37
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 38
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 39
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 40
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 41
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 42
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 43
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 44
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 45
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 46
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 47
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 48
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 49
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 50
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 51
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 52
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 53
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 54
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 55
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 56
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 57
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 58
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 59
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 60
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 1
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 2
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 3
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 4
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 5
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 6
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 7
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 11
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 12
+          }
+        ]
+      }
+    },
+    "lastChanged": "2026-08-20T20:37:01Z"
+  },
+  {
+    "uuid": "c0b00967-69b5-4595-bdf8-18a7fe1c7a49",
+    "name": "Example Preset 2",
+    "auxes": [
+      {
+        "enabled": true,
+        "colour": "#993333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993733",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993b33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994033",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994433",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994933",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994d33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995233",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995633",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995a33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#995f33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996833",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996c33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997133",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997533",
+        "layoutId": "default"
+      }
+    ],
+    "mixerLayouts": {
+      "default": {
+        "name": "Default",
+        "items": [
+          {
+            "kind": "section",
+            "sectionId": "0bf49c65-00a0-4b98-9a26-7bc2e1497dfc",
+            "sectionName": "Drums"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 1,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 2,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 3,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 4,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 5,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 6,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 7,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "372fa98b-54e7-441c-aa17-0ebd395c7c89",
+            "sectionName": "Band"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 11,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 12,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "09cff3ab-05a8-4556-9c80-8a81695577e5",
+            "sectionName": "Brass"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 13,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 14,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 15,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 16,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 17,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 18,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 19,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 20,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 21,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 22,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 23,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 24,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "ab85199d-d583-40ba-a50d-89ef6a7f1ef0",
+            "sectionName": "Vocals"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 25,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 26,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 27,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 28,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "eb5828bd-77b5-4a2d-b793-9ac0d43eb634",
+            "sectionName": "Misc"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 29,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 30,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 31
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 32
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 33
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 34
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 35
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 36
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 37
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 38
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 39
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 40
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 41
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 42
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 43
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 44
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 45
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 46
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 47
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 48
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 49
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 50
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 51
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 52
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 53
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 54
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 55
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 56
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 57
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 58
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 59
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 60
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 1
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 2
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 3
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 4
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 5
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 6
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 7
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 11
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 12
+          }
+        ]
+      }
+    },
+    "lastChanged": "2026-08-09T10:58:26Z"
+  },
+  {
+    "uuid": "7ac43902-90c5-4770-a6d1-888100d86564",
+    "name": "Test Preset",
+    "auxes": [
+      {
+        "enabled": true,
+        "colour": "#993333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993733",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#993b33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994033",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994433",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994933",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#994d33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995233",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995633",
+        "layoutId": "default"
+      },
+      {
+        "enabled": true,
+        "colour": "#995a33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#995f33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996333",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996833",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#996c33",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997133",
+        "layoutId": "default"
+      },
+      {
+        "enabled": false,
+        "colour": "#997533",
+        "layoutId": "default"
+      }
+    ],
+    "mixerLayouts": {
+      "default": {
+        "name": "Default",
+        "items": [
+          {
+            "kind": "section",
+            "sectionId": "0bf49c65-00a0-4b98-9a26-7bc2e1497dfc",
+            "sectionName": "Drums"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 1,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 2,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 3,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 4,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 5,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 6,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 7,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "372fa98b-54e7-441c-aa17-0ebd395c7c89",
+            "sectionName": "Band"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 8,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 11,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 12,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "09cff3ab-05a8-4556-9c80-8a81695577e5",
+            "sectionName": "Brass"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 9,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 13,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 14,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 15,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 16,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 17,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 18,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 19,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 20,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 21,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 22,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 23,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 24,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "ab85199d-d583-40ba-a50d-89ef6a7f1ef0",
+            "sectionName": "Vocals"
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 10,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 25,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 26,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 27,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 28,
+            "enabled": true
+          },
+          {
+            "kind": "section",
+            "sectionId": "eb5828bd-77b5-4a2d-b793-9ac0d43eb634",
+            "sectionName": "Misc"
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 29,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 30,
+            "enabled": true
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 31
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 32
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 33
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 34
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 35
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 36
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 37
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 38
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 39
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 40
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 41
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 42
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 43
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 44
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 45
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 46
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 47
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 48
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 49
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 50
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 51
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 52
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 53
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 54
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 55
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 56
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 57
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 58
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 59
+          },
+          {
+            "kind": "source",
+            "type": "channel",
+            "number": 60
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 1
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 2
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 3
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 4
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 5
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 6
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 7
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 11
+          },
+          {
+            "kind": "source",
+            "type": "group",
+            "number": 12
+          }
+        ]
+      }
+    },
+    "lastChanged": "2026-07-30T19:11:02Z"
+  }
+]
