@@ -1,9 +1,42 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
 stages:
   - test
   - build
   - publish
 
+.code_changes: &code_changes
+  - cmd/**/*
+  - config/**/*
+  - internal/**/*
+  - web/**/*
+  - Dockerfile
+  - go.mod
+  - go.sum
+  - VERSION
+  - .gitlab-ci.yml
+
+.rules_test:
+  rules:
+    - changes: *code_changes
+
+.rules_build:
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main"
+      changes: *code_changes
+
+.rules_publish:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *code_changes
+
 test:
+  extends: .rules_test
   stage: test
   image: golang:1.27-alpine
   tags:
@@ -18,12 +51,11 @@ test:
     when: always
 
 build:
+  extends: .rules_build
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  rules:
-    - if: $CI_COMMIT_BRANCH != "main"
   tags:
     - docker
   script:
@@ -36,12 +68,11 @@ build:
         --no-push
 
 .publish_arch:
+  extends: .rules_publish
   stage: publish
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
   before_script:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf "%s:%s" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
@@ -75,12 +106,11 @@ publish:arm64:
         --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-arm64"
 
 publish:manifest:
+  extends: .rules_publish
   stage: publish
   image:
     name: mplatform/manifest-tool:alpine
     entrypoint: [""]
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
   tags:
     - docker
   needs:
