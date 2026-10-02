@@ -232,6 +232,11 @@ button.success:hover { background: #2a4a2a; }
 	transition: opacity 0.15s;
 }
 
+.multiselected {
+	outline: 1px solid #999;
+	outline-offset: -1px;
+}
+
 .source-card.stereo, .aux-card.stereo { border-left-width: 6px; border-left-style: double; }
 
 .source-card .badge, .aux-card .badge {

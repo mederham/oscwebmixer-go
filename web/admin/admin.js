@@ -13,6 +13,9 @@ function initSourcesSortable() {
 	new Sortable(el, {
 		animation: 150,
 		handle: ".drag-handle",
+		multiDrag: true,
+		selectedClass: "multiselected",
+		multiDragKey: "ctrl",
 		onEnd: function () {
 			htmx.trigger(document.getElementById("sources-form"), "submit");
 		},
@@ -139,6 +142,11 @@ document.body.addEventListener("change", function (e) {
 	// tabbing through a field without editing it is a no-op, not a wasted
 	// save.
 	if (e.target.closest("#sources-form") && (e.target.classList.contains("enabled-field") || e.target.classList.contains("section-name-field"))) {
+		if (e.target.classList.contains("enabled-field") && e.target.closest(".multiselected")) {
+			for (const other of document.querySelectorAll("#sources-list .multiselected .enabled-field")) {
+				other.checked = e.target.checked;
+			}
+		}
 		htmx.trigger(document.getElementById("sources-form"), "submit");
 	} else if (e.target.closest("#auxes-form")) {
 		htmx.trigger(document.getElementById("auxes-form"), "submit");
