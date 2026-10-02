@@ -171,7 +171,14 @@ button.danger:hover { background: #7a3a3a; }
 button.success { background: #2a4a2a; border-color: #4a7a4a; }
 button.success:hover { background: #2a4a2a; }
 
-#sources-toggle-all, #auxes-toggle-all { margin-bottom: 0.5rem; }
+#sources-toggle-all, #auxes-toggle-all, #sources-select-mode { margin-bottom: 0.5rem; }
+#sources-select-mode.active { background: #3a3a3a; border-color: #999; }
+#sources-select-mode.active:hover { background: #454545; }
+
+#sources-list.select-mode .source-card,
+#sources-list.select-mode .section-marker {
+	cursor: pointer;
+}
 
 .drag-handle {
 	cursor: grab;
