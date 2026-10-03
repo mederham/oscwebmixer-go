@@ -17,6 +17,7 @@ OSCWebMixer-Go implements the core features of OSCWebMixer2:
 
 - **Group Bus Support:** In addition to input channels, group buses can also be mixed into auxes now.
 - **Custom assignable layouts:** You can now create custom source layouts that are assignable to any aux bus.
+- **Multi-select sources:** Multiple sources can be selected and reordered together, making layout configuration quicker.
 - **Performance:** The new multi-threaded architecture makes it possible to use more personal mixing clients and iPads simultaneously without problems, while using 1/4 the memory and half the CPU of the old version.
 - **Console Healthcheck:** OSCWebMixer-Go detects when the console goes offline and shows a status message on all clients until the connection is restored.
 - **Session Reload:** When reloading the session on the console, the changes are automatically adapted in OSCWebMixer-Go.
