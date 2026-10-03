@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -147,15 +148,34 @@ func (m *Manager) GetPresetByID(uuid string) (Preset, error) {
 	return Preset{}, ErrPresetNotFound
 }
 
+func presetNameTaken(presets []Preset, name string) bool {
+	for _, p := range presets {
+		if p.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueName(presets []Preset, base string) string {
+	if !presetNameTaken(presets, base) {
+		return base
+	}
+	for i := 2; ; i++ {
+		candidate := fmt.Sprintf("%s (%d)", base, i)
+		if !presetNameTaken(presets, candidate) {
+			return candidate
+		}
+	}
+}
+
 func (m *Manager) SaveCurrentStateAsPreset(state State, name string) (Preset, error) {
 	presets, err := m.LoadPresets()
 	if err != nil {
 		return Preset{}, err
 	}
-	for _, p := range presets {
-		if p.Name == name {
-			return Preset{}, ErrPresetExists
-		}
+	if presetNameTaken(presets, name) {
+		return Preset{}, ErrPresetExists
 	}
 
 	id, err := NewID()
@@ -171,6 +191,37 @@ func (m *Manager) SaveCurrentStateAsPreset(state State, name string) (Preset, er
 		return Preset{}, err
 	}
 	return preset, nil
+}
+
+func (m *Manager) ImportPresets(incoming []Preset) ([]Preset, error) {
+	presets, err := m.LoadPresets()
+	if err != nil {
+		return nil, err
+	}
+
+	imported := make([]Preset, 0, len(incoming))
+	for _, p := range incoming {
+		id, err := NewID()
+		if err != nil {
+			return nil, err
+		}
+		name := strings.TrimSpace(p.Name)
+		if name == "" {
+			name = "Imported preset"
+		}
+		p.UUID = id
+		p.Name = uniqueName(presets, name)
+		p.LastChanged = time.Now().UTC().Format(time.RFC3339)
+		ensureDefaultLayout(&p.State)
+
+		presets = append(presets, p)
+		imported = append(imported, p)
+	}
+
+	if err := m.savePresets(presets); err != nil {
+		return nil, err
+	}
+	return imported, nil
 }
 
 func (m *Manager) UpdatePreset(uuid string, mixerLayouts map[string]NamedLayout, auxes []Aux) (Preset, error) {

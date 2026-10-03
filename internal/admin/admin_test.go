@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"io/fs"
 	"log"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -175,6 +177,27 @@ func postFormExpectStatus(t *testing.T, mux *http.ServeMux, path, body string, w
 	if rec.Code != want {
 		t.Fatalf("POST %s: status = %d, want %d, body = %s", path, rec.Code, want, rec.Body.String())
 	}
+	return rec
+}
+
+func postMultipartFile(t *testing.T, mux *http.ServeMux, path, filename string, content []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	part, err := w.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatalf("CreateFormFile: %v", err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatalf("write part: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, path, body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
 	return rec
 }
 
@@ -527,6 +550,108 @@ func TestPresetActiveAndUpdate(t *testing.T) {
 	}
 	if len(updated.MixerLayouts["default"].Items) != 1 || updated.MixerLayouts["default"].Items[0].Enabled {
 		t.Fatalf("preset after update = %+v, want channel 1 disabled (the live state at update time)", updated.MixerLayouts["default"].Items)
+	}
+}
+
+func TestPresetDownload(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	uuid := presets[0].UUID
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/presets/"+uuid+"/download", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET download: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), "Show 1.json") {
+		t.Fatalf("Content-Disposition = %q, want it to name the preset", rec.Header().Get("Content-Disposition"))
+	}
+	var got config.Preset
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if got.Name != "Show 1" || got.UUID != uuid {
+		t.Fatalf("downloaded preset = %+v, want Name=Show 1 UUID=%s", got, uuid)
+	}
+}
+
+func TestPresetDownloadUnknownUUID(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/presets/does-not-exist/download", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestPresetsDownloadAll(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 2"))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/presets/download", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET download all: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var got []config.Preset
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("downloaded presets = %+v, want 2", got)
+	}
+}
+
+func TestPresetsUpload(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+
+	payload := `[{"name":"Show 1","mixerLayouts":{"default":{"name":"Default","items":[]}}}]`
+	rec := postMultipartFile(t, mux, "/admin/presets/upload", "presets.json", []byte(payload))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Show 1 (2)") {
+		t.Fatalf("response = %s, want the auto-renamed imported preset", rec.Body.String())
+	}
+
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	if len(presets) != 2 {
+		t.Fatalf("presets = %+v, want 2 (original + imported)", presets)
+	}
+}
+
+func TestPresetsUploadRejectsMalformedJSON(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := postMultipartFile(t, mux, "/admin/presets/upload", "presets.json", []byte("not json"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body = %s", rec.Code, rec.Body.String())
 	}
 }
 

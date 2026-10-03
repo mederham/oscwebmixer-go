@@ -110,6 +110,8 @@ document.body.addEventListener("change", function (e) {
 		htmx.trigger(document.getElementById("sources-form"), "submit");
 	} else if (e.target.closest("#auxes-form")) {
 		htmx.trigger(document.getElementById("auxes-form"), "submit");
+	} else if (e.target.closest("#presets-upload-form")) {
+		htmx.trigger(document.getElementById("presets-upload-form"), "submit");
 	}
 });
 

@@ -114,6 +114,45 @@ func TestPresetLifecycle(t *testing.T) {
 	}
 }
 
+func TestImportPresets(t *testing.T) {
+	m := New(t.TempDir())
+	layouts := map[string]NamedLayout{
+		DefaultLayoutID: {Name: "Default", Items: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}},
+	}
+	if _, err := m.SaveCurrentStateAsPreset(State{MixerLayouts: layouts}, "Show 1"); err != nil {
+		t.Fatalf("SaveCurrentStateAsPreset: %v", err)
+	}
+
+	incoming := []Preset{
+		{State: State{UUID: "stale-uuid", Name: "Show 1", MixerLayouts: layouts}},
+		{State: State{UUID: "", Name: "Show 2", MixerLayouts: layouts}},
+	}
+	imported, err := m.ImportPresets(incoming)
+	if err != nil {
+		t.Fatalf("ImportPresets: %v", err)
+	}
+	if len(imported) != 2 {
+		t.Fatalf("imported = %+v, want 2", imported)
+	}
+	if imported[0].Name != "Show 1 (2)" {
+		t.Fatalf("imported[0].Name = %q, want %q (auto-renamed to avoid the existing preset)", imported[0].Name, "Show 1 (2)")
+	}
+	if imported[0].UUID == "" || imported[0].UUID == "stale-uuid" {
+		t.Fatalf("imported[0].UUID = %q, want a freshly generated id, not the uploaded one", imported[0].UUID)
+	}
+	if imported[1].Name != "Show 2" {
+		t.Fatalf("imported[1].Name = %q, want unchanged %q (no conflict)", imported[1].Name, "Show 2")
+	}
+
+	all, err := m.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("LoadPresets = %+v, want 3 (1 original + 2 imported)", all)
+	}
+}
+
 func TestUpdatePreset(t *testing.T) {
 	m := New(t.TempDir())
 	original := State{MixerLayouts: map[string]NamedLayout{
