@@ -3,6 +3,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
+    - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH
 
 stages:
@@ -21,6 +22,9 @@ stages:
   - VERSION
   - .gitlab-ci.yml
 
+.derive_version: &derive_version
+  export VERSION=${CI_COMMIT_TAG:-$(cat VERSION)-$CI_COMMIT_SHORT_SHA}
+
 .rules_test:
   rules:
     - changes: *code_changes
@@ -32,6 +36,7 @@ stages:
 
 .rules_publish:
   rules:
+    - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
       changes: *code_changes
 
@@ -59,19 +64,20 @@ build:
   tags:
     - docker
   script:
+    - *derive_version
     - /kaniko/executor
         --context "$CI_PROJECT_DIR"
         --dockerfile "$CI_PROJECT_DIR/Dockerfile"
         --build-arg TARGETOS=linux
         --build-arg TARGETARCH=amd64
-        --build-arg VERSION=$(cat VERSION)
+        --build-arg VERSION=$VERSION
         --no-push
 
 .publish_arch:
   extends: .rules_publish
   stage: publish
   image:
-    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    name: gcr.io/kaniko-project/executor:v1.24.0-debug
     entrypoint: [""]
   before_script:
     - mkdir -p /kaniko/.docker
@@ -83,13 +89,14 @@ publish:amd64:
     - docker
     - amd64
   script:
+    - *derive_version
     - /kaniko/executor
         --context "$CI_PROJECT_DIR"
         --dockerfile "$CI_PROJECT_DIR/Dockerfile"
         --build-arg TARGETOS=linux
         --build-arg TARGETARCH=amd64
-        --build-arg VERSION=$(cat VERSION)
-        --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-amd64"
+        --build-arg VERSION=$VERSION
+        --destination "$CI_REGISTRY_IMAGE:$VERSION-amd64"
 
 publish:arm64:
   extends: .publish_arch
@@ -97,13 +104,14 @@ publish:arm64:
     - docker
     - arm64
   script:
+    - *derive_version
     - /kaniko/executor
         --context "$CI_PROJECT_DIR"
         --dockerfile "$CI_PROJECT_DIR/Dockerfile"
         --build-arg TARGETOS=linux
         --build-arg TARGETARCH=arm64
-        --build-arg VERSION=$(cat VERSION)
-        --destination "$CI_REGISTRY_IMAGE:$(cat VERSION)-arm64"
+        --build-arg VERSION=$VERSION
+        --destination "$CI_REGISTRY_IMAGE:$VERSION-arm64"
 
 publish:manifest:
   extends: .rules_publish
@@ -117,17 +125,18 @@ publish:manifest:
     - publish:amd64
     - publish:arm64
   script:
+    - *derive_version
     - manifest-tool
         --username "$CI_REGISTRY_USER"
         --password "$CI_REGISTRY_PASSWORD"
         push from-args
         --platforms linux/amd64,linux/arm64
-        --template "$CI_REGISTRY_IMAGE:$(cat VERSION)-ARCH"
-        --target "$CI_REGISTRY_IMAGE:$(cat VERSION)"
+        --template "$CI_REGISTRY_IMAGE:$VERSION-ARCH"
+        --target "$CI_REGISTRY_IMAGE:$VERSION"
     - manifest-tool
         --username "$CI_REGISTRY_USER"
         --password "$CI_REGISTRY_PASSWORD"
         push from-args
         --platforms linux/amd64,linux/arm64
-        --template "$CI_REGISTRY_IMAGE:$(cat VERSION)-ARCH"
+        --template "$CI_REGISTRY_IMAGE:$VERSION-ARCH"
         --target "$CI_REGISTRY_IMAGE:latest"
