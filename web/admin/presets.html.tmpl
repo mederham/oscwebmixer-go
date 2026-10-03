@@ -2,8 +2,8 @@
 <section id="section-presets">
 	<h2>Presets</h2>
 	<p class="hint">Save and restore your OSCWebMixer configuration (mixer layout, auxes).</p>
-	<div class="presets-toolbar">
-		<div class="presets-toolbar-group">
+	<div class="toolbar">
+		<div class="toolbar-group">
 			<form hx-post="/admin/presets/save" hx-target="#section-presets" hx-swap="outerHTML" class="inline-form">
 				<input type="text" name="name" placeholder="New preset name" required />
 				<button type="submit">Save</button>
@@ -17,7 +17,7 @@
 				hx-confirm="Reset EVERYTHING — all sources, sections, and aux settings — to defaults? Saved presets, external devices, and network settings are not affected. This cannot be undone."
 			>Reset to defaults</button>
 		</div>
-		<div class="preset-bulk-actions">
+		<div class="toolbar-group">
 			<a href="/admin/presets/download" download class="button">Download all</a>
 			<form id="presets-upload-form" hx-post="/admin/presets/upload" hx-target="#section-presets" hx-swap="outerHTML" hx-encoding="multipart/form-data" class="inline-form">
 				<input type="file" name="file" accept="application/json" hidden />

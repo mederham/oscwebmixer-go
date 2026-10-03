@@ -173,7 +173,6 @@ button.danger:hover { background: #7a3a3a; }
 button.success { background: #2a4a2a; border-color: #4a7a4a; }
 button.success:hover { background: #2a4a2a; }
 
-#sources-toggle-all, #auxes-toggle-all { margin-bottom: 0.5rem; }
 
 .drag-handle {
 	cursor: grab;
@@ -254,10 +253,10 @@ button.success:hover { background: #2a4a2a; }
 .preset-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
 .preset-actions button.danger { margin-bottom: 0; }
 
-.presets-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
-.presets-toolbar-group, .preset-bulk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.presets-toolbar .inline-form { margin-top: 0; }
-.presets-toolbar button.danger { margin-bottom: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.toolbar-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.toolbar .inline-form { margin-top: 0; }
+.toolbar button.danger { margin-bottom: 0; }
 
 @media (max-width: 30rem) {
 	.preset-actions { order: 1; flex-basis: 100%; }
