@@ -87,17 +87,24 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
 	}
 });
 
+const POPUP_SIZES = {
+	"icon-popup": { width: 240, height: 256 },
+	"preset-menu": { width: 150, height: 160 },
+};
+
 document.addEventListener("beforetoggle", function (e) {
-	if (!e.target.classList.contains("icon-popup") || e.newState !== "open") return;
+	const sizeClass = Object.keys(POPUP_SIZES).find((c) => e.target.classList.contains(c));
+	if (!sizeClass || e.newState !== "open") return;
 	const btn = document.querySelector(`[popovertarget="${e.target.id}"]`);
 	if (!btn) return;
 	const rect = btn.getBoundingClientRect();
+	const { width, height } = POPUP_SIZES[sizeClass];
 	const popup = e.target;
 	popup.style.position = "fixed";
 	popup.style.inset = "auto";
 	popup.style.margin = "0";
-	popup.style.left = Math.min(rect.left, window.innerWidth - 240 - 8) + "px";
-	popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 256 - 8) + "px";
+	popup.style.left = Math.min(rect.left, window.innerWidth - width - 8) + "px";
+	popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - height - 8) + "px";
 }, true);
 
 document.body.addEventListener("change", function (e) {

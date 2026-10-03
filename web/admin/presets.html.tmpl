@@ -32,12 +32,19 @@
 			<span class="label">{{.Name}}</span>
 			<span class="preset-meta">{{prettyDate .LastChanged}}</span>
 			<div class="preset-actions">
-				<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
 				{{if .Active}}
 				<button hx-post="/admin/presets/{{.UUID}}/update" hx-target="#section-presets" hx-swap="outerHTML">Update</button>
+				{{else}}
+				<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
 				{{end}}
-				<a href="/admin/presets/{{.UUID}}/download" download class="button">Download</a>
-				<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML" hx-confirm="Delete preset {{.Name}}? This cannot be undone.">Delete</button>
+				<button type="button" class="preset-menu-btn" popovertarget="preset-menu-{{.UUID}}" title="More actions" aria-label="More actions">&#8942;</button>
+				<div id="preset-menu-{{.UUID}}" popover class="preset-menu">
+					{{if .Active}}
+					<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
+					{{end}}
+					<a href="/admin/presets/{{.UUID}}/download" download class="button">Download</a>
+					<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML" hx-confirm="Delete preset {{.Name}}? This cannot be undone.">Delete</button>
+				</div>
 			</div>
 		</div>
 	{{else}}

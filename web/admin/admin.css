@@ -253,6 +253,21 @@ button.success:hover { background: #2a4a2a; }
 .preset-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
 .preset-actions button.danger { margin-bottom: 0; }
 
+.preset-menu-btn { padding: 0.3rem 0.5rem; }
+
+.preset-menu {
+	width: 9rem;
+	flex-direction: column;
+	gap: 0.3rem;
+	padding: 0.4rem;
+	margin: 0;
+	background: #1c1c1c;
+	border: 1px solid #3a3a3a;
+	border-radius: 4px;
+}
+.preset-menu:popover-open { display: flex; }
+.preset-menu button, .preset-menu a.button { width: 100%; text-align: left; margin: 0; }
+
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
 .toolbar-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .toolbar .inline-form { margin-top: 0; }

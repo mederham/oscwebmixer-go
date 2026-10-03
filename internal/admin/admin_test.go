@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -652,6 +653,57 @@ func TestPresetsUploadRejectsMalformedJSON(t *testing.T) {
 	rec := postMultipartFile(t, mux, "/admin/presets/upload", "presets.json", []byte("not json"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPresetCardShowsSinglePrimaryActionWithOverflowMenu(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/presets/save", "name="+url.QueryEscape("Show 1"))
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		t.Fatalf("LoadPresets: %v", err)
+	}
+	uuid := presets[0].UUID
+
+	index := func() string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+
+	loadPost := fmt.Sprintf(`hx-post="/admin/presets/%s/load"`, uuid)
+	updatePost := fmt.Sprintf(`hx-post="/admin/presets/%s/update"`, uuid)
+	menuID := fmt.Sprintf("preset-menu-%s", uuid)
+
+	inactive := index()
+	if strings.Contains(inactive, updatePost) {
+		t.Fatalf("inactive preset card unexpectedly has an Update action: %s", inactive)
+	}
+	if !strings.Contains(inactive, loadPost) {
+		t.Fatalf("inactive preset card is missing its primary Load action")
+	}
+	if !strings.Contains(inactive, menuID) {
+		t.Fatalf("preset card is missing its overflow menu %q", menuID)
+	}
+
+	postForm(t, mux, "/admin/presets/"+uuid+"/load", "")
+	active := index()
+
+	updateIdx := strings.Index(active, updatePost)
+	loadIdx := strings.Index(active, loadPost)
+	if updateIdx == -1 {
+		t.Fatalf("active preset card is missing its primary Update action")
+	}
+	if loadIdx == -1 {
+		t.Fatalf("active preset card is missing Load inside the overflow menu")
+	}
+	if updateIdx > loadIdx {
+		t.Fatalf("Update (primary) should render before Load (demoted into the overflow menu): update@%d load@%d", updateIdx, loadIdx)
 	}
 }
 
