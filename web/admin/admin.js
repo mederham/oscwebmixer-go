@@ -1,32 +1,33 @@
 "use strict";
 
-// Drag-and-drop for the Sources tab — one flat list mixing source cards
-// and section markers (see internal/oscmsg.LayoutItem's doc comment: a
-// source's section is derived from whichever marker precedes it in this
-// same list, not a stored field, so there's nothing to keep in sync beyond
-// the list's own order — no groups, no nested containers, just one
-// Sortable instance). Every drop re-submits the whole list via
-// #sources-form, same as the visible Save button.
 function initSourcesSortable() {
 	const el = document.getElementById("sources-list");
 	if (!el) return;
 	new Sortable(el, {
 		animation: 150,
 		handle: ".drag-handle",
+		multiDrag: true,
+		selectedClass: "multiselected",
 		onEnd: function () {
 			htmx.trigger(document.getElementById("sources-form"), "submit");
 		},
 	});
 }
 
-// Reads the current DOM state of #sources-list (order + every field's live
-// value) into the wire shape internal/oscmsg.LayoutItem expects. Called
-// fresh on every submission — Save-button click or drag-drop auto-persist
-// alike — via htmx:configRequest below, never cached, so it's always
-// exactly what's on screen.
+document.body.addEventListener("click", function (e) {
+	if (!e.target.closest("#sources-list") || e.target.closest("#sources-list > [data-kind]")) return;
+	for (const el of document.querySelectorAll("#sources-list .multiselected")) {
+		Sortable.utils.deselect(el);
+	}
+});
+
 function collectLayout() {
 	const items = [];
+	const seen = new Set();
 	for (const el of document.querySelectorAll("#sources-list > [data-kind]")) {
+		const key = el.dataset.kind === "section" ? "section:" + el.dataset.id : "source:" + el.dataset.type + ":" + el.dataset.number;
+		if (seen.has(key)) continue;
+		seen.add(key);
 		if (el.dataset.kind === "section") {
 			items.push({
 				kind: "section",
@@ -45,12 +46,6 @@ function collectLayout() {
 	return items;
 }
 
-// Injects the live layout JSON into #sources-form's request right before
-// it's sent — htmx's documented extension point for computing a request's
-// parameters, used here instead of named per-field inputs since the
-// browser's native form serialization has no way to represent an ordered,
-// mixed-kind list (see internal/admin's package doc comment). Everything
-// else about the request/response/swap lifecycle is still plain htmx.
 document.body.addEventListener("htmx:configRequest", function (e) {
 	if (e.detail.elt && e.detail.elt.id === "sources-form") {
 		e.detail.parameters.layout = JSON.stringify(collectLayout());
@@ -59,19 +54,6 @@ document.body.addEventListener("htmx:configRequest", function (e) {
 
 document.addEventListener("DOMContentLoaded", initSourcesSortable);
 
-// Re-init after any htmx swap that touched the sources section (a Save, a
-// drag-drop auto-save, a section add/delete, or an out-of-band update from
-// a preset load) — outerHTML replacement creates brand new DOM nodes with
-// no Sortable instance attached.
-// Keeps ?layout=<id> in the address bar in sync with whichever layout is
-// currently showing (read from #sources-form's hidden layoutId field, which
-// every render of this section carries) — a plain history.replaceState, no
-// navigation, so it doesn't disturb htmx. Without this, a page reload always
-// fell back to Default: handleIndex had no way to know what was selected.
-// Re-queries the live document rather than trusting the swap event's own
-// target — for an outerHTML swap (used throughout this section) htmx fires
-// afterSwap with e.detail.target still the old, now-detached element (same
-// reason initSourcesSortable re-queries by id instead of using it).
 function syncLayoutURL() {
 	const hidden = document.querySelector("#sources-form input[name='layoutId']");
 	if (!hidden) return;
@@ -93,13 +75,6 @@ document.body.addEventListener("htmx:oobAfterSwap", function (e) {
 	}
 });
 
-// Full page reload whenever the desk status actually changes (e.g.
-// Reloading -> Healthy on a desk session change) — Sources/Auxes only ever
-// re-render from a save the admin page itself made, so a session change on
-// the desk otherwise leaves them stale until a manual reload; this just
-// does that reload automatically. lastDeskStatus starts null so the first
-// poll (fired by hx-trigger="load") only establishes the baseline instead
-// of reloading immediately.
 let lastDeskStatus = null;
 document.body.addEventListener("htmx:afterSwap", function (e) {
 	if (!e.detail.target || e.detail.target.id !== "desk-status") return;
@@ -112,10 +87,6 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
 	}
 });
 
-// Aux icon popup: positions the popover next to its trigger button.
-// "beforetoggle" is a Popover API event (not a plain DOM event), so it
-// doesn't bubble — capture:true still catches it on the way down to the
-// popover itself, before it becomes visible.
 document.addEventListener("beforetoggle", function (e) {
 	if (!e.target.classList.contains("icon-popup") || e.newState !== "open") return;
 	const btn = document.querySelector(`[popovertarget="${e.target.id}"]`);
@@ -125,28 +96,23 @@ document.addEventListener("beforetoggle", function (e) {
 	popup.style.position = "fixed";
 	popup.style.inset = "auto";
 	popup.style.margin = "0";
-	// ponytail: clamps right/bottom overflow only, doesn't flip above/left —
-	// fine for a grid of buttons near a card list, revisit if a trigger ever
-	// sits close to the right/bottom edge on a small viewport.
 	popup.style.left = Math.min(rect.left, window.innerWidth - 240 - 8) + "px";
 	popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 256 - 8) + "px";
 }, true);
 
 document.body.addEventListener("change", function (e) {
-	// Every field on the Sources and Auxes tabs applies immediately —
-	// no Save button on either. "change" (not "blur") on a text input only
-	// fires when the value actually differs from what it was on focus, so
-	// tabbing through a field without editing it is a no-op, not a wasted
-	// save.
 	if (e.target.closest("#sources-form") && (e.target.classList.contains("enabled-field") || e.target.classList.contains("section-name-field"))) {
+		if (e.target.classList.contains("enabled-field") && e.target.closest(".multiselected")) {
+			for (const other of document.querySelectorAll("#sources-list .multiselected .enabled-field")) {
+				other.checked = e.target.checked;
+			}
+		}
 		htmx.trigger(document.getElementById("sources-form"), "submit");
 	} else if (e.target.closest("#auxes-form")) {
 		htmx.trigger(document.getElementById("auxes-form"), "submit");
 	}
 });
 
-// "Show/Hide all": a single smart toggle per tab — if everything in scope
-// is currently enabled, disable all; otherwise enable all.
 function toggleAllEnabled(scopeSelector, checkboxSelector) {
 	const boxes = document.querySelectorAll(scopeSelector + " " + checkboxSelector);
 	if (boxes.length === 0) return;
@@ -167,9 +133,6 @@ document.body.addEventListener("click", function (e) {
 	}
 	if (e.target.id === "sources-toggle-all") {
 		toggleAllEnabled("#sources-list", ".enabled-field");
-		// Setting .checked in JS doesn't fire "change", so this toggle
-		// needs its own explicit submit to match individual checkboxes
-		// now applying immediately (see the change listener above).
 		htmx.trigger(document.getElementById("sources-form"), "submit");
 	} else if (e.target.id === "auxes-toggle-all") {
 		toggleAllEnabled("#section-auxes", "input[name^='enabled[']");
@@ -177,13 +140,6 @@ document.body.addEventListener("click", function (e) {
 	}
 });
 
-// Hover "+" on a source-card: adds a new, immediately-
-// renamable section right above that row — no drag across a layout
-// that's often taller than the viewport. htmx.ajax is htmx's own JS API
-// for a request with no real form-submit event (see collectLayout's
-// htmx:configRequest listener for the same reasoning), not a hand-rolled
-// fetch. beforeKey must match layoutItemKey's format server-side exactly
-// (see handleSectionAdd).
 document.body.addEventListener("click", function (e) {
 	const btn = e.target.closest(".add-section-btn");
 	if (!btn) return;
@@ -199,11 +155,6 @@ document.body.addEventListener("click", function (e) {
 	});
 });
 
-// External devices: the add-device form starts hidden (see
-// external-devices.html.tmpl) so the list isn't cluttered by an empty
-// card by default — this just reveals it. No re-hide-on-cancel: the form
-// re-renders hidden again from scratch after a successful add (or a full
-// page reload), and there's no cancel button to need one.
 document.body.addEventListener("click", function (e) {
 	if (e.target.id !== "add-device-toggle") return;
 	const form = document.querySelector(".add-device");
@@ -212,12 +163,6 @@ document.body.addEventListener("click", function (e) {
 	e.target.hidden = true;
 });
 
-// Tabs: plain hide/show over server-rendered content that's already all in
-// the DOM (no fetching, no imperative element construction) — every
-// section still renders and swaps exactly as it does today, this just
-// controls which one is visible. location.hash makes the current tab
-// survive a reload or a shared link, mirroring the legacy admin's nav
-// pattern minus its per-field DOM-construction/move-up-down mess.
 const tabLinks = document.querySelectorAll(".tabs a");
 
 function showTab(hash) {
