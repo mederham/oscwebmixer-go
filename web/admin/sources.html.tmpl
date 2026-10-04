@@ -24,16 +24,20 @@
 		{{end}}
 	</div>
 
-	<button
-		type="button"
-		class="danger"
-		hx-post="/admin/sources/reset"
-		hx-target="#section-sources"
-		hx-swap="outerHTML"
-		hx-include="[name='layoutId']"
-		hx-confirm="Reset this layout to all channels then groups, ascending? This clears every section and customization."
-	>Reset layout</button>
-	<button type="button" id="sources-toggle-all">Show/Hide all</button>
+	<div class="toolbar">
+		<div class="toolbar-group">
+			<button
+				type="button"
+				class="danger"
+				hx-post="/admin/sources/reset"
+				hx-target="#section-sources"
+				hx-swap="outerHTML"
+				hx-include="[name='layoutId']"
+				hx-confirm="Reset this layout to all channels then groups, ascending? This clears every section and customization."
+			>Reset layout</button>
+			<button type="button" id="sources-toggle-all">Show/Hide all</button>
+		</div>
+	</div>
 
 	<form id="sources-form" hx-post="/admin/sources/save" hx-target="#section-sources" hx-swap="outerHTML">
 		<input type="hidden" name="layoutId" value="{{.LayoutID}}" />

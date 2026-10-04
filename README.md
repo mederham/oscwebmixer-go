@@ -23,6 +23,7 @@ OSCWebMixer-Go implements the core features of OSCWebMixer2:
 - **Session Reload:** When reloading the session on the console, the changes are automatically adapted in OSCWebMixer-Go.
 - **Auto-hide patterns:** It is now possible to automatically hide channels from the personal mixing UI that match a pattern (e.g. FX buses, unnamed channels,...)
 - **Personal Mixing Lock:** Personal mixing can now be locked for all clients in the Admin panel. This is useful when making configuration changes while musicians are already connected.
+- **Preset Import/Export:** Presets can be downloaded as JSON files (individually or all at once) and re-uploaded later or on another instance, making it easy to back up or share a configuration.
 
 > [!note]
 > Icons for channels and plugin support are not implemented as of now. \

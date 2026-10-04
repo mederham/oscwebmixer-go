@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/hub"
@@ -828,6 +831,102 @@ func (h *Handler) handlePresetsReset(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handlePresetDelete(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	if err := h.cfg.DeletePreset(uuid); err != nil && !errors.Is(err, config.ErrPresetNotFound) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.renderPresetsSection(w); err != nil {
+		h.log.Printf("admin render: %v", err)
+	}
+}
+
+func sanitizeFilename(name string) string {
+	clean := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, name))
+	if clean == "" {
+		return "preset"
+	}
+	return clean
+}
+
+func writeJSONDownload(w http.ResponseWriter, filename string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	_, err = w.Write(data)
+	return err
+}
+
+func (h *Handler) handlePresetDownload(w http.ResponseWriter, r *http.Request) {
+	uuid := r.PathValue("uuid")
+	preset, err := h.cfg.GetPresetByID(uuid)
+	if errors.Is(err, config.ErrPresetNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := writeJSONDownload(w, sanitizeFilename(preset.Name)+".json", preset); err != nil {
+		h.log.Printf("admin download preset: %v", err)
+	}
+}
+
+func (h *Handler) handlePresetsDownloadAll(w http.ResponseWriter, r *http.Request) {
+	presets, err := h.cfg.LoadPresets()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := writeJSONDownload(w, "presets.json", presets); err != nil {
+		h.log.Printf("admin download presets: %v", err)
+	}
+}
+
+func parseUploadedPresets(data []byte) ([]config.Preset, error) {
+	var presets []config.Preset
+	if err := json.Unmarshal(data, &presets); err == nil {
+		return presets, nil
+	}
+	var preset config.Preset
+	if err := json.Unmarshal(data, &preset); err != nil {
+		return nil, err
+	}
+	return []config.Preset{preset}, nil
+}
+
+func (h *Handler) handlePresetsUpload(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">No preset file was uploaded.</p>`)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	presets, err := parseUploadedPresets(data)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<p class="flash error">That file isn't a valid preset export.</p>`)
+		return
+	}
+
+	if _, err := h.cfg.ImportPresets(presets); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
