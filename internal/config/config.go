@@ -49,16 +49,23 @@ func (m *Manager) EnsureDir() error {
 	return os.MkdirAll(m.dir, 0o755)
 }
 
+func NewDefaultGlobal() Global {
+	return Global{
+		OSC:  OSCConfig{Port: 8000},
+		Desk: DeskConfig{Port: 9000},
+	}
+}
+
 func (m *Manager) LoadGlobalOrDefault() (Global, error) {
 	data, err := os.ReadFile(m.globalPath())
 	if errors.Is(err, os.ErrNotExist) {
-		return Global{
-			OSC:  OSCConfig{Port: 8000},
-			Desk: DeskConfig{Port: 9000},
-		}, nil
+		return NewDefaultGlobal(), nil
 	}
 	if err != nil {
 		return Global{}, err
+	}
+	if len(data) == 0 {
+		return NewDefaultGlobal(), nil
 	}
 	var g Global
 	if err := json.Unmarshal(data, &g); err != nil {
@@ -78,6 +85,9 @@ func (m *Manager) LoadStateOrDefault() (State, error) {
 	}
 	if err != nil {
 		return State{}, err
+	}
+	if len(data) == 0 {
+		return NewDefaultState(), nil
 	}
 	var s State
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -107,6 +117,9 @@ func (m *Manager) LoadPresets() ([]Preset, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 	var raw []json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
