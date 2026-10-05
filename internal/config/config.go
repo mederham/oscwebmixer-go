@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,11 +18,12 @@ var (
 )
 
 type Manager struct {
-	dir string
+	dir    string
+	logger *log.Logger
 }
 
-func New(dir string) *Manager {
-	return &Manager{dir: dir}
+func New(dir string, logger *log.Logger) *Manager {
+	return &Manager{dir: dir, logger: logger}
 }
 
 func (m *Manager) globalPath() string  { return filepath.Join(m.dir, "global.json") }
@@ -49,16 +51,24 @@ func (m *Manager) EnsureDir() error {
 	return os.MkdirAll(m.dir, 0o755)
 }
 
+func NewDefaultGlobal() Global {
+	return Global{
+		OSC:  OSCConfig{Port: 8000},
+		Desk: DeskConfig{Port: 9000},
+	}
+}
+
 func (m *Manager) LoadGlobalOrDefault() (Global, error) {
 	data, err := os.ReadFile(m.globalPath())
 	if errors.Is(err, os.ErrNotExist) {
-		return Global{
-			OSC:  OSCConfig{Port: 8000},
-			Desk: DeskConfig{Port: 9000},
-		}, nil
+		return NewDefaultGlobal(), nil
 	}
 	if err != nil {
 		return Global{}, err
+	}
+	if len(data) == 0 {
+		m.logger.Printf("config: %s is empty, using defaults", m.globalPath())
+		return NewDefaultGlobal(), nil
 	}
 	var g Global
 	if err := json.Unmarshal(data, &g); err != nil {
@@ -78,6 +88,10 @@ func (m *Manager) LoadStateOrDefault() (State, error) {
 	}
 	if err != nil {
 		return State{}, err
+	}
+	if len(data) == 0 {
+		m.logger.Printf("config: %s is empty, using defaults", m.statePath())
+		return NewDefaultState(), nil
 	}
 	var s State
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -107,6 +121,10 @@ func (m *Manager) LoadPresets() ([]Preset, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if len(data) == 0 {
+		m.logger.Printf("config: %s is empty, no presets loaded", m.presetsPath())
+		return nil, nil
 	}
 	var raw []json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -285,10 +303,22 @@ func atomicWriteJSON(path string, v any) error {
 		tmp.Close()
 		return err
 	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+
+	if d, err := os.Open(dir); err == nil {
+		d.Sync()
+		d.Close()
+	}
+	return nil
 }
 
 func NewID() (string, error) {
