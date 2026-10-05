@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,11 +18,12 @@ var (
 )
 
 type Manager struct {
-	dir string
+	dir    string
+	logger *log.Logger
 }
 
-func New(dir string) *Manager {
-	return &Manager{dir: dir}
+func New(dir string, logger *log.Logger) *Manager {
+	return &Manager{dir: dir, logger: logger}
 }
 
 func (m *Manager) globalPath() string  { return filepath.Join(m.dir, "global.json") }
@@ -65,6 +67,7 @@ func (m *Manager) LoadGlobalOrDefault() (Global, error) {
 		return Global{}, err
 	}
 	if len(data) == 0 {
+		m.logger.Printf("config: %s is empty, using defaults", m.globalPath())
 		return NewDefaultGlobal(), nil
 	}
 	var g Global
@@ -87,6 +90,7 @@ func (m *Manager) LoadStateOrDefault() (State, error) {
 		return State{}, err
 	}
 	if len(data) == 0 {
+		m.logger.Printf("config: %s is empty, using defaults", m.statePath())
 		return NewDefaultState(), nil
 	}
 	var s State
@@ -119,6 +123,7 @@ func (m *Manager) LoadPresets() ([]Preset, error) {
 		return nil, err
 	}
 	if len(data) == 0 {
+		m.logger.Printf("config: %s is empty, no presets loaded", m.presetsPath())
 		return nil, nil
 	}
 	var raw []json.RawMessage

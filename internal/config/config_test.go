@@ -2,13 +2,17 @@ package config
 
 import (
 	"errors"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
+var testLogger = log.New(io.Discard, "", 0)
+
 func TestLoadGlobalOrDefaultWhenMissing(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	g, err := m.LoadGlobalOrDefault()
 	if err != nil {
 		t.Fatalf("LoadGlobalOrDefault: %v", err)
@@ -19,7 +23,7 @@ func TestLoadGlobalOrDefaultWhenMissing(t *testing.T) {
 }
 
 func TestSaveAndLoadGlobalRoundTrip(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	want := Global{
 		Debug: true,
 		OSC:   OSCConfig{Port: 9001},
@@ -41,7 +45,7 @@ func TestSaveAndLoadGlobalRoundTrip(t *testing.T) {
 }
 
 func TestSaveAndLoadStateRoundTrip(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	want := State{
 		Name: "My Session",
 		Auxes: []Aux{
@@ -78,7 +82,7 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 }
 
 func TestPresetLifecycle(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	state := State{MixerLayouts: map[string]NamedLayout{
 		DefaultLayoutID: {Name: "Default", Items: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}},
 	}}
@@ -115,7 +119,7 @@ func TestPresetLifecycle(t *testing.T) {
 }
 
 func TestImportPresets(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	layouts := map[string]NamedLayout{
 		DefaultLayoutID: {Name: "Default", Items: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}},
 	}
@@ -154,7 +158,7 @@ func TestImportPresets(t *testing.T) {
 }
 
 func TestUpdatePreset(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	original := State{MixerLayouts: map[string]NamedLayout{
 		DefaultLayoutID: {Name: "Default", Items: []LayoutItem{{Kind: LayoutKindSource, Type: "channel", Number: 1, Enabled: true}}},
 	}}
@@ -200,7 +204,7 @@ func TestUpdatePreset(t *testing.T) {
 
 func TestSaveGlobalIsAtomic(t *testing.T) {
 
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	if err := m.SaveGlobal(Global{OSC: OSCConfig{Port: 1}}); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
@@ -217,7 +221,7 @@ func TestSaveGlobalIsAtomic(t *testing.T) {
 }
 
 func TestLoadStateOrDefaultAlwaysHasDefaultLayout(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	s, err := m.LoadStateOrDefault()
 	if err != nil {
 		t.Fatalf("LoadStateOrDefault: %v", err)
@@ -246,7 +250,7 @@ func TestLoadStateLegacyMixerLayoutShim(t *testing.T) {
 		t.Fatalf("write legacy state.json: %v", err)
 	}
 
-	m := New(dir)
+	m := New(dir, testLogger)
 	s, err := m.LoadStateOrDefault()
 	if err != nil {
 		t.Fatalf("LoadStateOrDefault: %v", err)
@@ -272,7 +276,7 @@ func TestLoadPresetsLegacyMixerLayoutShim(t *testing.T) {
 		t.Fatalf("write legacy presets.json: %v", err)
 	}
 
-	m := New(dir)
+	m := New(dir, testLogger)
 	presets, err := m.LoadPresets()
 	if err != nil {
 		t.Fatalf("LoadPresets: %v", err)
@@ -287,7 +291,7 @@ func TestLoadPresetsLegacyMixerLayoutShim(t *testing.T) {
 }
 
 func TestMultipleNamedLayoutsRoundTrip(t *testing.T) {
-	m := New(t.TempDir())
+	m := New(t.TempDir(), testLogger)
 	want := State{
 		Auxes: []Aux{{Enabled: true, LayoutID: "monitor-1"}},
 		MixerLayouts: map[string]NamedLayout{

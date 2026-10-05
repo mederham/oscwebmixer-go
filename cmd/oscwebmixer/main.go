@@ -63,7 +63,7 @@ func main() {
 
 	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds)
 
-	cfgManager := config.New(*configDir)
+	cfgManager := config.New(*configDir, logger)
 	if err := cfgManager.EnsureDir(); err != nil {
 		logger.Fatalf("config dir: %v", err)
 	}
