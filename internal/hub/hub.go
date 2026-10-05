@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -432,6 +433,10 @@ func (h *Hub) advanceStartup() {
 
 func (h *Hub) query(address string) {
 	if err := h.desk.Send(oscmsg.Message{Address: address, Args: []any{}}); err != nil {
+		if errors.Is(err, desk.ErrNoDesk) {
+			h.debugf("query %s: %v", address, err)
+			return
+		}
 		h.log.Printf("query %s: %v", address, err)
 	}
 }

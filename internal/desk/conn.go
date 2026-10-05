@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
+
+var ErrNoDesk = errors.New("desk: no desk configured")
 
 const recvBufferBytes = 4 << 20
 
@@ -120,7 +123,7 @@ func (c *Conn) Send(msg oscmsg.Message) error {
 	sock := c.sock
 	c.mu.Unlock()
 	if raddr == nil {
-		return fmt.Errorf("desk: no desk configured")
+		return ErrNoDesk
 	}
 	oscMsg, err := toOSC(msg)
 	if err != nil {
