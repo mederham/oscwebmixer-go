@@ -1,0 +1,13 @@
+services:
+  oscwebmixer:
+    image: ghcr.io/mederham/oscwebmixer-go:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"           # admin panel + mixer UI
+      - "8000:8000/udp"     # OSC listen port
+    volumes:
+      - ./config:/webmixer/config
+    environment:
+      OSCWEBMIXER_DESK_IP: <your_desk_ip>
+      OSCWEBMIXER_DESK_PORT: <your_desk_port>
+      # OSCWEBMIXER_DESK_TRUSTED_IPS: 192.168.65.1
