@@ -1,3 +1,5 @@
+<img src="docs/icons/oscwebmixer-go-icon.svg" width="64" height="64" alt="OSCWebMixer-Go" />
+
 # OSCWebMixer-Go
 
 A complete rewrite of [castles/OSCWebMixer2](https://github.com/castles/OSCWebMixer2) in Go.
