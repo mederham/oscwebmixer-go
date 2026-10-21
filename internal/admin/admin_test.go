@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -747,10 +748,10 @@ func TestSettingsSaveAppliesLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadGlobalOrDefault: %v", err)
 	}
-	if want := []string{"Kick", "Master"}; !equalStrings(global.AutoHideChannelPatterns, want) {
+	if want := []string{"Kick", "Master"}; !slices.Equal(global.AutoHideChannelPatterns, want) {
 		t.Fatalf("persisted AutoHideChannelPatterns = %v, want %v", global.AutoHideChannelPatterns, want)
 	}
-	if want := []string{"Kick"}; !equalStrings(global.AutoHideAuxPatterns, want) {
+	if want := []string{"Kick"}; !slices.Equal(global.AutoHideAuxPatterns, want) {
 		t.Fatalf("persisted AutoHideAuxPatterns = %v, want %v", global.AutoHideAuxPatterns, want)
 	}
 
@@ -866,18 +867,6 @@ func TestNetworkFormHasNoServerPortField(t *testing.T) {
 	if strings.Contains(rec.Body.String(), "serverPort") {
 		t.Fatalf("index page still contains a serverPort field: %s", rec.Body.String())
 	}
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestDotClassAndLabel(t *testing.T) {
