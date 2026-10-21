@@ -148,34 +148,30 @@ func noStore(fn http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func sendAdminEvent[T any](ctx context.Context, events chan<- hub.AdminEvent, ev hub.AdminEvent, reply <-chan T) (T, error) {
+	select {
+	case events <- ev:
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	}
+	select {
+	case v := <-reply:
+		return v, nil
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	}
+}
+
 func (h *Handler) queryConfig(ctx context.Context) (oscmsg.ConfigPayload, error) {
 	reply := make(chan oscmsg.ConfigPayload, 1)
-	select {
-	case h.adminEvents <- hub.AdminEvent{Kind: hub.AdminQuery, Reply: reply}:
-	case <-ctx.Done():
-		return oscmsg.ConfigPayload{}, ctx.Err()
-	}
-	select {
-	case cfg := <-reply:
-		return cfg, nil
-	case <-ctx.Done():
-		return oscmsg.ConfigPayload{}, ctx.Err()
-	}
+	return sendAdminEvent(ctx, h.adminEvents, hub.AdminEvent{Kind: hub.AdminQuery, Reply: reply}, reply)
 }
 
 func (h *Handler) queryStatus(ctx context.Context) (hub.DeskStatusInfo, error) {
 	reply := make(chan hub.DeskStatusInfo, 1)
-	select {
-	case h.adminEvents <- hub.AdminEvent{Kind: hub.AdminStatusQuery, StatusReply: reply}:
-	case <-ctx.Done():
-		return hub.DeskStatusInfo{}, ctx.Err()
-	}
-	select {
-	case status := <-reply:
-		return status, nil
-	case <-ctx.Done():
-		return hub.DeskStatusInfo{}, ctx.Err()
-	}
+	return sendAdminEvent(ctx, h.adminEvents, hub.AdminEvent{Kind: hub.AdminStatusQuery, StatusReply: reply}, reply)
 }
 
 func (h *Handler) saveLayout(ctx context.Context, layoutID string, items []config.LayoutItem, auxes []config.Aux) (oscmsg.ConfigPayload, error) {
