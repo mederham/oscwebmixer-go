@@ -275,12 +275,7 @@ function buildSources(layout) {
 	channelsDiv.innerHTML = html;
 	for (const el of channelsDiv.querySelectorAll(".volumeInput, .panInput")) {
 		el.addEventListener("input", sliderChange);
-		el.parentNode.style.setProperty('--value', (parseFloat(el.value) * 100) + "%");
 	}
-}
-
-function findSlider(type, number, cls) {
-	return channelsDiv.querySelector('.' + cls + '[data-type="' + type + '"][data-number="' + number + '"]');
 }
 
 // applyStatus reflects the desk connectivity state machine (hub.Status) as
@@ -291,10 +286,9 @@ function findSlider(type, number, cls) {
 // distinguishes them. See mixer.css for what each class shows/hides.
 function applyStatus(status) {
 	const desk = (status && status.desk) || "";
-	document.body.classList.toggle("status-starting", desk === "starting");
-	document.body.classList.toggle("status-reloading", desk === "reloading");
-	document.body.classList.toggle("status-degraded", desk === "degraded");
-	document.body.classList.toggle("status-healthy", desk === "healthy");
+	for (const s of ["starting", "reloading", "degraded", "healthy"]) {
+		document.body.classList.toggle("status-" + s, desk === s);
+	}
 	document.body.classList.toggle("locked", !!(status && status.locked));
 }
 
@@ -331,7 +325,7 @@ function onMessage(e) {
 		const number = m[2], auxChannel = m[3], kind = m[4];
 		if (!selectedAux || auxChannel !== String(selectedAux.channel)) return;
 		const cls = kind === "level" ? "volumeInput" : "panInput";
-		const el = findSlider(type, number, cls);
+		const el = channelsDiv.querySelector('.' + cls + '[data-type="' + type + '"][data-number="' + number + '"]');
 		if (!el || isDraggingLocally(el)) return;
 		const value = kind === "level" ? dbToSlider(parseFloat(msg.args[0])) : parseFloat(msg.args[0]);
 		el.value = value;
