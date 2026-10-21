@@ -106,7 +106,7 @@ func main() {
 		defer cancel()
 	}
 
-	h := hub.New(conn, nil, logger, hub.Options{
+	h := hub.New(conn, logger, hub.Options{
 		DeskIP:                  global.Desk.IP,
 		DeskPort:                global.Desk.Port,
 		OSCPort:                 global.OSC.Port,
