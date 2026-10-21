@@ -13,7 +13,6 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
-	"github.com/mederham/oscwebmixer-go/internal/pipeline"
 )
 
 type DeskSender interface {
@@ -83,9 +82,8 @@ func adminSource() broadcastSource {
 }
 
 type Hub struct {
-	desk     DeskSender
-	pipeline *pipeline.Pipeline
-	log      *log.Logger
+	desk DeskSender
+	log  *log.Logger
 
 	deskIP         string
 	deskPort       int
@@ -168,7 +166,7 @@ type Options struct {
 	Debug bool
 }
 
-func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options) *Hub {
+func New(d DeskSender, logger *log.Logger, opts Options) *Hub {
 	healthCheckInterval := opts.HealthCheckInterval
 	if healthCheckInterval <= 0 {
 		healthCheckInterval = 24 * time.Hour
@@ -179,7 +177,6 @@ func New(d DeskSender, pipe *pipeline.Pipeline, logger *log.Logger, opts Options
 	}
 	return &Hub{
 		desk:                    d,
-		pipeline:                pipe,
 		log:                     logger,
 		deskIP:                  opts.DeskIP,
 		deskPort:                opts.DeskPort,
@@ -310,13 +307,6 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 			h.pushStatusAndConfig()
 		}
 	}
-
-	out, ok := h.pipeline.Run(msg)
-	if !ok {
-		h.log.Printf("pipeline vetoed %s", msg.Address)
-		return
-	}
-	msg = out
 
 	if msg.Address == sessionChangeAddress {
 		h.handleSessionChange()

@@ -56,12 +56,6 @@ func (h *Hub) handleClientMessage(clientID string, msg oscmsg.Message) {
 		return
 	}
 
-	out, ok := h.pipeline.Run(msg)
-	if !ok {
-		return
-	}
-	msg = out
-
 	if strings.HasSuffix(msg.Address, "/?") {
 		key := strings.TrimSuffix(msg.Address, "/?")
 		if cached, ok := h.cache[key]; ok {

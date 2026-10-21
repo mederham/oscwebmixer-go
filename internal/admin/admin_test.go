@@ -129,7 +129,7 @@ func newTestHandler(t *testing.T) *Handler {
 func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	t.Helper()
 	fd := &fakeDesk{inbound: make(chan desk.InboundMessage, 64)}
-	h := hub.New(fd, nil, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := hub.New(fd, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond})
 	adminEvents := make(chan hub.AdminEvent, 16)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

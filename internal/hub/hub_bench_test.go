@@ -18,7 +18,7 @@ func (noopDesk) Rebind(int) error                          { return nil }
 
 func benchHub(b *testing.B, clients int) *Hub {
 	b.Helper()
-	h := New(noopDesk{}, nil, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.18"})
+	h := New(noopDesk{}, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.18"})
 	h.status = StatusHealthy
 	h.channelCount, h.auxCount, h.groupCount = 48, 8, 4
 

@@ -11,14 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
-	"github.com/mederham/oscwebmixer-go/internal/pipeline"
 )
 
 type scriptedDesk struct {
@@ -195,7 +193,7 @@ func TestStartupSequenceWithGroups(t *testing.T) {
 		groupNames:   map[int]string{2: "Drums"},
 	}
 
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -236,7 +234,7 @@ func TestUnnamedBusCachesAsZeroArgs(t *testing.T) {
 		groupNames:   map[int]string{},
 	}
 
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -254,82 +252,6 @@ func TestUnnamedBusCachesAsZeroArgs(t *testing.T) {
 	}
 	if len(cached.Args) != 0 {
 		t.Fatalf("args = %v, want empty (unnamed bus)", cached.Args)
-	}
-}
-
-type countingInterceptor struct{ n atomic.Int64 }
-
-func (c *countingInterceptor) Handle(msg oscmsg.Message) (oscmsg.Message, bool) {
-	c.n.Add(1)
-	return msg, true
-}
-
-func waitForQuiet(counter *countingInterceptor, timeout, quietFor time.Duration) int64 {
-	deadline := time.Now().Add(timeout)
-	last := counter.n.Load()
-	stableSince := time.Now()
-	for time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-		cur := counter.n.Load()
-		if cur != last {
-			last = cur
-			stableSince = time.Now()
-			continue
-		}
-		if time.Since(stableSince) >= quietFor {
-			return last
-		}
-	}
-	return last
-}
-
-func TestDuplicateResendIsStillRelayed(t *testing.T) {
-	fakeDesk := &scriptedDesk{
-		inbound:      make(chan desk.InboundMessage, 64),
-		channelCount: 1,
-		auxCount:     1,
-		groupCount:   1,
-		channelNames: map[int]string{1: "Kick"},
-		auxNames:     map[int]string{1: "Mon 1"},
-		groupNames:   map[int]string{1: "Drums"},
-	}
-
-	counter := &countingInterceptor{}
-	h := New(fakeDesk, pipeline.New(counter), log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	go h.Run(ctx, fakeDesk.inbound, nil, nil)
-
-	select {
-	case <-h.Ready():
-	case <-time.After(2 * time.Second):
-		t.Fatal("startup did not complete within timeout")
-	}
-	afterStartup := waitForQuiet(counter, 2*time.Second, 20*time.Millisecond)
-
-	fakeDesk.inbound <- desk.InboundMessage{
-		Message: oscmsg.Message{Address: "/Input_Channels/1/Channel_Input/name", Args: []any{"Kick"}},
-	}
-	fakeDesk.inbound <- desk.InboundMessage{
-		Message: oscmsg.Message{Address: "/Input_Channels/1/Channel_Input/name", Args: []any{"Renamed"}},
-	}
-
-	sentinelDone := make(chan struct{})
-	go func() {
-		for counter.n.Load() < afterStartup+2 {
-			time.Sleep(time.Millisecond)
-		}
-		close(sentinelDone)
-	}()
-	select {
-	case <-sentinelDone:
-	case <-time.After(2 * time.Second):
-		t.Fatal("not both the duplicate and the genuinely new value reached the pipeline")
-	}
-
-	if got := counter.n.Load() - afterStartup; got != 2 {
-		t.Fatalf("pipeline invoked %d time(s) after startup for one duplicate + one real change, want 2", got)
 	}
 }
 
@@ -394,7 +316,7 @@ func newTestHubWithOneOfEach(t *testing.T) (*Hub, *scriptedDesk, chan ClientEven
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		StartupRetryInterval: 50 * time.Millisecond,
 		InitialLayouts:       map[string]config.NamedLayout{config.DefaultLayoutID: {Name: "Default"}},
 	})
@@ -426,7 +348,7 @@ func TestStartupRecoversFromLostReply(t *testing.T) {
 	}
 	fakeDesk.simulateDroppedReply("/Input_Channels/2/Channel_Input/name/?")
 
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 30 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 30 * time.Millisecond})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -450,7 +372,7 @@ func TestAdvanceStartupDoesNotResendPendingQuery(t *testing.T) {
 	}
 	fakeDesk.simulateDroppedReply("/Console/Channels/?")
 
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 5 * time.Second})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 5 * time.Second})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	go h.Run(ctx, fakeDesk.inbound, nil, nil)
@@ -559,7 +481,7 @@ func TestChronicallyFullClientGetsDisconnected(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
 	clientEvents := make(chan ClientEvent, 8)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	t.Cleanup(cancel)
@@ -662,7 +584,7 @@ func TestExternalDeviceMessagesAreForwardedToDesk(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
 		ExternalDevices: []ExternalDevice{
 			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: true},
@@ -708,7 +630,7 @@ func TestUnregisteredSourceMessagesAreDropped(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
 	})
 
@@ -748,7 +670,7 @@ func TestExternalDeviceMessagesAreDroppedWhenBroadcastDisabled(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
 		ExternalDevices: []ExternalDevice{
 			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: false},
@@ -790,7 +712,7 @@ func TestDeskRepliesAreNotEchoedBackToDesk(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
 	})
 
@@ -832,7 +754,7 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP:               deskIP,
 		StartupRetryInterval: 50 * time.Millisecond,
 		ExternalDevices: []ExternalDevice{
@@ -887,7 +809,7 @@ func TestDeskEchoSuppressedShortlyAfterClientDrivenChange(t *testing.T) {
 		sent:    make(chan oscmsg.Message, 64),
 		deskIP:  deskIP,
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP: deskIP, StartupRetryInterval: 50 * time.Millisecond,
 	})
 	clientEvents := make(chan ClientEvent, 8)
@@ -959,7 +881,7 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP:               deskIP,
 		StartupRetryInterval: 50 * time.Millisecond,
 		ExternalDevices: []ExternalDevice{
@@ -1004,7 +926,7 @@ func TestSessionChangeReQueriesFreshTopology(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		StartupRetryInterval: 50 * time.Millisecond,
 		InitialLayouts:       map[string]config.NamedLayout{config.DefaultLayoutID: {Name: "Default"}},
 	})
@@ -1093,7 +1015,7 @@ func TestSessionChangeDropsClientMessages(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 5 * time.Second})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 5 * time.Second})
 	clientEvents := make(chan ClientEvent, 8)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1163,7 +1085,7 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		StartupRetryInterval: 50 * time.Millisecond,
 		HealthCheckInterval:  20 * time.Millisecond,
 	})
@@ -1236,7 +1158,7 @@ func TestClientMessageDroppedWhileDegraded(t *testing.T) {
 		auxNames:     map[int]string{1: "Mon 1"},
 		groupNames:   map[int]string{1: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		StartupRetryInterval: 50 * time.Millisecond,
 		HealthCheckInterval:  20 * time.Millisecond,
 	})
@@ -1311,7 +1233,7 @@ func TestAdminApplyLayoutPreservesOrderAndAppendsUnmentioned(t *testing.T) {
 		channelNames: map[int]string{1: "One", 2: "Two", 3: "Three"},
 		auxNames:     map[int]string{1: "Mon 1"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
 	adminEvents := make(chan AdminEvent, 4)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1373,7 +1295,7 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 		auxNames:     map[int]string{1: "Hall"},
 		groupNames:   map[int]string{1: "Master", 2: "Drums"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
 	adminEvents := make(chan AdminEvent, 4)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1433,7 +1355,7 @@ func TestAutoHidePatternsHideUnmentionedMatches(t *testing.T) {
 
 func TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic(t *testing.T) {
 	fakeDesk := &scriptedDesk{inbound: make(chan desk.InboundMessage, 64)}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.5"})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.5"})
 
 	reply := make(chan DeskStatusInfo, 1)
 	h.handleAdminEvent(AdminEvent{Kind: AdminStatusQuery, StatusReply: reply})
@@ -1458,7 +1380,7 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 		channelNames: map[int]string{1: "Kick"},
 		auxNames:     map[int]string{1: "Mon 1"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		StartupRetryInterval: 50 * time.Millisecond,
 		DeskIP:               "10.0.0.10",
 		DeskPort:             8000,
@@ -1519,7 +1441,7 @@ func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {
 
 func TestLogSendErrThrottledSuppressesRepeats(t *testing.T) {
 	var buf bytes.Buffer
-	h := New(&scriptedDesk{}, nil, log.New(&buf, "", 0), Options{})
+	h := New(&scriptedDesk{}, log.New(&buf, "", 0), Options{})
 
 	for i := 0; i < 5; i++ {
 		h.logSendErrThrottled("dead-device", "broadcast to external %q: boom", "dead-device")
@@ -1547,7 +1469,7 @@ func TestBuildConfigPerLayoutIndependence(t *testing.T) {
 		channelNames: map[int]string{1: "One", 2: "Two"},
 		auxNames:     map[int]string{1: "Mon 1"},
 	}
-	h := New(fakeDesk, nil, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{StartupRetryInterval: 50 * time.Millisecond})
 	adminEvents := make(chan AdminEvent, 4)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
