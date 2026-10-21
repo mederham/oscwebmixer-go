@@ -18,9 +18,8 @@
 		</div>
 		{{end}}
 	</div>
-	<details>
-	<summary>+ Add device</summary>
-	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="device-card add-device">
+	<button type="button" id="add-device-toggle">+ Add device</button>
+	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="device-card add-device" hidden>
 		<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" checked />
 		<div class="device-fields">
 			<input type="text" name="name" placeholder="Name" required />
@@ -32,6 +31,5 @@
 		<label class="loopback"><input type="checkbox" name="loopback" /> Loopback</label>
 		<button type="submit">Add device</button>
 	</form>
-	</details>
 </section>
 {{end}}
