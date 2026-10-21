@@ -17,10 +17,6 @@ const outboundBufferSize = 256
 
 var nextClientID atomic.Int64
 
-func newClientID() string {
-	return fmt.Sprintf("client-%d", nextClientID.Add(1))
-}
-
 type Server struct {
 	upgrader websocket.Upgrader
 	events   chan<- hub.ClientEvent
@@ -46,7 +42,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := newClientID()
+	id := fmt.Sprintf("client-%d", nextClientID.Add(1))
 	outbound := make(chan oscmsg.Envelope, outboundBufferSize)
 
 	s.events <- hub.ClientEvent{Kind: hub.ClientConnected, ClientID: id, Outbound: outbound}
