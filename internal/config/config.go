@@ -98,16 +98,24 @@ func (m *Manager) LoadStateOrDefault() (State, error) {
 		return State{}, fmt.Errorf("parse %s: %w", m.statePath(), err)
 	}
 
-	if len(s.MixerLayouts) == 0 {
-		var legacy struct {
-			MixerLayout []LayoutItem `json:"mixerLayout"`
-		}
-		if json.Unmarshal(data, &legacy) == nil && len(legacy.MixerLayout) > 0 {
-			s.MixerLayouts = map[string]NamedLayout{DefaultLayoutID: {Name: "Default", Items: legacy.MixerLayout}}
-		}
-	}
+	s.MixerLayouts = migrateLegacyLayout(data, s.MixerLayouts)
 	ensureDefaultLayout(&s)
 	return s, nil
+}
+
+// migrateLegacyLayout reads the old singular "mixerLayout" key some
+// releases shipped, used when a state/preset file predates named layouts.
+func migrateLegacyLayout(data []byte, layouts map[string]NamedLayout) map[string]NamedLayout {
+	if len(layouts) > 0 {
+		return layouts
+	}
+	var legacy struct {
+		MixerLayout []LayoutItem `json:"mixerLayout"`
+	}
+	if json.Unmarshal(data, &legacy) == nil && len(legacy.MixerLayout) > 0 {
+		return map[string]NamedLayout{DefaultLayoutID: {Name: "Default", Items: legacy.MixerLayout}}
+	}
+	return layouts
 }
 
 func (m *Manager) SaveState(s State) error {
@@ -136,14 +144,7 @@ func (m *Manager) LoadPresets() ([]Preset, error) {
 			return nil, fmt.Errorf("parse %s: %w", m.presetsPath(), err)
 		}
 
-		if len(presets[i].MixerLayouts) == 0 {
-			var legacy struct {
-				MixerLayout []LayoutItem `json:"mixerLayout"`
-			}
-			if json.Unmarshal(r, &legacy) == nil && len(legacy.MixerLayout) > 0 {
-				presets[i].MixerLayouts = map[string]NamedLayout{DefaultLayoutID: {Name: "Default", Items: legacy.MixerLayout}}
-			}
-		}
+		presets[i].MixerLayouts = migrateLegacyLayout(r, presets[i].MixerLayouts)
 		ensureDefaultLayout(&presets[i].State)
 	}
 	return presets, nil
@@ -153,15 +154,22 @@ func (m *Manager) savePresets(presets []Preset) error {
 	return atomicWriteJSON(m.presetsPath(), presets)
 }
 
+func findPresetIndex(presets []Preset, uuid string) int {
+	for i, p := range presets {
+		if p.UUID == uuid {
+			return i
+		}
+	}
+	return -1
+}
+
 func (m *Manager) GetPresetByID(uuid string) (Preset, error) {
 	presets, err := m.LoadPresets()
 	if err != nil {
 		return Preset{}, err
 	}
-	for _, p := range presets {
-		if p.UUID == uuid {
-			return p, nil
-		}
+	if idx := findPresetIndex(presets, uuid); idx != -1 {
+		return presets[idx], nil
 	}
 	return Preset{}, ErrPresetNotFound
 }
@@ -247,13 +255,7 @@ func (m *Manager) UpdatePreset(uuid string, mixerLayouts map[string]NamedLayout,
 	if err != nil {
 		return Preset{}, err
 	}
-	idx := -1
-	for i, p := range presets {
-		if p.UUID == uuid {
-			idx = i
-			break
-		}
-	}
+	idx := findPresetIndex(presets, uuid)
 	if idx == -1 {
 		return Preset{}, ErrPresetNotFound
 	}
@@ -271,13 +273,7 @@ func (m *Manager) DeletePreset(uuid string) error {
 	if err != nil {
 		return err
 	}
-	idx := -1
-	for i, p := range presets {
-		if p.UUID == uuid {
-			idx = i
-			break
-		}
-	}
+	idx := findPresetIndex(presets, uuid)
 	if idx == -1 {
 		return ErrPresetNotFound
 	}
