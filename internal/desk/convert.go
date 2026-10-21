@@ -53,8 +53,6 @@ func anyToArg(v any) (osc.Argument, error) {
 	switch x := v.(type) {
 	case int32:
 		return osc.Int(x), nil
-	case int:
-		return osc.Int(x), nil
 	case float32:
 		return osc.Float(x), nil
 	case float64:
