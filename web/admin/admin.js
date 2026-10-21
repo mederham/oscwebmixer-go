@@ -62,18 +62,14 @@ function syncLayoutURL() {
 	history.replaceState(null, "", url);
 }
 
-document.body.addEventListener("htmx:afterSwap", function (e) {
+function onSourcesSwap(e) {
 	if (e.detail.target && e.detail.target.id === "section-sources") {
 		initSourcesSortable();
 		syncLayoutURL();
 	}
-});
-document.body.addEventListener("htmx:oobAfterSwap", function (e) {
-	if (e.detail.target && e.detail.target.id === "section-sources") {
-		initSourcesSortable();
-		syncLayoutURL();
-	}
-});
+}
+document.body.addEventListener("htmx:afterSwap", onSourcesSwap);
+document.body.addEventListener("htmx:oobAfterSwap", onSourcesSwap);
 
 let lastDeskStatus = null;
 document.body.addEventListener("htmx:afterSwap", function (e) {
@@ -162,14 +158,6 @@ document.body.addEventListener("click", function (e) {
 			layoutId: layoutIdField ? layoutIdField.value : "",
 		},
 	});
-});
-
-document.body.addEventListener("click", function (e) {
-	if (e.target.id !== "add-device-toggle") return;
-	const form = document.querySelector(".add-device");
-	if (!form) return;
-	form.hidden = false;
-	e.target.hidden = true;
 });
 
 const tabLinks = document.querySelectorAll(".tabs a");
