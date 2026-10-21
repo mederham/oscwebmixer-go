@@ -365,6 +365,7 @@ input.toggle:checked::before { left: 1.15rem; }
 .device-card .device-address { display: flex; gap: 0.4rem; }
 .device-card .loopback { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; }
 .device-card.add-device { --stripe-color: #3a6a9a; }
+.device-card.add-device[hidden] { display: none; }
 
 
 .lock-toggle label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer; }

@@ -160,6 +160,14 @@ document.body.addEventListener("click", function (e) {
 	});
 });
 
+document.body.addEventListener("click", function (e) {
+	if (e.target.id !== "add-device-toggle") return;
+	const form = document.querySelector(".add-device");
+	if (!form) return;
+	form.hidden = false;
+	e.target.hidden = true;
+});
+
 const tabLinks = document.querySelectorAll(".tabs a");
 
 function showTab(hash) {
