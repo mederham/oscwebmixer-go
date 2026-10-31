@@ -1,8 +1,8 @@
 {{define "settings-section"}}
 <section id="section-settings">
-	<h2>Settings</h2>
+	<h2>General</h2>
 	<form class="field-grid" hx-post="/admin/settings" hx-target="#section-settings" hx-swap="outerHTML">
-		<h3>General</h3>
+		<h3>Miscellaneous</h3>
 		<label>Debug logging <input type="checkbox" class="toggle" name="debug" {{if .Debug}}checked{{end}} /></label>
 
 		<h3>Auto-hide patterns</h3>
@@ -27,29 +27,32 @@
 
 {{define "password-section"}}
 <section id="section-password">
-	<h2>Admin access</h2>
+	<h2>Authentication</h2>
+	{{if .Set}}
+	<form method="post" action="/admin/logout">
+		<button type="submit">Log out</button>
+	</form>
+	{{end}}
+
+	<h3>Admin Password</h3>
 	{{if .FromEnv}}
-	<p class="hint">Set via OSCWEBMIXER_ADMIN_PASSWORD</p>
+	<p class="hint">Currently overridden via environment variable OSCWEBMIXER_ADMIN_PASSWORD. To change the password from here, unset the environment variable in your deployment.</p>
 	{{else}}
-	{{if not .Set}}<p class="hint">No password set — admin is open to everyone on the network.</p>{{end}}
+	{{if not .Set}}<p class="hint">No password set.</p>{{end}}
 	{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
-	{{if .Message}}<p class="hint">{{.Message}}</p>{{end}}
-	<form class="field-grid" hx-post="/admin/password" hx-target="#section-password" hx-swap="outerHTML">
+	<div class="toolbar">
+		<div class="toolbar-group">
+			{{if not .Error}}<button type="button" data-reveal="#password-form">{{if .Set}}Change{{else}}Set{{end}} password</button>{{end}}
+			{{if .Set}}
+			<button type="button" class="danger" hx-post="/admin/password" hx-vals='{"action": "remove"}' hx-target="#section-password" hx-swap="outerHTML" hx-confirm="Remove the admin password? Anyone on the network can then access the admin page.">Remove</button>
+			{{end}}
+		</div>
+	</div>
+	<form id="password-form" class="field-grid" hx-post="/admin/password" hx-target="#section-password" hx-swap="outerHTML" {{if not .Error}}hidden{{end}}>
 		<input type="hidden" name="action" value="set" />
 		<label>New password <input type="password" name="password" autocomplete="new-password" /></label>
 		<label>Confirm <input type="password" name="confirm" autocomplete="new-password" /></label>
 		<button type="submit">Save</button>
-	</form>
-	{{if .Set}}
-	<form hx-post="/admin/password" hx-target="#section-password" hx-swap="outerHTML">
-		<input type="hidden" name="action" value="remove" />
-		<button type="submit" class="danger" hx-confirm="Remove the admin password? Anyone on the network can then open the admin.">Remove password</button>
-	</form>
-	{{end}}
-	{{end}}
-	{{if .Set}}
-	<form method="post" action="/admin/logout">
-		<button type="submit">Log out</button>
 	</form>
 	{{end}}
 </section>

@@ -21,8 +21,8 @@ type ViewData struct {
 }
 
 type PasswordSectionData struct {
-	Set, FromEnv   bool
-	Error, Message string
+	Set, FromEnv bool
+	Error        string
 }
 
 type NetworkSectionData struct {

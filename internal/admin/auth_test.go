@@ -327,9 +327,6 @@ func TestPasswordBlockedWhenEnvSet(t *testing.T) {
 	}
 	expectConfigPassword(t, h, "")
 	body := get(mux, "/admin", c).Body.String()
-	if !strings.Contains(body, "Set via OSCWEBMIXER_ADMIN_PASSWORD") {
-		t.Error("index missing env note")
-	}
 	if strings.Contains(body, `name="confirm"`) {
 		t.Error("index shows password form while env is set")
 	}

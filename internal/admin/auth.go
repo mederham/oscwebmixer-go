@@ -148,10 +148,8 @@ func (h *Handler) handlePasswordUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		global.AdminPassword = pw
-		data.Message = "Password saved"
 	case "remove":
 		global.AdminPassword = ""
-		data.Message = "Password removed"
 	default:
 		http.Error(w, "unknown action", http.StatusBadRequest)
 		return

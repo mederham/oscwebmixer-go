@@ -18,7 +18,7 @@
 		</div>
 		{{end}}
 	</div>
-	<button type="button" id="add-device-toggle">+ Add device</button>
+	<button type="button" data-reveal=".add-device">+ Add device</button>
 	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="device-card add-device" hidden>
 		<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" checked />
 		<div class="device-fields">
