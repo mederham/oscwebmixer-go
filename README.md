@@ -104,6 +104,7 @@ Variable | Default | Description
 `OSCWEBMIXER_DESK_PORT` | `9000` | Desk port. Same restart behavior as `OSCWEBMIXER_DESK_IP`.
 `OSCWEBMIXER_OSC_PORT` | `8000` | Local UDP port the app listens on for OSC from the desk.
 `OSCWEBMIXER_DESK_TRUSTED_IPS` | _(none)_ | Comma-separated list of extra source IPs to treat as the desk, e.g. `192.168.65.1,192.168.65.2`. For Docker Desktop only — see [note above](#docker-recommended).
+`OSCWEBMIXER_ADMIN_PASSWORD` | _(none)_ | Password for the admin panel. Takes precedence over a password set in the admin panel and is never written to `global.json`. Without any password the admin panel is open.
 
 `OSCWEBMIXER_DESK_IP` and `OSCWEBMIXER_DESK_PORT` can still be changed afterwards in the admin panel, but reset to the environment value on every container restart. To keep a connection configured via the admin UI instead, remove those two variables. `OSCWEBMIXER_DESK_TRUSTED_IPS` is not exposed in the admin panel.
 

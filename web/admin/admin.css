@@ -55,7 +55,7 @@ h3 { font-size: 0.95rem; opacity: 0.8; margin: 1rem 0 0.4rem; }
 	display: inline-block;
 }
 
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], input[type="password"] {
 	background: #1c1c1c;
 	border: 1px solid #3a3a3a;
 	color: #eee;
@@ -419,3 +419,6 @@ input.toggle:checked::before { left: 1.15rem; }
 .field-grid h3, .field-grid p { grid-column: 1 / -1; }
 .field-grid h3:first-child { margin-top: 0; }
 .field-grid h3 + .hint { margin-top: 0; }
+
+.login { max-width: 20rem; margin: 15vh auto 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.error { color: #ff6b6b; margin: 0; }

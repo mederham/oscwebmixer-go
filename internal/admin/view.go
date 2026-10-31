@@ -17,6 +17,12 @@ type ViewData struct {
 	Presets     []PresetRow
 	Message     string
 	Version     string
+	Password    PasswordSectionData
+}
+
+type PasswordSectionData struct {
+	Set, FromEnv   bool
+	Error, Message string
 }
 
 type NetworkSectionData struct {

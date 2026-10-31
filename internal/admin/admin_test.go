@@ -155,7 +155,7 @@ func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	if err := cfg.EnsureDir(); err != nil {
 		t.Fatalf("EnsureDir: %v", err)
 	}
-	handler, err := New(tmplFS, assetsFS, cfg, adminEvents, log.New(io.Discard, "", 0), testVersion)
+	handler, err := New(tmplFS, assetsFS, cfg, adminEvents, log.New(io.Discard, "", 0), testVersion, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

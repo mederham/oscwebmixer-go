@@ -1,0 +1,20 @@
+{{define "login"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OSCWebMixer Admin login</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+<link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+<form class="login" method="post" action="/admin/login">
+	<h1>OSCWebMixer admin</h1>
+	{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+	<input type="password" name="password" aria-label="Password" placeholder="Password" autofocus autocomplete="current-password" />
+	<button type="submit">Log in</button>
+</form>
+</body>
+</html>
+{{end}}

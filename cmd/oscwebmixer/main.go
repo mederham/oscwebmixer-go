@@ -134,7 +134,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("assets: %v", err)
 	}
-	adminHandler, err := admin.New(adminTemplatesFS, assetsFS, cfgManager, adminEvents, logger, version)
+	adminHandler, err := admin.New(adminTemplatesFS, assetsFS, cfgManager, adminEvents, logger, version, os.Getenv("OSCWEBMIXER_ADMIN_PASSWORD"))
 	if err != nil {
 		logger.Fatalf("admin templates: %v", err)
 	}

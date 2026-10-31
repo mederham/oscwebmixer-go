@@ -65,6 +65,11 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	pw, err := h.password()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	data := ViewData{
 		Global:      global,
@@ -74,6 +79,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Presets:     toPresetRows(presets, state.UUID),
 		Message:     r.URL.Query().Get("msg"),
 		Version:     h.version,
+		Password:    PasswordSectionData{Set: pw != "", FromEnv: h.envPassword != ""},
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "layout", data); err != nil {

@@ -24,3 +24,33 @@
 	</form>
 </section>
 {{end}}
+
+{{define "password-section"}}
+<section id="section-password">
+	<h2>Admin access</h2>
+	{{if .FromEnv}}
+	<p class="hint">Set via OSCWEBMIXER_ADMIN_PASSWORD</p>
+	{{else}}
+	{{if not .Set}}<p class="hint">No password set — admin is open to everyone on the network.</p>{{end}}
+	{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+	{{if .Message}}<p class="hint">{{.Message}}</p>{{end}}
+	<form class="field-grid" hx-post="/admin/password" hx-target="#section-password" hx-swap="outerHTML">
+		<input type="hidden" name="action" value="set" />
+		<label>New password <input type="password" name="password" autocomplete="new-password" /></label>
+		<label>Confirm <input type="password" name="confirm" autocomplete="new-password" /></label>
+		<button type="submit">Save</button>
+	</form>
+	{{if .Set}}
+	<form hx-post="/admin/password" hx-target="#section-password" hx-swap="outerHTML">
+		<input type="hidden" name="action" value="remove" />
+		<button type="submit" class="danger" hx-confirm="Remove the admin password? Anyone on the network can then open the admin.">Remove password</button>
+	</form>
+	{{end}}
+	{{end}}
+	{{if .Set}}
+	<form method="post" action="/admin/logout">
+		<button type="submit">Log out</button>
+	</form>
+	{{end}}
+</section>
+{{end}}
