@@ -58,8 +58,8 @@ func iconLabel(filename string) string {
 	return strings.Join(words, " ")
 }
 
-func listIcons(templatesFS fs.FS) ([]string, error) {
-	entries, err := fs.ReadDir(templatesFS, "icons")
+func listIcons(assetsFS fs.FS) ([]string, error) {
+	entries, err := fs.ReadDir(assetsFS, "icons")
 	if err != nil {
 		return nil, err
 	}
@@ -99,12 +99,12 @@ func dotLabel(status string) string {
 	}
 }
 
-func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger, version string) (*Handler, error) {
+func New(templatesFS, assetsFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger, version string) (*Handler, error) {
 	tmpl, err := template.New("admin").Funcs(templateFuncs).ParseFS(templatesFS, "*.html.tmpl")
 	if err != nil {
 		return nil, err
 	}
-	icons, err := listIcons(templatesFS)
+	icons, err := listIcons(assetsFS)
 	if err != nil {
 		return nil, err
 	}

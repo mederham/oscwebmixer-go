@@ -147,11 +147,15 @@ func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	if err != nil {
 		t.Fatalf("admin assets: %v", err)
 	}
+	assetsFS, err := fs.Sub(web.AssetsFS, "assets")
+	if err != nil {
+		t.Fatalf("assets: %v", err)
+	}
 	cfg := config.New(t.TempDir(), log.New(io.Discard, "", 0))
 	if err := cfg.EnsureDir(); err != nil {
 		t.Fatalf("EnsureDir: %v", err)
 	}
-	handler, err := New(tmplFS, cfg, adminEvents, log.New(io.Discard, "", 0), testVersion)
+	handler, err := New(tmplFS, assetsFS, cfg, adminEvents, log.New(io.Discard, "", 0), testVersion)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -460,7 +464,7 @@ func TestAuxesSaveRoundTrip(t *testing.T) {
 func TestIconsListedFromEmbeddedFS(t *testing.T) {
 	h := newTestHandler(t)
 	if len(h.icons) == 0 {
-		t.Fatal("icons list is empty, want the instrument SVG set from web/admin/icons/")
+		t.Fatal("icons list is empty, want the instrument SVG set from web/assets/icons/")
 	}
 	for _, name := range h.icons {
 		if !strings.HasSuffix(name, ".svg") {

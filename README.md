@@ -111,4 +111,4 @@ Variable | Default | Description
 
 MIT, see [LICENSE](LICENSE).
 
-Instrument icons in [web/admin/icons/](web/admin/icons/) are from [castles/OSCWebMixer2](https://github.com/castles/OSCWebMixer2), MIT License, Copyright (c) 2024 Marc.
+Instrument icons in [web/assets/icons/](web/assets/icons/) are from [castles/OSCWebMixer2](https://github.com/castles/OSCWebMixer2), MIT License, Copyright (c) 2024 Marc.
