@@ -742,7 +742,7 @@ func TestSettingsSaveAppliesLive(t *testing.T) {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	rec := postForm(t, mux, "/admin/settings",
+	rec := postForm(t, mux, "/admin/settings/auto-hide",
 		"autoHideChannelPatterns="+url.QueryEscape("Kick, Master")+"&autoHideAuxPatterns="+url.QueryEscape("Kick"))
 	if !strings.Contains(rec.Body.String(), `value="Kick, Master"`) {
 		t.Fatalf("settings response = %s, want the saved channel patterns echoed back into the field", rec.Body.String())
@@ -777,7 +777,7 @@ func TestSettingsSaveAppliesDebug(t *testing.T) {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	rec := postForm(t, mux, "/admin/settings", "debug=on")
+	rec := postForm(t, mux, "/admin/settings/debug", "debug=on")
 	if !strings.Contains(rec.Body.String(), `name="debug" checked`) {
 		t.Fatalf("settings response = %s, want the debug checkbox to come back checked", rec.Body.String())
 	}
@@ -790,7 +790,7 @@ func TestSettingsSaveAppliesDebug(t *testing.T) {
 		t.Fatal("persisted Debug = false, want true")
 	}
 
-	rec = postForm(t, mux, "/admin/settings", "")
+	rec = postForm(t, mux, "/admin/settings/debug", "")
 	if strings.Contains(rec.Body.String(), `name="debug" checked`) {
 		t.Fatalf("settings response = %s, want the debug checkbox unchecked after omitting the field", rec.Body.String())
 	}
@@ -800,6 +800,31 @@ func TestSettingsSaveAppliesDebug(t *testing.T) {
 	}
 	if global.Debug {
 		t.Fatal("persisted Debug = true after unchecking, want false")
+	}
+}
+
+func TestSettingsSectionsSaveIndependently(t *testing.T) {
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	postForm(t, mux, "/admin/settings/auto-hide", "autoHideChannelPatterns=Talkback")
+	postForm(t, mux, "/admin/settings/debug", "debug=on")
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	if want := []string{"Talkback"}; !slices.Equal(global.AutoHideChannelPatterns, want) {
+		t.Fatalf("AutoHideChannelPatterns after debug toggle = %v, want %v", global.AutoHideChannelPatterns, want)
+	}
+
+	postForm(t, mux, "/admin/settings/auto-hide", "autoHideChannelPatterns=Kick")
+	global, err = h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	if !global.Debug {
+		t.Fatal("Debug = false after saving auto-hide, want it left on")
 	}
 }
 

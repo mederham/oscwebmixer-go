@@ -1,12 +1,9 @@
-{{define "settings-section"}}
-<section id="section-settings">
+{{define "auto-hide-section"}}
+<section id="section-auto-hide">
 	<h2>General</h2>
-	<form class="field-grid" hx-post="/admin/settings" hx-target="#section-settings" hx-swap="outerHTML">
-		<h3>Miscellaneous</h3>
-		<label>Debug logging <input type="checkbox" class="toggle" name="debug" {{if .Debug}}checked{{end}} /></label>
-
-		<h3>Auto-hide patterns</h3>
-		<p class="hint">Auto-hide keeps a newly-seen source or aux off the mixer layout by default when its name matches a pattern below.<br/>Comma-separated, case-insensitive; manually re-enabling a source overrides this.</p>
+	<h3>Auto-hide patterns</h3>
+	<p class="hint">Auto-hide keeps a newly-seen source or aux off the mixer layout by default when its name matches a pattern below.<br/>Comma-separated, case-insensitive; manually re-enabling a source overrides this.</p>
+	<form class="field-grid" hx-post="/admin/settings/auto-hide" hx-target="#section-auto-hide" hx-swap="outerHTML">
 		<label>
 			Channels
 			<input type="text" name="autoHideChannelPatterns" value="{{join .AutoHideChannelPatterns ", "}}" placeholder="e.g. Talkback" />
@@ -19,7 +16,6 @@
 			Auxes
 			<input type="text" name="autoHideAuxPatterns" value="{{join .AutoHideAuxPatterns ", "}}" placeholder="e.g. Talkback" />
 		</label>
-
 		<button type="submit">Save</button>
 	</form>
 </section>
@@ -28,12 +24,6 @@
 {{define "password-section"}}
 <section id="section-password">
 	<h2>Authentication</h2>
-	{{if .Set}}
-	<form method="post" action="/admin/logout">
-		<button type="submit">Log out</button>
-	</form>
-	{{end}}
-
 	<h3>Admin Password</h3>
 	{{if .FromEnv}}
 	<p class="hint">Currently overridden via environment variable OSCWEBMIXER_ADMIN_PASSWORD. To change the password from here, unset the environment variable in your deployment.</p>
@@ -55,5 +45,24 @@
 		<button type="submit">Save</button>
 	</form>
 	{{end}}
+
+	{{if .Set}}
+	<h3>Session</h3>
+	<form method="post" action="/admin/logout">
+		<button type="submit">Log out</button>
+	</form>
+	{{end}}
+</section>
+{{end}}
+
+{{/* debug-section: applies the moment the toggle flips (change bubbles up
+     to the form), same instant-apply pattern as the topbar lock toggle. */}}
+{{define "debug-section"}}
+<section id="section-debug">
+	<h2>Miscellaneous</h2>
+	<h3>Logging</h3>
+	<form hx-post="/admin/settings/debug" hx-trigger="change" hx-target="#section-debug" hx-swap="outerHTML">
+		<label class="toggle-label"><input type="checkbox" class="toggle" name="debug" {{if .Debug}}checked{{end}} /> Enable debug logging</label>
+	</form>
 </section>
 {{end}}

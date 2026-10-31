@@ -195,13 +195,13 @@ func TestEnvPasswordNotPersisted(t *testing.T) {
 	h.envPassword = "envpw"
 	c := login(t, mux, "envpw")
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/settings", strings.NewReader("debug=on"))
+	req := httptest.NewRequest(http.MethodPost, "/admin/settings/debug", strings.NewReader("debug=on"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(c)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("POST /admin/settings: status = %d, body = %s", rec.Code, rec.Body.String())
+		t.Fatalf("POST /admin/settings/debug: status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 
 	global, err := h.cfg.LoadGlobalOrDefault()
@@ -353,7 +353,8 @@ func TestEveryAdminRouteIsGuarded(t *testing.T) {
 		"GET /admin/auxes/send-on/reset",
 		"POST /admin/network",
 		"GET /admin/network/status",
-		"POST /admin/settings",
+		"POST /admin/settings/auto-hide",
+		"POST /admin/settings/debug",
 		"POST /admin/password",
 		"POST /admin/lock",
 		"POST /admin/external-devices",
