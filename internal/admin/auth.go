@@ -119,7 +119,7 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) renderLogin(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := h.tmpl.ExecuteTemplate(w, "login", struct{ Error string }{msg}); err != nil {
+	if err := h.tmpl.ExecuteTemplate(w, "login", struct{ Error, Version string }{msg, h.version}); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
