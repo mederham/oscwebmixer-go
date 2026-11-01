@@ -36,9 +36,9 @@
 		<p>OSCWebMixer acts as a router for OSC messages between the console and all connected devices.<br/>Devices connect to OSCWebMixer instead of the console, so multiple iPads can be connected to the same console at once.</p>
 		<h4>DiGiCo SD/Quantum V2 iPad App</h4>
 		<ol>
-			<li><b>Desk IP:</b> the IP of the machine running OSCWebMixer.</li>
+			<li><b>Desk IP:</b> The IP of the machine running OSCWebMixer.</li>
 			<li><b>Send Port:</b> OSCWebMixer's OSC Listen Port ({{.OSC.Port}}).</li>
-			<li><b>Receive Port:</b> any free port. Simplest is the Console Receive Port ({{.Desk.Port}}); several devices can share the same port.</li>
+			<li><b>Receive Port:</b> Any free port. The simplest choice is the Console Receive Port ({{.Desk.Port}}). Devices can share the same port.</li>
 		</ol>
 		<p>The connection settings in the app should look like this:</p>
 		<div class="help-example">
@@ -53,7 +53,7 @@
 		<ol start="4">
 			<li>Click <b>+ Add device</b> and enter a name, the device's IP (shown as <b>Local IP</b> in the app) and the Receive Port from step 3.</li>
 		</ol>
-		<p>The <b>switch</b> on each device enables or disables the connection to the device.<br/><b>Loopback</b> also sends a device's own OSC messages back to it, leave it off unless the device needs that.</p>
+		<p>The <b>switch</b> on each device enables or disables the connection to the device.<br/><b>Loopback</b> also sends a device's own OSC messages back to it; leave it off unless the device needs that.</p>
 	</details>
 </section>
 {{end}}

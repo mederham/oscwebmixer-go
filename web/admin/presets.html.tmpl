@@ -1,7 +1,7 @@
 {{define "presets-section"}}
 <section id="section-presets">
 	<h2>Presets</h2>
-	<p class="hint">Save and restore your OSCWebMixer configuration (mixer layout, auxes).</p>
+	<p class="hint">Save and restore your OSCWebMixer configuration (mixer layouts, auxes).</p>
 	<div class="toolbar">
 		<div class="toolbar-group">
 			<form hx-post="/admin/presets/save" hx-target="#section-presets" hx-swap="outerHTML" class="inline-form">
@@ -55,9 +55,9 @@
 		<summary>Help</summary>
 		<p>A preset stores the mixer layouts and aux settings, so you can switch between setups, e.g. for different bands or shows. The currently loaded preset is highlighted green.</p>
 		<ul>
-			<li><b>Reset to defaults:</b> Resets the personal mixer to defaults. Settings, network and external devices are kept.</li>
+			<li><b>Reset to defaults:</b> Resets the personal mixer to defaults. Saved presets, settings, network and external devices are kept.</li>
 			<li><b>Download all:</b> Downloads all presets as one JSON file, e.g. for backup or to move them to another OSCWebMixer.</li>
-			<li><b>Upload:</b> Imports presets from a JSON file, either a single preset or a Download all file.</li>
+			<li><b>Upload:</b> Imports presets from a JSON file, either a single preset or a "Download all" file.</li>
 		</ul>
 		<h4>Preset actions (&#8942;)</h4>
 		<ul>

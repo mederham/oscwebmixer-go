@@ -2,7 +2,7 @@
 <section id="section-auto-hide">
 	<h2>General</h2>
 	<h3>Auto-hide patterns</h3>
-	<p class="hint">Automatically hide channels, groups or auxes from the mixer layout that match the given names (comma-separated).</p>
+	<p class="hint">Automatically hide channels, groups or auxes whose names match the patterns below (comma-separated).</p>
 	<form class="field-grid" hx-post="/admin/settings/auto-hide" hx-target="#section-auto-hide" hx-swap="outerHTML">
 		<label>
 			Channels
@@ -26,7 +26,7 @@
 	<h2>Authentication</h2>
 	<h3>Admin Password</h3>
 	{{if .FromEnv}}
-	<p class="hint">Currently overridden via environment variable OSCWEBMIXER_ADMIN_PASSWORD. To change the password from here, unset the environment variable in your deployment.</p>
+	<p class="hint">Currently overridden via the environment variable OSCWEBMIXER_ADMIN_PASSWORD. To change the password from here, unset the environment variable in your deployment.</p>
 	{{else}}
 	{{if not .Set}}<p class="hint">No password set.</p>{{end}}
 	{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
