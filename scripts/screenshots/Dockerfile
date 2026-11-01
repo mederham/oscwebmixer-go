@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.63.0-jammy
+FROM mcr.microsoft.com/playwright:v1.64.1-jammy
 
 # The app's CSS asks for -apple-system/system-ui (Apple's SF Pro on a real
 # device). SF Pro isn't redistributable via apt, so alias those names to
