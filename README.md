@@ -28,6 +28,8 @@ OSCWebMixer-Go implements the core features of OSCWebMixer2:
 - **Auto-hide patterns:** It is now possible to automatically hide channels from the personal mixing UI that match a pattern (e.g. FX buses, unnamed channels,...)
 - **Personal Mixing Lock:** Personal mixing can now be locked for all clients in the Admin panel. This is useful when making configuration changes while musicians are already connected.
 - **Preset Import/Export:** Presets can be downloaded as JSON files (individually or all at once) and re-uploaded later or on another instance, making it easy to back up or share a configuration.
+- **Admin password in the admin panel:** Besides `OSCWEBMIXER_ADMIN_PASSWORD`, the admin password can also be set, changed or removed directly in the admin panel.
+- **Set assigned sends to ON:** OSCWebMixer-Go never switches aux sends on by itself. One button switches on every send that is currently shown in the personal mixer, instead of enabling each one manually on the console.
 
 > [!NOTE]
 > Icons for channels and plugin support are not implemented as of now. \
@@ -100,9 +102,9 @@ Environment variables can also be used when executing OSCWebMixer-Go like this.
 Variable | Default | Description
 ---|---|---
 `OSCWEBMIXER_HTTP_PORT` | `80` | Port for the admin panel and mixer UI.
-`OSCWEBMIXER_DESK_IP` | _(none)_ | Desk IP address. Reconfigures the desk connection on every restart; see note below.
-`OSCWEBMIXER_DESK_PORT` | `9000` | Desk port. Same restart behavior as `OSCWEBMIXER_DESK_IP`.
-`OSCWEBMIXER_OSC_PORT` | `8000` | Local UDP port the app listens on for OSC from the desk.
+`OSCWEBMIXER_DESK_IP` | _(none)_ | The console's IP address (**Console IP** in the admin panel). Reconfigures the console connection on every restart; see note below.
+`OSCWEBMIXER_DESK_PORT` | `9000` | The console's receive port (**Console Receive Port** in the admin panel). Same restart behavior as `OSCWEBMIXER_DESK_IP`.
+`OSCWEBMIXER_OSC_PORT` | `8000` | Local UDP port the app listens on for OSC from the console (**OSC Listen Port** in the admin panel).
 `OSCWEBMIXER_DESK_TRUSTED_IPS` | _(none)_ | Comma-separated list of extra source IPs to treat as the desk, e.g. `192.168.65.1,192.168.65.2`. For Docker Desktop only — see [note above](#docker-recommended).
 `OSCWEBMIXER_ADMIN_PASSWORD` | _(none)_ | Password for the admin panel. Takes precedence over a password set in the admin panel and is never written to `global.json`. Without any password the admin panel is open.
 
