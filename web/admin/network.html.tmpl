@@ -1,13 +1,37 @@
 {{define "network-section"}}
 <section id="section-network">
 	<h2>Network</h2>
-	<p class="hint">To connect to a DiGiCo console, set the console's IP address and OSC receive port here.<br/>The OSC listen port of OSCWebMixer must be used as the "Send Port" on the console side.</p>
+	<p class="hint">Network settings for the OSC connection to the console.</p>
 	<form class="field-grid" hx-post="/admin/network" hx-target="#section-network" hx-swap="outerHTML">
-		<label>Desk IP <input type="text" name="deskIP" value="{{.Global.Desk.IP}}" /></label>
-		<label>Desk port <input type="number" name="deskPort" value="{{.Global.Desk.Port}}" /></label>
-		<label>OSC listen port <input type="number" name="oscPort" value="{{.Global.OSC.Port}}" /></label>
+		<label>Console IP<input type="text" name="deskIP" value="{{.Global.Desk.IP}}" /></label>
+		<label>Console Receive Port<input type="number" name="deskPort" value="{{.Global.Desk.Port}}" /></label>
+		<label>OSC Listen Port<input type="number" name="oscPort" value="{{.Global.OSC.Port}}" /></label>
 		<button type="submit">Save</button>
 	</form>
+	<details class="help">
+		<summary>Help (Console setup)</summary>
+		<h4>On the console (Setup > External Control)</h4>
+		<ol>
+			<li>Enable External Control at the top.</li>
+			<li>Add a new connection of type <b>DiGiCo Pad</b> (iPad).</li>
+			<li><b>IP Address:</b> The IP of the machine running OSCWebMixer.</li>
+			<li><b>Send Port:</b> OSCWebMixer's OSC Listen Port ({{.Global.OSC.Port}}).</li>
+			<li>Note the <b>Receive Port</b>.</li>
+		</ol>
+		<p>The finished connection row on the console should look like this:</p>
+		<div class="help-example">
+			<table>
+				<tr><th>Type</th><th>Name</th><th>IP Address</th><th>Send</th><th>Rcv</th><th>Enabled</th><th>Bundles</th><th>DevID</th></tr>
+				<tr><td>DiGiCo</td><td><i>&lt;any&gt;</i></td><td><i>&lt;OSCWebMixer IP&gt;</i></td><td>{{.Global.OSC.Port}}</td><td>{{.Global.Desk.Port}}</td><td>✓</td><td></td><td></td></tr>
+			</table>
+		</div>
+		<h4>On this page</h4>
+		<ol start="6">
+			<li><b>Console IP:</b> The console's IP address.</li>
+			<li><b>Console Receive Port:</b> The Receive Port from step 5.</li>
+			<li>Click <b>Save</b>. The status in the top bar turns <b>Online</b> once the console answers.</li>
+		</ol>
+	</details>
 </section>
 {{end}}
 

@@ -68,7 +68,7 @@ function hexToRgb(hex) {
 }
 
 function iconSrc(icon) {
-	return icon ? "/admin/icons/" + encodeURIComponent(icon) : "";
+	return icon ? "/assets/icons/" + encodeURIComponent(icon) : "";
 }
 
 function sendOSC(address, args) {

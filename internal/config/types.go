@@ -9,6 +9,8 @@ type Global struct {
 	AutoHideChannelPatterns []string `json:"autoHideChannelPatterns"`
 	AutoHideGroupPatterns   []string `json:"autoHideGroupPatterns"`
 	AutoHideAuxPatterns     []string `json:"autoHideAuxPatterns"`
+
+	AdminPassword string `json:"adminPassword,omitempty"`
 }
 
 type OSCConfig struct {

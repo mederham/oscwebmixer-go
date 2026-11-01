@@ -65,6 +65,11 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	pw, err := h.password()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	data := ViewData{
 		Global:      global,
@@ -74,6 +79,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Presets:     toPresetRows(presets, state.UUID),
 		Message:     r.URL.Query().Get("msg"),
 		Version:     h.version,
+		Password:    PasswordSectionData{Set: pw != "", FromEnv: h.envPassword != ""},
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "layout", data); err != nil {
@@ -543,7 +549,23 @@ func (h *Handler) handleLockUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleAutoHideUpdate(w http.ResponseWriter, r *http.Request) {
+	h.updateSettings(w, r, "auto-hide-section", func(g *config.Global) {
+		g.AutoHideChannelPatterns = parsePatterns(r.FormValue("autoHideChannelPatterns"))
+		g.AutoHideGroupPatterns = parsePatterns(r.FormValue("autoHideGroupPatterns"))
+		g.AutoHideAuxPatterns = parsePatterns(r.FormValue("autoHideAuxPatterns"))
+	})
+}
+
+func (h *Handler) handleDebugUpdate(w http.ResponseWriter, r *http.Request) {
+	h.updateSettings(w, r, "debug-section", func(g *config.Global) {
+		g.Debug = r.Form.Has("debug")
+	})
+}
+
+// updateSettings applies one settings section's form fields to global.json,
+// pushes the result to the hub live, and re-renders just that section.
+func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request, section string, apply func(*config.Global)) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -553,10 +575,7 @@ func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	global.AutoHideChannelPatterns = parsePatterns(r.FormValue("autoHideChannelPatterns"))
-	global.AutoHideGroupPatterns = parsePatterns(r.FormValue("autoHideGroupPatterns"))
-	global.AutoHideAuxPatterns = parsePatterns(r.FormValue("autoHideAuxPatterns"))
-	global.Debug = r.Form.Has("debug")
+	apply(&global)
 	if err := h.cfg.SaveGlobal(global); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -567,7 +586,7 @@ func (h *Handler) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.tmpl.ExecuteTemplate(w, "settings-section", global); err != nil {
+	if err := h.tmpl.ExecuteTemplate(w, section, global); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }

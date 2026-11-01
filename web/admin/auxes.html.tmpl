@@ -5,7 +5,7 @@
 {{define "auxes-section"}}
 <section id="section-auxes"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Auxes</h2>
-	<p class="hint">Auxes are the desk's mix buses - each one can become a personal mix a user can pick in the mixer app.</p>
+	<p class="hint">Select which auxes to show in the personal mixer and assign layouts, colors and icons.</p>
 	<div class="toolbar">
 		<div class="toolbar-group">
 			<button type="button" id="auxes-toggle-all">Show/Hide all</button>
@@ -32,14 +32,14 @@
 						<input type="color" name="colour[{{.Channel}}]" value="{{.Colour}}" />
 						<span class="icon-picker">
 							<button type="button" class="icon-picker-btn" popovertarget="icon-popup-{{.Channel}}" title="Icon">
-								<img class="icon-preview" src="{{if .Icon}}/admin/icons/{{.Icon}}{{end}}" alt="" />
+								<img class="icon-preview" src="{{if .Icon}}/assets/icons/{{.Icon}}{{end}}" alt="" />
 							</button>
 							<input type="hidden" class="icon-value" name="icon[{{.Channel}}]" value="{{.Icon}}" />
 							<div id="icon-popup-{{.Channel}}" popover class="icon-popup">
 								<button type="button" class="icon-option{{if not .Icon}} selected{{end}}" data-icon="">No icon</button>
 								{{range $.Icons}}
 								<button type="button" class="icon-option{{if eq . $aux.Icon}} selected{{end}}" data-icon="{{.}}" title="{{iconLabel .}}">
-									<img src="/admin/icons/{{.}}" alt="{{iconLabel .}}" />
+									<img src="/assets/icons/{{.}}" alt="{{iconLabel .}}" />
 								</button>
 								{{end}}
 							</div>
@@ -51,5 +51,23 @@
 			{{end}}
 		</div>
 	</form>
+	<details class="help">
+		<summary>Help</summary>
+
+		<ul>
+			<li><b>Layout:</b> Select which source layout the aux shows in the mixer (see the Sources tab).</li>
+			<li><b>Color:</b> Click the color swatch to set the aux's color in the mixer.</li>
+			<li><b>Icon:</b> Click the icon button to pick an icon for the aux.</li>
+		</ul>
+		<h4>Set assigned sends to ON</h4>
+		<p>By design, OSCWebMixer never switches aux sends on by itself. Either switch them on manually on the console, or use this button to switch on every send that is currently shown in the mixer interface.</p>
+		<p>This action follows three rules:</p>
+		<ul>
+			<li>Only for auxes that are visible</li>
+			<li>Only for sources visible in the aux's assigned layout</li>
+			<li>Hidden sends and send levels stay untouched</li>
+		</ul>
+		<p><b>This can't be undone.</b> Set up layouts and auxes first.</p>
+	</details>
 </section>
 {{end}}

@@ -4,7 +4,8 @@
 # Results land directly in docs/screenshots/.
 services:
   oscwebmixer:
-    image: registry.mederham.at/audio/oscwebmixer-go:latest
+    build:
+      context: ../..
     ports:
       - "8080:80"
       - "8000:8000/udp"

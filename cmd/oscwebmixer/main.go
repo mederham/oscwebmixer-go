@@ -130,7 +130,11 @@ func main() {
 	if err != nil {
 		logger.Fatalf("admin assets: %v", err)
 	}
-	adminHandler, err := admin.New(adminTemplatesFS, cfgManager, adminEvents, logger, version)
+	assetsFS, err := fs.Sub(web.AssetsFS, "assets")
+	if err != nil {
+		logger.Fatalf("assets: %v", err)
+	}
+	adminHandler, err := admin.New(adminTemplatesFS, assetsFS, cfgManager, adminEvents, logger, version, os.Getenv("OSCWEBMIXER_ADMIN_PASSWORD"))
 	if err != nil {
 		logger.Fatalf("admin templates: %v", err)
 	}
@@ -146,6 +150,7 @@ func main() {
 		fmt.Fprintln(w, version)
 	})
 	adminHandler.Register(mux)
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assetsFS)))
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServerFS(adminTemplatesFS)))
 	mux.Handle("/", http.FileServer(http.FS(mixerFS)))
 

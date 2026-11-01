@@ -1,7 +1,7 @@
 {{define "external-devices-section"}}
 <section id="section-external-devices">
 	<h2>External devices</h2>
-	<p class="hint">To use the DiGiCo iPad app or other OSC devices with OSCWebMixer, add your connections here. Multiple iPads can be connected to the same console through OSCWebMixer.</p>
+	<p class="hint">To use the DiGiCo iPad app(s) or other OSC devices with OSCWebMixer, add your connections here.</p>
 	<div class="cards">
 		{{range .ExternalDevices}}
 		<div class="device-card" hx-post="/admin/external-devices/{{.ID}}" hx-trigger="change" hx-include="closest .device-card" hx-target="#section-external-devices" hx-swap="outerHTML">
@@ -18,7 +18,7 @@
 		</div>
 		{{end}}
 	</div>
-	<button type="button" id="add-device-toggle">+ Add device</button>
+	<button type="button" data-reveal=".add-device">+ Add device</button>
 	<form hx-post="/admin/external-devices" hx-target="#section-external-devices" hx-swap="outerHTML" class="device-card add-device" hidden>
 		<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" checked />
 		<div class="device-fields">
@@ -31,5 +31,29 @@
 		<label class="loopback"><input type="checkbox" name="loopback" /> Loopback</label>
 		<button type="submit">Add device</button>
 	</form>
+	<details class="help">
+		<summary>Help (iPad app / OSC devices)</summary>
+		<p>OSCWebMixer acts as a router for OSC messages between the console and all connected devices.<br/>Devices connect to OSCWebMixer instead of the console, so multiple iPads can be connected to the same console at once.</p>
+		<h4>DiGiCo SD/Quantum V2 iPad App</h4>
+		<ol>
+			<li><b>Desk IP:</b> The IP of the machine running OSCWebMixer.</li>
+			<li><b>Send Port:</b> OSCWebMixer's OSC Listen Port ({{.OSC.Port}}).</li>
+			<li><b>Receive Port:</b> Any free port. The simplest choice is the Console Receive Port ({{.Desk.Port}}). Devices can share the same port.</li>
+		</ol>
+		<p>The connection settings in the app should look like this:</p>
+		<div class="help-example">
+			<table>
+				<tr><th>Connection Name</th><td><i>&lt;any&gt;</i></td></tr>
+				<tr><th>Enter Desk IP</th><td><i>&lt;OSCWebMixer IP&gt;</i></td></tr>
+				<tr><th>Enter Send Port</th><td>{{.OSC.Port}}</td></tr>
+				<tr><th>Enter Receive Port</th><td>{{.Desk.Port}}</td></tr>
+			</table>
+		</div>
+		<h4>On this page</h4>
+		<ol start="4">
+			<li>Click <b>+ Add device</b> and enter a name, the device's IP (shown as <b>Local IP</b> in the app) and the Receive Port from step 3.</li>
+		</ol>
+		<p>The <b>switch</b> on each device enables or disables the connection to the device.<br/><b>Loopback</b> also sends a device's own OSC messages back to it; leave it off unless the device needs that.</p>
+	</details>
 </section>
 {{end}}

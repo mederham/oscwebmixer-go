@@ -130,7 +130,7 @@ document.body.addEventListener("click", function (e) {
 	if (opt) {
 		const picker = opt.closest(".icon-picker");
 		picker.querySelector(".icon-value").value = opt.dataset.icon;
-		picker.querySelector(".icon-preview").src = opt.dataset.icon ? "/admin/icons/" + opt.dataset.icon : "";
+		picker.querySelector(".icon-preview").src = opt.dataset.icon ? "/assets/icons/" + opt.dataset.icon : "";
 		for (const o of picker.querySelectorAll(".icon-option")) o.classList.toggle("selected", o === opt);
 		opt.closest(".icon-popup").hidePopover();
 		htmx.trigger(document.getElementById("auxes-form"), "submit");
@@ -160,11 +160,13 @@ document.body.addEventListener("click", function (e) {
 	});
 });
 
+// A button with data-reveal="<selector>" unhides that element and hides itself.
 document.body.addEventListener("click", function (e) {
-	if (e.target.id !== "add-device-toggle") return;
-	const form = document.querySelector(".add-device");
-	if (!form) return;
-	form.hidden = false;
+	const selector = e.target.dataset.reveal;
+	if (!selector) return;
+	const target = document.querySelector(selector);
+	if (!target) return;
+	target.hidden = false;
 	e.target.hidden = true;
 });
 

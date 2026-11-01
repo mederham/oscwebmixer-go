@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
@@ -27,6 +28,10 @@ type Handler struct {
 	icons []string
 
 	version string
+
+	envPassword string
+	sessMu      sync.Mutex
+	sessions    map[string]struct{}
 }
 
 var templateFuncs = template.FuncMap{
@@ -58,8 +63,8 @@ func iconLabel(filename string) string {
 	return strings.Join(words, " ")
 }
 
-func listIcons(templatesFS fs.FS) ([]string, error) {
-	entries, err := fs.ReadDir(templatesFS, "icons")
+func listIcons(assetsFS fs.FS) ([]string, error) {
+	entries, err := fs.ReadDir(assetsFS, "icons")
 	if err != nil {
 		return nil, err
 	}
@@ -99,46 +104,54 @@ func dotLabel(status string) string {
 	}
 }
 
-func New(templatesFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger, version string) (*Handler, error) {
+func New(templatesFS, assetsFS fs.FS, cfg *config.Manager, adminEvents chan<- hub.AdminEvent, logger *log.Logger, version, envPassword string) (*Handler, error) {
 	tmpl, err := template.New("admin").Funcs(templateFuncs).ParseFS(templatesFS, "*.html.tmpl")
 	if err != nil {
 		return nil, err
 	}
-	icons, err := listIcons(templatesFS)
+	icons, err := listIcons(assetsFS)
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl, icons: icons, version: version}, nil
+	return &Handler{
+		cfg: cfg, adminEvents: adminEvents, log: logger, tmpl: tmpl, icons: icons, version: version,
+		envPassword: envPassword, sessions: map[string]struct{}{},
+	}, nil
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /admin", noStore(h.handleIndex))
-	mux.HandleFunc("POST /admin/sources/save", noStore(h.handleSourcesSave))
-	mux.HandleFunc("POST /admin/sources/reset", noStore(h.handleSourcesReset))
-	mux.HandleFunc("GET /admin/sources", noStore(h.handleSourcesView))
-	mux.HandleFunc("POST /admin/layouts", noStore(h.handleLayoutCreate))
-	mux.HandleFunc("POST /admin/layouts/{id}/rename", noStore(h.handleLayoutRename))
-	mux.HandleFunc("POST /admin/layouts/{id}/delete", noStore(h.handleLayoutDelete))
-	mux.HandleFunc("POST /admin/sections", noStore(h.handleSectionAdd))
-	mux.HandleFunc("POST /admin/sections/{id}/delete", noStore(h.handleSectionDelete))
-	mux.HandleFunc("POST /admin/auxes", noStore(h.handleAuxesSave))
-	mux.HandleFunc("POST /admin/auxes/send-on", noStore(h.handleAuxSendOn))
-	mux.HandleFunc("GET /admin/auxes/send-on/reset", noStore(h.handleAuxSendOnReset))
-	mux.HandleFunc("POST /admin/network", noStore(h.handleNetworkUpdate))
-	mux.HandleFunc("GET /admin/network/status", noStore(h.handleNetworkStatus))
-	mux.HandleFunc("POST /admin/settings", noStore(h.handleSettingsUpdate))
-	mux.HandleFunc("POST /admin/lock", noStore(h.handleLockUpdate))
-	mux.HandleFunc("POST /admin/external-devices", noStore(h.handleExternalDeviceAdd))
-	mux.HandleFunc("POST /admin/external-devices/{id}", noStore(h.handleExternalDeviceUpdate))
-	mux.HandleFunc("POST /admin/external-devices/{id}/delete", noStore(h.handleExternalDeviceDelete))
-	mux.HandleFunc("POST /admin/presets/save", noStore(h.handlePresetSave))
-	mux.HandleFunc("POST /admin/presets/reset", noStore(h.handlePresetsReset))
-	mux.HandleFunc("POST /admin/presets/upload", noStore(h.handlePresetsUpload))
-	mux.HandleFunc("GET /admin/presets/download", noStore(h.handlePresetsDownloadAll))
-	mux.HandleFunc("GET /admin/presets/{uuid}/download", noStore(h.handlePresetDownload))
-	mux.HandleFunc("POST /admin/presets/{uuid}/load", noStore(h.handlePresetLoad))
-	mux.HandleFunc("POST /admin/presets/{uuid}/update", noStore(h.handlePresetUpdate))
-	mux.HandleFunc("POST /admin/presets/{uuid}/delete", noStore(h.handlePresetDelete))
+	mux.HandleFunc("GET /admin/login", noStore(h.handleLoginPage))
+	mux.HandleFunc("POST /admin/login", noStore(h.handleLogin))
+	mux.HandleFunc("POST /admin/logout", h.guard(h.handleLogout))
+	mux.HandleFunc("GET /admin", h.guard(h.handleIndex))
+	mux.HandleFunc("POST /admin/sources/save", h.guard(h.handleSourcesSave))
+	mux.HandleFunc("POST /admin/sources/reset", h.guard(h.handleSourcesReset))
+	mux.HandleFunc("GET /admin/sources", h.guard(h.handleSourcesView))
+	mux.HandleFunc("POST /admin/layouts", h.guard(h.handleLayoutCreate))
+	mux.HandleFunc("POST /admin/layouts/{id}/rename", h.guard(h.handleLayoutRename))
+	mux.HandleFunc("POST /admin/layouts/{id}/delete", h.guard(h.handleLayoutDelete))
+	mux.HandleFunc("POST /admin/sections", h.guard(h.handleSectionAdd))
+	mux.HandleFunc("POST /admin/sections/{id}/delete", h.guard(h.handleSectionDelete))
+	mux.HandleFunc("POST /admin/auxes", h.guard(h.handleAuxesSave))
+	mux.HandleFunc("POST /admin/auxes/send-on", h.guard(h.handleAuxSendOn))
+	mux.HandleFunc("GET /admin/auxes/send-on/reset", h.guard(h.handleAuxSendOnReset))
+	mux.HandleFunc("POST /admin/network", h.guard(h.handleNetworkUpdate))
+	mux.HandleFunc("GET /admin/network/status", h.guard(h.handleNetworkStatus))
+	mux.HandleFunc("POST /admin/settings/auto-hide", h.guard(h.handleAutoHideUpdate))
+	mux.HandleFunc("POST /admin/settings/debug", h.guard(h.handleDebugUpdate))
+	mux.HandleFunc("POST /admin/password", h.guard(h.handlePasswordUpdate))
+	mux.HandleFunc("POST /admin/lock", h.guard(h.handleLockUpdate))
+	mux.HandleFunc("POST /admin/external-devices", h.guard(h.handleExternalDeviceAdd))
+	mux.HandleFunc("POST /admin/external-devices/{id}", h.guard(h.handleExternalDeviceUpdate))
+	mux.HandleFunc("POST /admin/external-devices/{id}/delete", h.guard(h.handleExternalDeviceDelete))
+	mux.HandleFunc("POST /admin/presets/save", h.guard(h.handlePresetSave))
+	mux.HandleFunc("POST /admin/presets/reset", h.guard(h.handlePresetsReset))
+	mux.HandleFunc("POST /admin/presets/upload", h.guard(h.handlePresetsUpload))
+	mux.HandleFunc("GET /admin/presets/download", h.guard(h.handlePresetsDownloadAll))
+	mux.HandleFunc("GET /admin/presets/{uuid}/download", h.guard(h.handlePresetDownload))
+	mux.HandleFunc("POST /admin/presets/{uuid}/load", h.guard(h.handlePresetLoad))
+	mux.HandleFunc("POST /admin/presets/{uuid}/update", h.guard(h.handlePresetUpdate))
+	mux.HandleFunc("POST /admin/presets/{uuid}/delete", h.guard(h.handlePresetDelete))
 }
 
 func noStore(fn http.HandlerFunc) http.HandlerFunc {

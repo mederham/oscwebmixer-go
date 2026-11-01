@@ -11,3 +11,4 @@ services:
       OSCWEBMIXER_DESK_IP: <your_desk_ip>
       OSCWEBMIXER_DESK_PORT: <your_desk_port>
       # OSCWEBMIXER_DESK_TRUSTED_IPS: 192.168.65.1
+      # OSCWEBMIXER_ADMIN_PASSWORD: <password>
