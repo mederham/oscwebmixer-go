@@ -49,6 +49,16 @@ h3 { font-size: 0.95rem; opacity: 0.8; margin: 1rem 0 0.4rem; }
 .tab-panel.show { display: block; }
 
 .hint { opacity: 0.6; font-size: 0.85rem; margin: 0.25rem 0 0.75rem; }
+.help { margin: 0.5rem 0 0.75rem; font-size: 0.85rem; }
+:is(form, .cards) + .help { margin-top: 2rem; }
+.help summary { cursor: pointer; opacity: 0.8; }
+.help h4 { margin: 1rem 0 0; font-size: inherit; }
+.help :is(ol, ul) { margin: 0.5rem 0 0; padding-left: 1.5rem; line-height: 1.6; }
+.help li > :is(ol, ul) { margin-top: 0; }
+.help-example { overflow-x: auto; }
+.help-example table { border-collapse: collapse; white-space: nowrap; }
+.help-example th, .help-example td { border: 1px solid #333; padding: 0.25rem 0.6rem; text-align: left; }
+.help-example th { font-weight: normal; opacity: 0.7; }
 
 .flash {
 	background: #2a4a2a;

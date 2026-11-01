@@ -43,7 +43,7 @@
 					<button hx-post="/admin/presets/{{.UUID}}/load" hx-target="#section-presets" hx-swap="outerHTML">Load</button>
 					{{end}}
 					<a href="/admin/presets/{{.UUID}}/download" download class="button">Download</a>
-					<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML" hx-confirm="Delete preset {{.Name}}? This cannot be undone.">Delete</button>
+					<button class="danger" hx-post="/admin/presets/{{.UUID}}/delete" hx-target="#section-presets" hx-swap="outerHTML" hx-confirm="Delete preset '{{.Name}}'? This cannot be undone.">Delete</button>
 				</div>
 			</div>
 		</div>
@@ -51,5 +51,21 @@
 		<p class="hint">No presets are currently saved.</p>
 	{{end}}
 	</div>
+	<details class="help">
+		<summary>Help</summary>
+		<p>A preset stores the mixer layouts and aux settings, so you can switch between setups, e.g. for different bands or shows. The currently loaded preset is highlighted green.</p>
+		<ul>
+			<li><b>Reset to defaults:</b> Resets the personal mixer to defaults. Settings, network and external devices are kept.</li>
+			<li><b>Download all:</b> Downloads all presets as one JSON file, e.g. for backup or to move them to another OSCWebMixer.</li>
+			<li><b>Upload:</b> Imports presets from a JSON file, either a single preset or a Download all file.</li>
+		</ul>
+		<h4>Preset actions (&#8942;)</h4>
+		<ul>
+			<li><b>Update:</b> On the loaded preset, saves the current configuration into it.</li>
+			<li><b>Load:</b> On the loaded preset, reloads its saved version and discards unsaved changes.</li>
+			<li><b>Download:</b> Downloads the preset as a JSON file.</li>
+			<li><b>Delete:</b> Deletes the preset. This can't be undone.</li>
+		</ul>
+	</details>
 </section>
 {{end}}

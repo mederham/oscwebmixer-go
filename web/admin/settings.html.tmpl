@@ -2,7 +2,7 @@
 <section id="section-auto-hide">
 	<h2>General</h2>
 	<h3>Auto-hide patterns</h3>
-	<p class="hint">Auto-hide keeps a newly-seen source or aux off the mixer layout by default when its name matches a pattern below.<br/>Comma-separated, case-insensitive; manually re-enabling a source overrides this.</p>
+	<p class="hint">Automatically hide channels, groups or auxes from the mixer layout that match the given names (comma-separated).</p>
 	<form class="field-grid" hx-post="/admin/settings/auto-hide" hx-target="#section-auto-hide" hx-swap="outerHTML">
 		<label>
 			Channels
@@ -14,7 +14,7 @@
 		</label>
 		<label>
 			Auxes
-			<input type="text" name="autoHideAuxPatterns" value="{{join .AutoHideAuxPatterns ", "}}" placeholder="e.g. Talkback" />
+			<input type="text" name="autoHideAuxPatterns" value="{{join .AutoHideAuxPatterns ", "}}" placeholder="e.g. Shoutbox, FX" />
 		</label>
 		<button type="submit">Save</button>
 	</form>

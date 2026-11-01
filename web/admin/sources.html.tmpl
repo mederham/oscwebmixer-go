@@ -1,7 +1,7 @@
 {{define "sources-section"}}
 <section id="section-sources"{{if .OOB}} hx-swap-oob="true"{{end}}>
 	<h2>Sources (channels &amp; groups)</h2>
-	<p class="hint">Sources are channels and group buses that can be mixed into auxes. Drag to reorder, hover over a source and click "+" to insert a section above.</p>
+	<p class="hint">Create personal mixing layouts with channels and group buses here. Layouts can be assigned to auxes in the Auxes tab.</p>
 
 	<div class="layout-picker">
 		<select name="layout" hx-get="/admin/sources" hx-target="#section-sources" hx-swap="outerHTML">
@@ -33,7 +33,7 @@
 				hx-target="#section-sources"
 				hx-swap="outerHTML"
 				hx-include="[name='layoutId']"
-				hx-confirm="Reset this layout to all channels then groups, ascending? This clears every section and customization."
+				hx-confirm="Reset this layout to default (channels then groups, ascending)? This clears every customization."
 			>Reset layout</button>
 			<button type="button" id="sources-toggle-all">Show/Hide all</button>
 		</div>
@@ -47,6 +47,21 @@
 			{{end}}
 		</div>
 	</form>
+
+	<details class="help">
+		<summary>Help</summary>
+		<ul>
+			<li><b>Reorder:</b> drag by the handle (&#8942;&#8942;). Saves immediately.</li>
+			<li><b>Multi-select:</b>
+				<ul>
+					<li>Click sources/sections to select them (keyboard: <b>Shift</b> for a range, <b>Ctrl</b>/<b>Cmd</b> for single).</li>
+					<li>Drag or show/hide one of them to apply it to all selected.</li>
+					<li>Click an empty spot to deselect.</li>
+				</ul>
+			</li>
+			<li><b>Sections:</b> hover or click a source, then click <b>+ Section</b> to insert one above.</li>
+		</ul>
+	</details>
 </section>
 {{end}}
 
