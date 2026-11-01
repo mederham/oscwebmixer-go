@@ -64,8 +64,6 @@ type SourceRow struct {
 	Stereo  bool
 }
 
-func (r SourceRow) Key() string { return fmt.Sprintf("%s:%d", r.Type, r.Number) }
-
 type AuxRow struct {
 	Channel  int
 	Label    string

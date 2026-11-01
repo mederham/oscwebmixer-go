@@ -1,6 +1,7 @@
 package desk
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -44,12 +45,9 @@ func Listen(localPort int, deskIP string, deskPort int) (*Conn, error) {
 		raddr = &net.UDPAddr{IP: ip, Port: deskPort}
 	}
 
-	sock, err := net.ListenUDP("udp", &net.UDPAddr{Port: localPort})
+	sock, err := newListenSocket(localPort)
 	if err != nil {
-		return nil, fmt.Errorf("listen udp :%d: %w", localPort, err)
-	}
-	if err := sock.SetReadBuffer(recvBufferBytes); err != nil {
-		log.Printf("desk: warning: could not raise UDP read buffer: %v", err)
+		return nil, err
 	}
 
 	return &Conn{
@@ -95,8 +93,7 @@ func (c *Conn) Run(ctx context.Context) error {
 			return fmt.Errorf("read udp: %w", err)
 		}
 
-		raw := make([]byte, n)
-		copy(raw, buf[:n])
+		raw := bytes.Clone(buf[:n])
 
 		oscMsg, err := osc.ParseMessage(raw, addr)
 		if err != nil {
@@ -150,9 +147,9 @@ func (c *Conn) sendSock(addr *net.UDPAddr) (*net.UDPConn, error) {
 	key := addr.String()
 
 	c.mu.Lock()
-	sock, ok := c.sendSocks[key]
-	c.mu.Unlock()
-	if ok {
+	defer c.mu.Unlock()
+
+	if sock, ok := c.sendSocks[key]; ok {
 		return sock, nil
 	}
 
@@ -160,15 +157,7 @@ func (c *Conn) sendSock(addr *net.UDPAddr) (*net.UDPConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial udp %s: %w", addr, err)
 	}
-
-	c.mu.Lock()
-	if existing, ok := c.sendSocks[key]; ok {
-		c.mu.Unlock()
-		sock.Close()
-		return existing, nil
-	}
 	c.sendSocks[key] = sock
-	c.mu.Unlock()
 	return sock, nil
 }
 
@@ -184,12 +173,9 @@ func (c *Conn) SetRemote(ip string, port int) error {
 }
 
 func (c *Conn) Rebind(localPort int) error {
-	sock, err := net.ListenUDP("udp", &net.UDPAddr{Port: localPort})
+	sock, err := newListenSocket(localPort)
 	if err != nil {
-		return fmt.Errorf("listen udp :%d: %w", localPort, err)
-	}
-	if err := sock.SetReadBuffer(recvBufferBytes); err != nil {
-		log.Printf("desk: warning: could not raise UDP read buffer: %v", err)
+		return err
 	}
 
 	c.mu.Lock()
@@ -199,6 +185,17 @@ func (c *Conn) Rebind(localPort int) error {
 
 	old.Close()
 	return nil
+}
+
+func newListenSocket(localPort int) (*net.UDPConn, error) {
+	sock, err := net.ListenUDP("udp", &net.UDPAddr{Port: localPort})
+	if err != nil {
+		return nil, fmt.Errorf("listen udp :%d: %w", localPort, err)
+	}
+	if err := sock.SetReadBuffer(recvBufferBytes); err != nil {
+		log.Printf("desk: warning: could not raise UDP read buffer: %v", err)
+	}
+	return sock, nil
 }
 
 func (c *Conn) Close() error {

@@ -183,8 +183,6 @@ button.success:hover { background: #2a4a2a; }
 }
 .drag-handle:hover { opacity: 0.9; }
 
-#sources-form { display: block; }
-
 .cards {
 	display: flex;
 	flex-direction: column;

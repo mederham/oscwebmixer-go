@@ -62,18 +62,14 @@ function syncLayoutURL() {
 	history.replaceState(null, "", url);
 }
 
-document.body.addEventListener("htmx:afterSwap", function (e) {
+function onSourcesSwap(e) {
 	if (e.detail.target && e.detail.target.id === "section-sources") {
 		initSourcesSortable();
 		syncLayoutURL();
 	}
-});
-document.body.addEventListener("htmx:oobAfterSwap", function (e) {
-	if (e.detail.target && e.detail.target.id === "section-sources") {
-		initSourcesSortable();
-		syncLayoutURL();
-	}
-});
+}
+document.body.addEventListener("htmx:afterSwap", onSourcesSwap);
+document.body.addEventListener("htmx:oobAfterSwap", onSourcesSwap);
 
 let lastDeskStatus = null;
 document.body.addEventListener("htmx:afterSwap", function (e) {
