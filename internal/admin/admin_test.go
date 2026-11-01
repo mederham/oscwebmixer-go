@@ -471,6 +471,9 @@ func TestIconsListedFromEmbeddedFS(t *testing.T) {
 			t.Fatalf("icons list contains non-svg entry %q", name)
 		}
 	}
+	if !slices.Equal(h.icons[:len(iconOrder)], iconOrder) {
+		t.Fatalf("icons start with %v, want iconOrder %v (renamed icon file?)", h.icons[:len(iconOrder)], iconOrder)
+	}
 }
 
 func TestPresetsReset(t *testing.T) {

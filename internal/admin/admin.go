@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -74,8 +75,32 @@ func listIcons(assetsFS fs.FS) ([]string, error) {
 			icons = append(icons, e.Name())
 		}
 	}
-	sort.Strings(icons)
+	sort.Slice(icons, func(i, j int) bool {
+		ri, rj := iconRank(icons[i]), iconRank(icons[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return icons[i] < icons[j]
+	})
 	return icons, nil
+}
+
+// iconOrder lists icons shown first in the picker: rhythm section, vocals,
+// brass, woodwind. Everything not listed follows alphabetically.
+var iconOrder = []string{
+	"snare-drum.svg", "cymbals.svg",
+	"bass-guitar.svg", "acoustic-guitar.svg", "electric-guitar.svg",
+	"piano.svg", "synthesizer.svg",
+	"microphone-1.svg", "microphone-2.svg", "headset.svg",
+	"trumpet.svg", "trombone.svg", "horn.svg", "tuba.svg",
+	"flute.svg", "clarinet.svg", "saxophone.svg", "pan-flute.svg",
+}
+
+func iconRank(name string) int {
+	if i := slices.Index(iconOrder, name); i >= 0 {
+		return i
+	}
+	return len(iconOrder)
 }
 
 func dotClass(status string) string {
