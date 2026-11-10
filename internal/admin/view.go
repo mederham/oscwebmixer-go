@@ -57,7 +57,7 @@ type SectionRow struct {
 
 type AuxesSectionData struct {
 	Auxes   []AuxRow
-	Icons   []string
+	Icons   []IconGroup
 	Layouts []LayoutOption
 	OOB     bool
 }
@@ -140,7 +140,7 @@ func sourcesSectionData(cfg oscmsg.ConfigPayload, layoutID string, oob bool) Sou
 	return toSourcesSectionData(nl.Items, layoutID, nl.Name, layoutOptions(cfg.MixerLayouts), oob)
 }
 
-func auxesSectionData(cfg oscmsg.ConfigPayload, icons []string, oob bool) AuxesSectionData {
+func auxesSectionData(cfg oscmsg.ConfigPayload, icons []IconGroup, oob bool) AuxesSectionData {
 	return AuxesSectionData{Auxes: toAuxRows(cfg.Auxes), Icons: icons, Layouts: layoutOptions(cfg.MixerLayouts), OOB: oob}
 }
 
