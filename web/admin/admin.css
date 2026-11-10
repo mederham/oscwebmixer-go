@@ -149,6 +149,13 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 2px; }
 }
 
 .icon-popup:popover-open { display: grid; }
+.icon-group {
+	grid-column: 1 / -1;
+	margin: 0.4rem 0 0;
+	font-size: 0.7rem;
+	font-weight: normal;
+	color: #aaa;
+}
 .icon-option {
 	display: flex;
 	flex-direction: column;

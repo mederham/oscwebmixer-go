@@ -37,11 +37,14 @@
 							<input type="hidden" class="icon-value" name="icon[{{.Channel}}]" value="{{.Icon}}" />
 							<div id="icon-popup-{{.Channel}}" popover class="icon-popup">
 								<button type="button" class="icon-option{{if not .Icon}} selected{{end}}" data-icon="">No icon</button>
-								{{range $.Icons}}
+								{{range $.Icons}}{{if .Icons}}
+								<h4 class="icon-group">{{.Name}}</h4>
+								{{range .Icons}}
 								<button type="button" class="icon-option{{if eq . $aux.Icon}} selected{{end}}" data-icon="{{.}}" title="{{iconLabel .}}">
 									<img src="/assets/icons/{{.}}" alt="{{iconLabel .}}" />
 								</button>
 								{{end}}
+								{{end}}{{end}}
 							</div>
 						</span>
 					</span>

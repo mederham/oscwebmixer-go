@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +25,7 @@ type Handler struct {
 	log         *log.Logger
 	tmpl        *template.Template
 
-	icons []string
+	icons []IconGroup
 
 	version string
 
@@ -64,43 +63,39 @@ func iconLabel(filename string) string {
 	return strings.Join(words, " ")
 }
 
-func listIcons(assetsFS fs.FS) ([]string, error) {
+type IconGroup struct {
+	Name  string
+	Icons []string
+}
+
+// iconGroups defines the picker sections. Icons not listed here end up in a
+// trailing "Misc" group, sorted alphabetically.
+var iconGroups = []IconGroup{
+	{"Rhythm Section", []string{"drum-kit.svg", "bass-guitar.svg", "acoustic-guitar.svg", "electric-guitar.svg", "piano.svg", "synthesizer.svg"}},
+	{"Vocals", []string{"microphone-1.svg", "microphone-2.svg", "headset.svg"}},
+	{"Brass", []string{"trumpet.svg", "trombone.svg", "horn.svg", "tuba.svg"}},
+	{"Woodwinds", []string{"flute.svg", "clarinet.svg", "saxophone.svg", "pan-flute.svg"}},
+	{"Strings", []string{"violin.svg", "cello.svg", "harp.svg", "mandolin.svg", "banjo.svg"}},
+	{"Drums & Percussion", []string{"snare-drum.svg", "cymbals.svg", "conga.svg", "djembe.svg", "tambourine.svg", "maraca.svg", "triangle.svg", "xylophone.svg", "vibraphone.svg"}},
+}
+
+func listIcons(assetsFS fs.FS) ([]IconGroup, error) {
 	entries, err := fs.ReadDir(assetsFS, "icons")
 	if err != nil {
 		return nil, err
 	}
-	icons := make([]string, 0, len(entries))
+	var misc []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".svg") {
-			icons = append(icons, e.Name())
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".svg") {
+			continue
+		}
+		if !slices.ContainsFunc(iconGroups, func(g IconGroup) bool { return slices.Contains(g.Icons, name) }) {
+			misc = append(misc, name)
 		}
 	}
-	sort.Slice(icons, func(i, j int) bool {
-		ri, rj := iconRank(icons[i]), iconRank(icons[j])
-		if ri != rj {
-			return ri < rj
-		}
-		return icons[i] < icons[j]
-	})
-	return icons, nil
-}
-
-// iconOrder lists icons shown first in the picker: rhythm section, vocals,
-// brass, woodwind. Everything not listed follows alphabetically.
-var iconOrder = []string{
-	"snare-drum.svg", "cymbals.svg",
-	"bass-guitar.svg", "acoustic-guitar.svg", "electric-guitar.svg",
-	"piano.svg", "synthesizer.svg",
-	"microphone-1.svg", "microphone-2.svg", "headset.svg",
-	"trumpet.svg", "trombone.svg", "horn.svg", "tuba.svg",
-	"flute.svg", "clarinet.svg", "saxophone.svg", "pan-flute.svg",
-}
-
-func iconRank(name string) int {
-	if i := slices.Index(iconOrder, name); i >= 0 {
-		return i
-	}
-	return len(iconOrder)
+	// fs.ReadDir returns entries sorted by filename, so misc is already alphabetical.
+	return append(slices.Clone(iconGroups), IconGroup{"Misc", misc}), nil
 }
 
 func dotClass(status string) string {

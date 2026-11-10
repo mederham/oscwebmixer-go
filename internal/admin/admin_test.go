@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -463,16 +464,21 @@ func TestAuxesSaveRoundTrip(t *testing.T) {
 
 func TestIconsListedFromEmbeddedFS(t *testing.T) {
 	h := newTestHandler(t)
-	if len(h.icons) == 0 {
-		t.Fatal("icons list is empty, want the instrument SVG set from web/assets/icons/")
+	files, err := fs.Glob(web.AssetsFS, "assets/icons/*.svg")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no icon files found (err %v)", err)
 	}
-	for _, name := range h.icons {
-		if !strings.HasSuffix(name, ".svg") {
-			t.Fatalf("icons list contains non-svg entry %q", name)
+	var listed []string
+	for _, g := range h.icons {
+		listed = append(listed, g.Icons...)
+	}
+	for _, f := range files {
+		if name := path.Base(f); !slices.Contains(listed, name) {
+			t.Errorf("icon file %q missing from picker", name)
 		}
 	}
-	if !slices.Equal(h.icons[:len(iconOrder)], iconOrder) {
-		t.Fatalf("icons start with %v, want iconOrder %v (renamed icon file?)", h.icons[:len(iconOrder)], iconOrder)
+	if len(listed) != len(files) {
+		t.Errorf("picker lists %d icons, want %d files (grouped icon renamed/removed or listed twice?)", len(listed), len(files))
 	}
 }
 
@@ -482,13 +488,13 @@ func TestPresetsReset(t *testing.T) {
 	h.Register(mux)
 
 	postSourcesSave(t, mux, []oscmsg.LayoutItem{
-		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Drums"},
+		{Kind: oscmsg.LayoutKindSection, SectionID: "s1", SectionName: "Stale Section"},
 		{Kind: oscmsg.LayoutKindSource, Type: "channel", Number: 1, Enabled: false},
 	})
 	postForm(t, mux, "/admin/auxes", "colour[1]=%23ff0000&icon[1]=mic.svg")
 
 	rec := postForm(t, mux, "/admin/presets/reset", "")
-	if strings.Contains(rec.Body.String(), "Drums") {
+	if strings.Contains(rec.Body.String(), "Stale Section") {
 		t.Fatalf("reset response still mentions the old section: %s", rec.Body.String())
 	}
 
