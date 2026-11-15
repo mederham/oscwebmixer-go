@@ -1128,7 +1128,6 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "c1", Outbound: out}
 	drainN(t, out, 2)
 	drainQuiet(out)
-	drainAllSent(fakeDesk)
 
 	var degradedEnv oscmsg.Envelope
 	select {
@@ -1140,13 +1139,15 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 		t.Fatalf("envelope after silence = %+v, want status:degraded", degradedEnv)
 	}
 
-	select {
-	case sent := <-fakeDesk.sent:
-		if sent.Address != healthProbeAddress {
-			t.Fatalf("query sent during silence = %q, want %q", sent.Address, healthProbeAddress)
+	// Waiting for the desk sends to go quiet can't work: the probe interval equals the quiet window.
+	probeDeadline := time.After(time.Second)
+	for probed := false; !probed; {
+		select {
+		case sent := <-fakeDesk.sent:
+			probed = sent.Address == healthProbeAddress
+		case <-probeDeadline:
+			t.Fatal("health ticker never probed the desk during silence")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("health ticker never probed the desk during silence")
 	}
 
 	fakeDesk.inbound <- desk.InboundMessage{
