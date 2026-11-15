@@ -1720,3 +1720,41 @@ func TestMessageFromExternalDeviceMarksItSeen(t *testing.T) {
 		t.Fatalf("seen = %v, want only %v", rec.seen, ipad)
 	}
 }
+
+func TestExternalLastSeenIsReportedAsCopyAndPruned(t *testing.T) {
+	rec := &seenRecorder{}
+	ipad := ExternalDevice{ID: "ipad", Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}, Broadcast: true}
+	h := New(rec, log.New(io.Discard, "", 0), Options{
+		DeskIP:          "10.0.0.18",
+		ExternalSender:  rec,
+		ExternalDevices: []ExternalDevice{ipad},
+	})
+	h.status = StatusHealthy
+
+	query := func() map[string]time.Time {
+		reply := make(chan DeskStatusInfo, 1)
+		h.handleAdminEvent(AdminEvent{Kind: AdminStatusQuery, StatusReply: reply})
+		return (<-reply).ExternalLastSeen
+	}
+
+	if seen := query(); len(seen) != 0 {
+		t.Fatalf("last seen before any message = %v, want empty", seen)
+	}
+
+	before := time.Now()
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Name/?", Args: []any{}}, "10.0.0.12")
+	seen := query()
+	if seen["ipad"].Before(before) {
+		t.Fatalf("last seen = %v, want at or after %v", seen["ipad"], before)
+	}
+
+	delete(seen, "ipad")
+	if _, ok := query()["ipad"]; !ok {
+		t.Fatal("status reply shares the hub's map instead of a copy")
+	}
+
+	h.handleAdminEvent(AdminEvent{Kind: AdminApply})
+	if seen := query(); len(seen) != 0 {
+		t.Fatalf("last seen after removing the device = %v, want empty", seen)
+	}
+}

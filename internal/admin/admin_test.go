@@ -1260,3 +1260,41 @@ func TestAuxesTabRendersLayoutSelect(t *testing.T) {
 		t.Errorf("aux 1's layout select doesn't preselect %q: %s", id, body)
 	}
 }
+
+func TestDeviceStatusesUseOnlineWindow(t *testing.T) {
+	now := time.Now()
+	devices := []config.ExternalDevice{{ID: "recent"}, {ID: "stale"}, {ID: "never"}}
+	lastSeen := map[string]time.Time{
+		"recent": now.Add(-2 * time.Second),
+		"stale":  now.Add(-externalOnlineWindow - time.Second),
+	}
+
+	got := deviceStatuses(devices, lastSeen, now)
+	want := []DeviceStatus{{ID: "recent", Online: true}, {ID: "stale", Online: false}, {ID: "never", Online: false}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("deviceStatuses = %+v, want %+v", got, want)
+	}
+}
+
+func TestNetworkStatusIncludesExternalDeviceMarkers(t *testing.T) {
+	h, _ := newTestHandlerWithDesk(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := postForm(t, mux, "/admin/external-devices", "name=iPad&ip=10.0.0.50&port=8000&broadcast=on")
+	if got := rec.Header().Get("HX-Trigger-After-Swap"); got != "external-devices-changed" {
+		t.Fatalf("HX-Trigger-After-Swap = %q, want external-devices-changed", got)
+	}
+	if !strings.Contains(rec.Body.String(), `class="device-status"`) {
+		t.Fatalf("device card has no status marker: %s", rec.Body.String())
+	}
+
+	statusRec := httptest.NewRecorder()
+	mux.ServeHTTP(statusRec, httptest.NewRequest(http.MethodGet, "/admin/network/status", nil))
+	body := statusRec.Body.String()
+	for _, want := range []string{`class="status-dot`, `class="device-status offline" hx-swap-oob="true"`, `id="device-status-`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("status response missing %q: %s", want, body)
+		}
+	}
+}

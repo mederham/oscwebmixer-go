@@ -6,6 +6,7 @@
 		{{range .ExternalDevices}}
 		<div class="device-card" hx-post="/admin/external-devices/{{.ID}}" hx-trigger="change" hx-include="closest .device-card" hx-target="#section-external-devices" hx-swap="outerHTML">
 			<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" {{if .Broadcast}}checked{{end}} />
+			<span id="device-status-{{.ID}}" class="device-status"></span>
 			<div class="device-fields">
 				<input type="text" name="name" value="{{.Name}}" placeholder="Name" />
 				<div class="device-address">
@@ -53,7 +54,7 @@
 		<ol start="4">
 			<li>Click <b>+ Add device</b> and enter a name, the device's IP (shown as <b>Local IP</b> in the app) and the Receive Port from step 3.</li>
 		</ol>
-		<p>The <b>switch</b> on each device enables or disables the connection to the device.<br/><b>Loopback</b> also sends a device's own OSC messages back to it; leave it off unless the device needs that.</p>
+		<p>The <b>switch</b> on each device enables or disables the connection to the device.<br/><b>Loopback</b> also sends a device's own OSC messages back to it; leave it off unless the device needs that.<br/>The <b>bar</b> on the left of an enabled device is green if OSCWebMixer received a message from it in the last 10 seconds, and red otherwise.</p>
 	</details>
 </section>
 {{end}}

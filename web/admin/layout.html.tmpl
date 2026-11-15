@@ -27,7 +27,7 @@
 <body>
 <header class="topbar">
 	<h1>OSCWebMixer v{{.Version}}</h1>
-	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s" hx-swap="innerHTML">
+	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s, external-devices-changed from:body" hx-swap="innerHTML">
 		{{template "status-dot" .Network.DeskStatus}}
 	</div>
 	{{template "lock-toggle" .Network.DeskStatus}}

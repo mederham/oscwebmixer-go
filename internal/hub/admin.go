@@ -2,6 +2,8 @@ package hub
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
@@ -23,6 +25,8 @@ type DeskStatusInfo struct {
 	Status   string
 	LastSeen time.Time
 	Locked   bool
+
+	ExternalLastSeen map[string]time.Time
 }
 
 type AdminEvent struct {
@@ -64,6 +68,7 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.auxOverrides = ev.Auxes
 		h.externalDevices = ev.ExternalDevices
 		h.syncExternalSenders()
+		h.pruneExternalLastSeen()
 		h.autoHideChannelPatterns = ev.AutoHideChannelPatterns
 		h.autoHideGroupPatterns = ev.AutoHideGroupPatterns
 		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns
@@ -79,7 +84,7 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 
 	case AdminStatusQuery:
 		select {
-		case ev.StatusReply <- DeskStatusInfo{Status: string(h.status), LastSeen: h.lastDeskSeen, Locked: h.locked}:
+		case ev.StatusReply <- DeskStatusInfo{Status: string(h.status), LastSeen: h.lastDeskSeen, Locked: h.locked, ExternalLastSeen: maps.Clone(h.externalLastSeen)}:
 		default:
 		}
 
@@ -94,6 +99,14 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 	case AdminSendAuxOn:
 		for _, msg := range ev.Messages {
 			h.broadcast(msg, adminSource())
+		}
+	}
+}
+
+func (h *Hub) pruneExternalLastSeen() {
+	for id := range h.externalLastSeen {
+		if !slices.ContainsFunc(h.externalDevices, func(d ExternalDevice) bool { return d.ID == id }) {
+			delete(h.externalLastSeen, id)
 		}
 	}
 }

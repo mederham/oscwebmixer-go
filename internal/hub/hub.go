@@ -36,6 +36,7 @@ func (noopExternalSender) Enqueue(*net.UDPAddr, []byte) bool { return false }
 func (noopExternalSender) Seen(*net.UDPAddr)                 {}
 
 type ExternalDevice struct {
+	ID        string
 	Name      string
 	Addr      *net.UDPAddr
 	Broadcast bool
@@ -115,9 +116,10 @@ type Hub struct {
 	currentSnapshot   int
 	snapshotName      string
 
-	clients         map[string]chan<- oscmsg.Envelope
-	dropStreak      map[string]int
-	externalDevices []ExternalDevice
+	clients          map[string]chan<- oscmsg.Envelope
+	dropStreak       map[string]int
+	externalDevices  []ExternalDevice
+	externalLastSeen map[string]time.Time
 
 	lastSendErrLogged map[string]time.Time
 
@@ -216,6 +218,7 @@ func New(d DeskSender, logger *log.Logger, opts Options) *Hub {
 		autoHideGroupPatterns:   opts.AutoHideGroupPatterns,
 		autoHideAuxPatterns:     opts.AutoHideAuxPatterns,
 		externalDevices:         opts.ExternalDevices,
+		externalLastSeen:        make(map[string]time.Time),
 		startupRetryInterval:    opts.StartupRetryInterval,
 		healthCheckInterval:     healthCheckInterval,
 		debug:                   opts.Debug,
@@ -325,6 +328,7 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 			return
 		}
 		h.external.Seen(device.Addr)
+		h.externalLastSeen[device.ID] = time.Now()
 		if !device.Broadcast {
 			if h.debug {
 				h.debugf("  -> from external %q: dropped (broadcast disabled)", device.Name)
