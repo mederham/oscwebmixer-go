@@ -27,7 +27,7 @@
 <body>
 <header class="topbar">
 	<h1>OSCWebMixer v{{.Version}}</h1>
-	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s, external-devices-changed from:body" hx-swap="innerHTML">
+	<div id="desk-status" hx-get="/admin/network/status" hx-trigger="load, every 5s" hx-swap="innerHTML">
 		{{template "status-dot" .Network.DeskStatus}}
 	</div>
 	{{template "lock-toggle" .Network.DeskStatus}}
@@ -44,7 +44,7 @@
 </nav>
 
 <div class="tab-panel show" id="tab-network">{{template "network-section" .Network}}</div>
-<div class="tab-panel" id="tab-external-devices">{{template "external-devices-section" .Global}}</div>
+<div class="tab-panel" id="tab-external-devices">{{template "external-devices-section" .ExternalDevices}}</div>
 <div class="tab-panel" id="tab-sources">{{template "sources-section" .SourcesData}}</div>
 <div class="tab-panel" id="tab-auxes">{{template "auxes-section" .AuxesData}}</div>
 <div class="tab-panel" id="tab-presets">{{template "presets-section" .Presets}}</div>

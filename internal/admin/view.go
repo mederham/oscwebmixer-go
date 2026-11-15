@@ -11,14 +11,15 @@ import (
 )
 
 type ViewData struct {
-	Global      config.Global
-	Network     NetworkSectionData
-	SourcesData SourcesSectionData
-	AuxesData   AuxesSectionData
-	Presets     []PresetRow
-	Message     string
-	Version     string
-	Password    PasswordSectionData
+	Global          config.Global
+	Network         NetworkSectionData
+	ExternalDevices ExternalDevicesSectionData
+	SourcesData     SourcesSectionData
+	AuxesData       AuxesSectionData
+	Presets         []PresetRow
+	Message         string
+	Version         string
+	Password        PasswordSectionData
 }
 
 type PasswordSectionData struct {
@@ -35,21 +36,23 @@ const externalOnlineWindow = 10 * time.Second
 
 type NetworkStatusData struct {
 	DeskStatus hub.DeskStatusInfo
-	Devices    []DeviceStatus
+	Devices    []config.ExternalDevice
+	Online     map[string]bool
 }
 
-type DeviceStatus struct {
-	ID     string
-	Online bool
+type ExternalDevicesSectionData struct {
+	config.Global
+	Online map[string]bool
 }
 
-func deviceStatuses(devices []config.ExternalDevice, lastSeen map[string]time.Time, now time.Time) []DeviceStatus {
-	out := make([]DeviceStatus, 0, len(devices))
+func onlineByID(devices []config.ExternalDevice, lastSeen map[string]time.Time, now time.Time) map[string]bool {
+	online := make(map[string]bool, len(devices))
 	for _, d := range devices {
-		seen, ok := lastSeen[d.ID]
-		out = append(out, DeviceStatus{ID: d.ID, Online: ok && now.Sub(seen) < externalOnlineWindow})
+		if seen, ok := lastSeen[d.ID]; ok && now.Sub(seen) < externalOnlineWindow {
+			online[d.ID] = true
+		}
 	}
-	return out
+	return online
 }
 
 type LayoutOption struct {

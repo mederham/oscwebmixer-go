@@ -73,8 +73,12 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := ViewData{
-		Global:      global,
-		Network:     NetworkSectionData{Global: global, DeskStatus: status},
+		Global:  global,
+		Network: NetworkSectionData{Global: global, DeskStatus: status},
+		ExternalDevices: ExternalDevicesSectionData{
+			Global: global,
+			Online: onlineByID(global.ExternalDevices, status.ExternalLastSeen, time.Now()),
+		},
 		SourcesData: sourcesSectionData(cfg, queryLayoutID(r), false),
 		AuxesData:   auxesSectionData(cfg, h.icons, false),
 		Presets:     toPresetRows(presets, state.UUID),
@@ -532,7 +536,8 @@ func (h *Handler) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	data := NetworkStatusData{
 		DeskStatus: status,
-		Devices:    deviceStatuses(global.ExternalDevices, status.ExternalLastSeen, time.Now()),
+		Devices:    global.ExternalDevices,
+		Online:     onlineByID(global.ExternalDevices, status.ExternalLastSeen, time.Now()),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "network-status", data); err != nil {
@@ -650,9 +655,19 @@ func (h *Handler) handleExternalDeviceAdd(w http.ResponseWriter, r *http.Request
 		h.applyState(state)
 	}
 
+	h.renderExternalDevices(w, r, global)
+}
+
+func (h *Handler) renderExternalDevices(w http.ResponseWriter, r *http.Request, global config.Global) {
+	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
+	defer cancel()
+	var lastSeen map[string]time.Time
+	if status, err := h.queryStatus(ctx); err == nil {
+		lastSeen = status.ExternalLastSeen
+	}
+	data := ExternalDevicesSectionData{Global: global, Online: onlineByID(global.ExternalDevices, lastSeen, time.Now())}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("HX-Trigger-After-Swap", "external-devices-changed")
-	if err := h.tmpl.ExecuteTemplate(w, "external-devices-section", global); err != nil {
+	if err := h.tmpl.ExecuteTemplate(w, "external-devices-section", data); err != nil {
 		h.log.Printf("admin render: %v", err)
 	}
 }
@@ -694,11 +709,7 @@ func (h *Handler) handleExternalDeviceUpdate(w http.ResponseWriter, r *http.Requ
 		h.applyState(state)
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("HX-Trigger-After-Swap", "external-devices-changed")
-	if err := h.tmpl.ExecuteTemplate(w, "external-devices-section", global); err != nil {
-		h.log.Printf("admin render: %v", err)
-	}
+	h.renderExternalDevices(w, r, global)
 }
 
 func (h *Handler) handleExternalDeviceDelete(w http.ResponseWriter, r *http.Request) {
@@ -724,11 +735,7 @@ func (h *Handler) handleExternalDeviceDelete(w http.ResponseWriter, r *http.Requ
 		h.applyState(state)
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("HX-Trigger-After-Swap", "external-devices-changed")
-	if err := h.tmpl.ExecuteTemplate(w, "external-devices-section", global); err != nil {
-		h.log.Printf("admin render: %v", err)
-	}
+	h.renderExternalDevices(w, r, global)
 }
 
 func (h *Handler) handlePresetSave(w http.ResponseWriter, r *http.Request) {

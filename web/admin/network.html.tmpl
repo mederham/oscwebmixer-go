@@ -37,7 +37,7 @@
 
 {{define "network-status"}}
 {{template "status-dot" .DeskStatus}}
-{{range .Devices}}<span id="device-status-{{.ID}}" class="device-status {{if .Online}}online{{else}}offline{{end}}" hx-swap-oob="true"></span>
+{{range .Devices}}<span id="device-status-{{.ID}}" class="device-status {{if index $.Online .ID}}online{{else}}offline{{end}}" hx-swap-oob="true"></span>
 {{end}}
 {{end}}
 

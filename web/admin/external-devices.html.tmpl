@@ -6,7 +6,7 @@
 		{{range .ExternalDevices}}
 		<div class="device-card" hx-post="/admin/external-devices/{{.ID}}" hx-trigger="change" hx-include="closest .device-card" hx-target="#section-external-devices" hx-swap="outerHTML">
 			<input type="checkbox" class="toggle" name="broadcast" title="Broadcast" {{if .Broadcast}}checked{{end}} />
-			<span id="device-status-{{.ID}}" class="device-status"></span>
+			<span id="device-status-{{.ID}}" class="device-status {{if index $.Online .ID}}online{{else}}offline{{end}}"></span>
 			<div class="device-fields">
 				<input type="text" name="name" value="{{.Name}}" placeholder="Name" />
 				<div class="device-address">

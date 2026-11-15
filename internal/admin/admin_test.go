@@ -1261,7 +1261,7 @@ func TestAuxesTabRendersLayoutSelect(t *testing.T) {
 	}
 }
 
-func TestDeviceStatusesUseOnlineWindow(t *testing.T) {
+func TestOnlineByIDUsesOnlineWindow(t *testing.T) {
 	now := time.Now()
 	devices := []config.ExternalDevice{{ID: "recent"}, {ID: "stale"}, {ID: "never"}}
 	lastSeen := map[string]time.Time{
@@ -1269,32 +1269,49 @@ func TestDeviceStatusesUseOnlineWindow(t *testing.T) {
 		"stale":  now.Add(-externalOnlineWindow - time.Second),
 	}
 
-	got := deviceStatuses(devices, lastSeen, now)
-	want := []DeviceStatus{{ID: "recent", Online: true}, {ID: "stale", Online: false}, {ID: "never", Online: false}}
-	if !slices.Equal(got, want) {
-		t.Fatalf("deviceStatuses = %+v, want %+v", got, want)
+	got := onlineByID(devices, lastSeen, now)
+	if !got["recent"] || got["stale"] || got["never"] {
+		t.Fatalf("onlineByID = %v, want only recent online", got)
 	}
 }
 
-func TestNetworkStatusIncludesExternalDeviceMarkers(t *testing.T) {
-	h, _ := newTestHandlerWithDesk(t)
+func TestExternalDeviceStatusRenderedInSectionAndStatusPoll(t *testing.T) {
+	h, fd := newTestHandlerWithDesk(t)
 	mux := http.NewServeMux()
 	h.Register(mux)
 
 	rec := postForm(t, mux, "/admin/external-devices", "name=iPad&ip=10.0.0.50&port=8000&broadcast=on")
-	if got := rec.Header().Get("HX-Trigger-After-Swap"); got != "external-devices-changed" {
-		t.Fatalf("HX-Trigger-After-Swap = %q, want external-devices-changed", got)
-	}
-	if !strings.Contains(rec.Body.String(), `class="device-status"`) {
-		t.Fatalf("device card has no status marker: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `class="device-status offline"`) {
+		t.Fatalf("new device card isn't marked offline: %s", rec.Body.String())
 	}
 
-	statusRec := httptest.NewRecorder()
-	mux.ServeHTTP(statusRec, httptest.NewRequest(http.MethodGet, "/admin/network/status", nil))
-	body := statusRec.Body.String()
-	for _, want := range []string{`class="status-dot`, `class="device-status offline" hx-swap-oob="true"`, `id="device-status-`} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("status response missing %q: %s", want, body)
+	status := func() string {
+		r := httptest.NewRecorder()
+		mux.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/admin/network/status", nil))
+		return r.Body.String()
+	}
+	if body := status(); !strings.Contains(body, `class="device-status offline" hx-swap-oob="true"`) {
+		t.Fatalf("status poll missing offline marker: %s", body)
+	}
+
+	fd.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: "/Console/Name/?", Args: []any{}},
+		From:    &net.UDPAddr{IP: net.ParseIP("10.0.0.50"), Port: 8000},
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(status(), `class="device-status online" hx-swap-oob="true"`) {
+		if time.Now().After(deadline) {
+			t.Fatal("status poll never reported the device online after it sent a message")
 		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	rec = postForm(t, mux, "/admin/external-devices/"+global.ExternalDevices[0].ID, "name=iPad&ip=10.0.0.50&port=8000")
+	if !strings.Contains(rec.Body.String(), `class="device-status online"`) {
+		t.Fatalf("re-rendered section lost the online status: %s", rec.Body.String())
 	}
 }
