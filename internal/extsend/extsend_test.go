@@ -229,7 +229,7 @@ func TestBlockedDeviceDoesNotBlockOthers(t *testing.T) {
 		t.Fatalf("blocked device accepted %d msgs, want at most %d", deadAccepted, QueueSize+1)
 	}
 	s := m.senders[key(dead)]
-	if got, want := s.dropped.Load(), uint64(rounds*perRound-deadAccepted); got != want {
+	if got, want := s.droppedFull.Load(), uint64(rounds*perRound-deadAccepted); got != want {
 		t.Fatalf("blocked device dropped = %d, want %d", got, want)
 	}
 }
@@ -413,14 +413,53 @@ func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
 	if got := strings.Count(logs, "unreachable"); got != 1 {
 		t.Fatalf("logged %d unreachable lines, want 1:\n%s", got, logs)
 	}
-	if want := `external "iPad 2" (10.0.0.12:8001): unreachable (`; !strings.Contains(logs, want) {
-		t.Fatalf("log %q doesn't contain %q", logs, want)
+	for _, want := range []string{
+		`external "iPad 2" (10.0.0.12:8001): unreachable (`,
+		`(backed off 0, queue full 0, send failed 1)`,
+	} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("log %q doesn't contain %q", logs, want)
+		}
 	}
 
 	w.setErr(nil)
-	waitFor(t, "device up for recovery probe", func() bool { return !s.down.Load() })
+	waitFor(t, "device up for next probe", func() bool { return !s.down.Load() })
+	m.Enqueue(addr, []byte("x"))
+	waitFor(t, "successful write", func() bool { n, _ := w.stats(); return n == 4 })
+	time.Sleep(10 * time.Millisecond)
+	if strings.Contains(out.String(), "reachable again") {
+		t.Fatal("logged recovery after a successful UDP write without hearing from the device")
+	}
+
+	m.Seen(addr)
 	m.Enqueue(addr, []byte("x"))
 	waitFor(t, "recovery log", func() bool { return strings.Contains(out.String(), "reachable again") })
+}
+
+func TestSeenEndsBackoffImmediately(t *testing.T) {
+	fn := newFakeNet()
+	addr := udpAddr("10.0.0.12", 8001)
+	w := fn.writer(addr.String())
+	w.setErr(&net.OpError{Op: "write", Net: "udp", Err: os.NewSyscallError("write", syscall.EHOSTUNREACH)})
+
+	var out syncBuffer
+	m := newTestManager(t, fn, &out)
+	m.backoff = time.Hour
+	m.Sync([]Device{{Name: "iPad", Addr: addr}})
+	s := m.senders[key(addr)]
+
+	m.Enqueue(addr, []byte("x"))
+	waitFor(t, "device to be marked down", s.down.Load)
+
+	w.setErr(nil)
+	m.Seen(addr)
+	waitFor(t, "Seen to end the backoff", func() bool { return !s.down.Load() })
+	waitFor(t, "recovery log", func() bool { return strings.Contains(out.String(), "reachable again") })
+
+	if !m.Enqueue(addr, []byte("y")) {
+		t.Fatal("Enqueue after Seen returned false")
+	}
+	waitFor(t, "write after recovery", func() bool { n, _ := w.stats(); return n == 2 })
 }
 
 func TestRefusedLocalPortDoesNotAffectOtherDevices(t *testing.T) {

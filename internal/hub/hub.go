@@ -26,12 +26,14 @@ type DeskSender interface {
 type ExternalSender interface {
 	Sync(devices []extsend.Device)
 	Enqueue(addr *net.UDPAddr, pkt []byte) bool
+	Seen(addr *net.UDPAddr)
 }
 
 type noopExternalSender struct{}
 
 func (noopExternalSender) Sync([]extsend.Device)             {}
 func (noopExternalSender) Enqueue(*net.UDPAddr, []byte) bool { return false }
+func (noopExternalSender) Seen(*net.UDPAddr)                 {}
 
 type ExternalDevice struct {
 	Name      string
@@ -322,6 +324,7 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 			}
 			return
 		}
+		h.external.Seen(device.Addr)
 		if !device.Broadcast {
 			if h.debug {
 				h.debugf("  -> from external %q: dropped (broadcast disabled)", device.Name)

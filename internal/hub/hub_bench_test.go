@@ -22,6 +22,7 @@ type discardExternal struct{}
 
 func (discardExternal) Sync([]extsend.Device)             {}
 func (discardExternal) Enqueue(*net.UDPAddr, []byte) bool { return true }
+func (discardExternal) Seen(*net.UDPAddr)                 {}
 
 func benchHub(b *testing.B, clients int) *Hub {
 	b.Helper()

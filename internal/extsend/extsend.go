@@ -105,6 +105,12 @@ func (m *Manager) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
 	return s.enqueue(pkt)
 }
 
+func (m *Manager) Seen(addr *net.UDPAddr) {
+	if s, ok := m.senders[key(addr)]; ok {
+		s.seen()
+	}
+}
+
 func (m *Manager) Close() {
 	stopped := make([]*sender, 0, len(m.senders))
 	for k, s := range m.senders {
@@ -128,11 +134,16 @@ type sender struct {
 	backoff      time.Duration
 
 	queue  chan []byte
+	wake   chan struct{}
 	done   chan struct{}
 	exited chan struct{}
 
-	down    atomic.Bool
-	dropped atomic.Uint64
+	down  atomic.Bool
+	alive atomic.Bool
+
+	droppedBackoff atomic.Uint64
+	droppedFull    atomic.Uint64
+	droppedFailed  atomic.Uint64
 
 	// Owned by the sender goroutine.
 	w            writer
@@ -151,6 +162,7 @@ func (m *Manager) newSender(d Device) *sender {
 		writeTimeout: m.writeTimeout,
 		backoff:      m.backoff,
 		queue:        make(chan []byte, m.queueSize),
+		wake:         make(chan struct{}, 1),
 		done:         make(chan struct{}),
 		exited:       make(chan struct{}),
 		windowStart:  time.Now(),
@@ -165,15 +177,27 @@ func (s *sender) label() string { return fmt.Sprintf("external %q (%s)", *s.name
 
 func (s *sender) enqueue(pkt []byte) bool {
 	if s.down.Load() {
-		s.dropped.Add(1)
+		s.droppedBackoff.Add(1)
 		return false
 	}
 	select {
 	case s.queue <- pkt:
 		return true
 	default:
-		s.dropped.Add(1)
+		s.droppedFull.Add(1)
 		return false
+	}
+}
+
+func (s *sender) seen() {
+	if !s.alive.Load() {
+		s.alive.Store(true)
+	}
+	if s.down.Load() {
+		select {
+		case s.wake <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -205,7 +229,7 @@ func (s *sender) send(pkt []byte) bool {
 	if s.w == nil {
 		w, err := s.dial(s.udpAddr)
 		if err != nil {
-			s.dropped.Add(1)
+			s.droppedFailed.Add(1)
 			return s.backOff(now, fmt.Errorf("dial: %w", err))
 		}
 		s.w = w
@@ -216,7 +240,7 @@ func (s *sender) send(pkt []byte) bool {
 	if s.deadline.Sub(now) < s.writeTimeout/2 {
 		s.deadline = now.Add(s.writeTimeout)
 		if err := s.w.SetWriteDeadline(s.deadline); err != nil {
-			s.dropped.Add(1)
+			s.droppedFailed.Add(1)
 			s.logThrottled(now, fmt.Sprintf("set write deadline: %v", err))
 			return true
 		}
@@ -224,17 +248,16 @@ func (s *sender) send(pkt []byte) bool {
 
 	_, err := s.w.Write(pkt)
 	if err == nil {
-		if s.reportedDown {
-			s.reportedDown = false
-			s.log.Printf("%s: reachable again", s.label())
+		if s.reportedDown && s.alive.Load() {
+			s.recovered()
 		}
-		if s.dropped.Load() != 0 {
+		if s.droppedFull.Load() != 0 {
 			s.logThrottled(now, "queue full")
 		}
 		return true
 	}
 
-	s.dropped.Add(1)
+	s.droppedFailed.Add(1)
 	if isUnreachable(err) {
 		return s.backOff(now, err)
 	}
@@ -250,12 +273,22 @@ func isUnreachable(err error) bool {
 		errors.Is(err, syscall.ECONNREFUSED)
 }
 
+func (s *sender) recovered() {
+	s.reportedDown = false
+	s.log.Printf("%s: reachable again", s.label())
+}
+
 func (s *sender) backOff(now time.Time, cause error) bool {
 	s.down.Store(true)
+	s.alive.Store(false)
+	select {
+	case <-s.wake:
+	default:
+	}
 	for drained := false; !drained; {
 		select {
 		case <-s.queue:
-			s.dropped.Add(1)
+			s.droppedBackoff.Add(1)
 		default:
 			drained = true
 		}
@@ -268,19 +301,26 @@ func (s *sender) backOff(now time.Time, cause error) bool {
 	select {
 	case <-s.done:
 		return false
+	case <-s.wake:
+		s.down.Store(false)
+		if s.reportedDown {
+			s.recovered()
+		}
+		return true
 	case <-t.C:
+		s.down.Store(false)
+		return true
 	}
-	s.down.Store(false)
-	return true
 }
 
 func (s *sender) logThrottled(now time.Time, what string) bool {
 	if !s.lastLogged.IsZero() && now.Sub(s.lastLogged) < logInterval {
 		return false
 	}
-	n := s.dropped.Swap(0)
+	backedOff, full, failed := s.droppedBackoff.Swap(0), s.droppedFull.Swap(0), s.droppedFailed.Swap(0)
 	window := now.Sub(s.windowStart).Round(time.Second)
 	s.lastLogged, s.windowStart = now, now
-	s.log.Printf("%s: %s, dropped %d msg(s) in last %s", s.label(), what, n, window)
+	s.log.Printf("%s: %s, dropped %d msg(s) in last %s (backed off %d, queue full %d, send failed %d)",
+		s.label(), what, backedOff+full+failed, window, backedOff, full, failed)
 	return true
 }

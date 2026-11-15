@@ -131,6 +131,8 @@ func (d *scriptedDesk) Sync(devices []extsend.Device) {
 	d.syncs = append(d.syncs, devices)
 }
 
+func (d *scriptedDesk) Seen(*net.UDPAddr) {}
+
 func (d *scriptedDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
 	msg, err := desk.Decode(pkt)
 	if err != nil {
@@ -1573,6 +1575,8 @@ func (r *pktRecorder) SendEncoded(pkt []byte) error {
 
 func (r *pktRecorder) Sync([]extsend.Device) {}
 
+func (r *pktRecorder) Seen(*net.UDPAddr) {}
+
 func (r *pktRecorder) Enqueue(_ *net.UDPAddr, pkt []byte) bool {
 	r.ptrs = append(r.ptrs, &pkt[0])
 	return true
@@ -1687,5 +1691,32 @@ func TestBroadcastThroughRealSendersReachesHealthyDeviceDespiteDeadOne(t *testin
 	}
 	if inBroadcast > time.Second {
 		t.Fatalf("spent %s in broadcast for %d msgs, want < 1s", inBroadcast, rounds*perRound)
+	}
+}
+
+type seenRecorder struct {
+	noopDesk
+	seen []*net.UDPAddr
+}
+
+func (r *seenRecorder) Sync([]extsend.Device)             {}
+func (r *seenRecorder) Enqueue(*net.UDPAddr, []byte) bool { return true }
+func (r *seenRecorder) Seen(addr *net.UDPAddr)            { r.seen = append(r.seen, addr) }
+
+func TestMessageFromExternalDeviceMarksItSeen(t *testing.T) {
+	rec := &seenRecorder{}
+	ipad := &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}
+	h := New(rec, log.New(io.Discard, "", 0), Options{
+		DeskIP:          "10.0.0.18",
+		ExternalSender:  rec,
+		ExternalDevices: []ExternalDevice{{Name: "iPad", Addr: ipad, Broadcast: true}},
+	})
+	h.status = StatusHealthy
+
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Channels/?", Args: []any{}}, "10.0.0.99")
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Channels/?", Args: []any{}}, "10.0.0.12")
+
+	if len(rec.seen) != 1 || rec.seen[0] != ipad {
+		t.Fatalf("seen = %v, want only %v", rec.seen, ipad)
 	}
 }
