@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mederham/oscwebmixer-go/internal/desk"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
@@ -96,27 +97,40 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 	}
 	if !fromDesk {
 		h.lastClientDriven[msg.Address] = time.Now()
-		if err := h.desk.Send(msg); err != nil {
+	}
+
+	// Encode once, and only if someone needs the wire format. The same slice
+	// goes to the desk and to every external device, so it must not be modified.
+	var pkt []byte
+	encodeOK := true
+	if !fromDesk || h.anyExternalTarget(source) {
+		var err error
+		if pkt, err = desk.Encode(msg); err != nil {
+			encodeOK = false
+			h.logSendErrThrottled("encode", "broadcast %s: encode: %v", msg.Address, err)
+		}
+	}
+
+	if !fromDesk && encodeOK {
+		if err := h.desk.SendEncoded(pkt); err != nil {
 			h.logSendErrThrottled("desk", "broadcast to desk: %v", err)
 		} else if h.debug {
 			h.debugf("  -> desk: sent")
 		}
 	}
 
-	for _, ext := range h.externalDevices {
-		if !ext.Broadcast {
+	for i := range h.externalDevices {
+		ext := &h.externalDevices[i]
+		if reason := externalSkipReason(ext, source); reason != "" {
 			if h.debug {
-				h.debugf("  -> external %q: skipped (broadcast disabled)", ext.Name)
+				h.debugf("  -> external %q: skipped (%s)", ext.Name, reason)
 			}
 			continue
 		}
-		if !ext.Loopback && source.ip != "" && ext.Addr.IP.String() == source.ip {
-			if h.debug {
-				h.debugf("  -> external %q: skipped (loopback source)", ext.Name)
-			}
-			continue
+		if !encodeOK {
+			break
 		}
-		if err := h.desk.SendTo(msg, ext.Addr); err != nil {
+		if err := h.desk.SendTo(pkt, ext.Addr); err != nil {
 			h.logSendErrThrottled(ext.Addr.String(), "broadcast to external %q: %v", ext.Name, err)
 		} else if h.debug {
 			h.debugf("  -> external %q at %s: sent", ext.Name, ext.Addr)
@@ -139,6 +153,27 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 		}
 		h.sendTo(id, out, env)
 	}
+}
+
+// externalSkipReason returns why a message from source must not be relayed to
+// ext, or "" if it should be.
+func externalSkipReason(ext *ExternalDevice, source broadcastSource) string {
+	if !ext.Broadcast {
+		return "broadcast disabled"
+	}
+	if !ext.Loopback && source.ip != "" && ext.Addr.IP.String() == source.ip {
+		return "loopback source"
+	}
+	return ""
+}
+
+func (h *Hub) anyExternalTarget(source broadcastSource) bool {
+	for i := range h.externalDevices {
+		if externalSkipReason(&h.externalDevices[i], source) == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Hub) logSendErrThrottled(key, format string, args ...any) {

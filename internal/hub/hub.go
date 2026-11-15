@@ -17,7 +17,8 @@ import (
 
 type DeskSender interface {
 	Send(msg oscmsg.Message) error
-	SendTo(msg oscmsg.Message, addr *net.UDPAddr) error
+	SendEncoded(pkt []byte) error
+	SendTo(pkt []byte, addr *net.UDPAddr) error
 	SetRemote(ip string, port int) error
 	Rebind(localPort int) error
 }

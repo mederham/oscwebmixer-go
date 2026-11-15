@@ -185,12 +185,12 @@ func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
 	}
 	defer c.Close()
 
-	msg := oscmsg.Message{Address: "/ping", Args: []any{}}
+	pkt := pingPayload(t)
 
 	for i := 0; i < 5; i++ {
-		c.SendTo(msg, deadAddr)
+		c.SendTo(pkt, deadAddr)
 	}
-	if err := c.SendTo(msg, recvAddr); err != nil {
+	if err := c.SendTo(pkt, recvAddr); err != nil {
 		t.Fatalf("SendTo healthy addr right after dead addr: %v", err)
 	}
 	assertReceivesPing(t, recv)

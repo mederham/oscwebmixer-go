@@ -77,7 +77,19 @@ func (d *fakeDesk) Send(msg oscmsg.Message) error {
 	return nil
 }
 
-func (d *fakeDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
+func (d *fakeDesk) SendEncoded(pkt []byte) error {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return err
+	}
+	return d.Send(msg)
+}
+
+func (d *fakeDesk) SendTo(pkt []byte, addr *net.UDPAddr) error {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return err
+	}
 	d.mu.Lock()
 	d.sentTo = append(d.sentTo, sentToCall{msg: msg, addr: addr})
 	d.mu.Unlock()

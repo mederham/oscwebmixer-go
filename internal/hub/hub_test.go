@@ -114,7 +114,19 @@ type externalSend struct {
 	Addr    *net.UDPAddr
 }
 
-func (d *scriptedDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
+func (d *scriptedDesk) SendEncoded(pkt []byte) error {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return err
+	}
+	return d.Send(msg)
+}
+
+func (d *scriptedDesk) SendTo(pkt []byte, addr *net.UDPAddr) error {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return err
+	}
 	if d.sentExternal != nil {
 		select {
 		case d.sentExternal <- externalSend{Message: msg, Addr: addr}:
@@ -1532,5 +1544,48 @@ func TestBuildConfigPerLayoutIndependence(t *testing.T) {
 
 	if len(cfg.Auxes) != 1 || cfg.Auxes[0].LayoutID != "mon-1" {
 		t.Fatalf("auxes = %+v, want aux 1 layoutId=mon-1", cfg.Auxes)
+	}
+}
+
+// pktRecorder records the first byte's address of every packet it is given,
+// so tests can check that one encoded slice is shared by all recipients.
+type pktRecorder struct {
+	noopDesk
+	ptrs []*byte
+}
+
+func (r *pktRecorder) SendEncoded(pkt []byte) error {
+	r.ptrs = append(r.ptrs, &pkt[0])
+	return nil
+}
+
+func (r *pktRecorder) SendTo(pkt []byte, _ *net.UDPAddr) error {
+	r.ptrs = append(r.ptrs, &pkt[0])
+	return nil
+}
+
+func TestBroadcastEncodesOncePerMessage(t *testing.T) {
+	rec := &pktRecorder{}
+	var devices []ExternalDevice
+	for i := 0; i < 3; i++ {
+		devices = append(devices, ExternalDevice{
+			Name:      fmt.Sprintf("dev%d", i),
+			Addr:      &net.UDPAddr{IP: net.IPv4(10, 0, 0, byte(50+i)), Port: 9000},
+			Broadcast: true,
+		})
+	}
+	h := New(rec, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.18", ExternalDevices: devices})
+	h.status = StatusHealthy
+
+	msg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
+	h.broadcast(msg, clientSource("c1"))
+
+	if len(rec.ptrs) != 4 {
+		t.Fatalf("got %d sends, want 4 (desk + 3 external devices)", len(rec.ptrs))
+	}
+	for i, p := range rec.ptrs[1:] {
+		if p != rec.ptrs[0] {
+			t.Fatalf("send %d got a different slice than the desk: message was encoded more than once", i+1)
+		}
 	}
 }

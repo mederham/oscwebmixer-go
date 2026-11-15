@@ -115,6 +115,14 @@ func (c *Conn) Run(ctx context.Context) error {
 }
 
 func (c *Conn) Send(msg oscmsg.Message) error {
+	pkt, err := Encode(msg)
+	if err != nil {
+		return err
+	}
+	return c.SendEncoded(pkt)
+}
+
+func (c *Conn) SendEncoded(pkt []byte) error {
 	c.mu.Lock()
 	raddr := c.raddr
 	sock := c.sock
@@ -122,24 +130,17 @@ func (c *Conn) Send(msg oscmsg.Message) error {
 	if raddr == nil {
 		return ErrNoDesk
 	}
-	oscMsg, err := toOSC(msg)
-	if err != nil {
-		return err
-	}
-	_, err = sock.WriteToUDP(oscMsg.Bytes(), raddr)
+	_, err := sock.WriteToUDP(pkt, raddr)
 	return err
 }
 
-func (c *Conn) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
-	oscMsg, err := toOSC(msg)
-	if err != nil {
-		return err
-	}
+// SendTo sends an already encoded OSC message (see Encode) to addr.
+func (c *Conn) SendTo(pkt []byte, addr *net.UDPAddr) error {
 	sock, err := c.sendSock(addr)
 	if err != nil {
 		return err
 	}
-	_, err = sock.Write(oscMsg.Bytes())
+	_, err = sock.Write(pkt)
 	return err
 }
 

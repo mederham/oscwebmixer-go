@@ -11,10 +11,11 @@ import (
 
 type noopDesk struct{}
 
-func (noopDesk) Send(oscmsg.Message) error                 { return nil }
-func (noopDesk) SendTo(oscmsg.Message, *net.UDPAddr) error { return nil }
-func (noopDesk) SetRemote(string, int) error               { return nil }
-func (noopDesk) Rebind(int) error                          { return nil }
+func (noopDesk) Send(oscmsg.Message) error         { return nil }
+func (noopDesk) SendEncoded([]byte) error          { return nil }
+func (noopDesk) SendTo([]byte, *net.UDPAddr) error { return nil }
+func (noopDesk) SetRemote(string, int) error       { return nil }
+func (noopDesk) Rebind(int) error                  { return nil }
 
 func benchHub(b *testing.B, clients int) *Hub {
 	b.Helper()
