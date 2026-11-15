@@ -22,6 +22,7 @@ import (
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/hub"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 	"github.com/mederham/oscwebmixer-go/web"
@@ -85,15 +86,17 @@ func (d *fakeDesk) SendEncoded(pkt []byte) error {
 	return d.Send(msg)
 }
 
-func (d *fakeDesk) SendTo(pkt []byte, addr *net.UDPAddr) error {
+func (d *fakeDesk) Sync([]extsend.Device) {}
+
+func (d *fakeDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
 	msg, err := desk.Decode(pkt)
 	if err != nil {
-		return err
+		return false
 	}
 	d.mu.Lock()
 	d.sentTo = append(d.sentTo, sentToCall{msg: msg, addr: addr})
 	d.mu.Unlock()
-	return nil
+	return true
 }
 
 func (d *fakeDesk) SetRemote(ip string, port int) error {
@@ -143,7 +146,7 @@ func newTestHandler(t *testing.T) *Handler {
 func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	t.Helper()
 	fd := &fakeDesk{inbound: make(chan desk.InboundMessage, 64)}
-	h := hub.New(fd, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := hub.New(fd, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond, ExternalSender: fd})
 	adminEvents := make(chan hub.AdminEvent, 16)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

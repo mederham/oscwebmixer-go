@@ -16,6 +16,7 @@ import (
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
@@ -35,6 +36,7 @@ type scriptedDesk struct {
 
 	remoteCalls  []remoteCall
 	rebindCalls  []int
+	syncs        [][]extsend.Device
 	setRemoteErr error
 	rebindErr    error
 }
@@ -122,10 +124,16 @@ func (d *scriptedDesk) SendEncoded(pkt []byte) error {
 	return d.Send(msg)
 }
 
-func (d *scriptedDesk) SendTo(pkt []byte, addr *net.UDPAddr) error {
+func (d *scriptedDesk) Sync(devices []extsend.Device) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.syncs = append(d.syncs, devices)
+}
+
+func (d *scriptedDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
 	msg, err := desk.Decode(pkt)
 	if err != nil {
-		return err
+		return false
 	}
 	if d.sentExternal != nil {
 		select {
@@ -133,7 +141,7 @@ func (d *scriptedDesk) SendTo(pkt []byte, addr *net.UDPAddr) error {
 		default:
 		}
 	}
-	return nil
+	return true
 }
 
 func (d *scriptedDesk) SetRemote(ip string, port int) error {
@@ -769,6 +777,7 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP:               deskIP,
 		StartupRetryInterval: 50 * time.Millisecond,
+		ExternalSender:       fakeDesk,
 		ExternalDevices: []ExternalDevice{
 			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: true, Loopback: false},
 			{Name: "Other", Addr: &net.UDPAddr{IP: net.ParseIP(otherIP), Port: 9000}, Broadcast: true, Loopback: false},
@@ -896,6 +905,7 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP:               deskIP,
 		StartupRetryInterval: 50 * time.Millisecond,
+		ExternalSender:       fakeDesk,
 		ExternalDevices: []ExternalDevice{
 			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: true, Loopback: false},
 		},
@@ -1559,9 +1569,11 @@ func (r *pktRecorder) SendEncoded(pkt []byte) error {
 	return nil
 }
 
-func (r *pktRecorder) SendTo(pkt []byte, _ *net.UDPAddr) error {
+func (r *pktRecorder) Sync([]extsend.Device) {}
+
+func (r *pktRecorder) Enqueue(_ *net.UDPAddr, pkt []byte) bool {
 	r.ptrs = append(r.ptrs, &pkt[0])
-	return nil
+	return true
 }
 
 func TestBroadcastEncodesOncePerMessage(t *testing.T) {
@@ -1574,7 +1586,7 @@ func TestBroadcastEncodesOncePerMessage(t *testing.T) {
 			Broadcast: true,
 		})
 	}
-	h := New(rec, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.18", ExternalDevices: devices})
+	h := New(rec, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.18", ExternalDevices: devices, ExternalSender: rec})
 	h.status = StatusHealthy
 
 	msg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
@@ -1587,5 +1599,31 @@ func TestBroadcastEncodesOncePerMessage(t *testing.T) {
 		if p != rec.ptrs[0] {
 			t.Fatalf("send %d got a different slice than the desk: message was encoded more than once", i+1)
 		}
+	}
+}
+
+func TestExternalSendersSyncedOnStartAndAdminApply(t *testing.T) {
+	fakeDesk := &scriptedDesk{}
+	ipad := &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}
+	other := &net.UDPAddr{IP: net.ParseIP("10.0.0.13"), Port: 9000}
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
+		ExternalSender: fakeDesk,
+		ExternalDevices: []ExternalDevice{
+			{Name: "iPad", Addr: ipad, Broadcast: true},
+			{Name: "Other", Addr: other, Broadcast: false},
+		},
+	})
+
+	h.handleAdminEvent(AdminEvent{Kind: AdminApply, ExternalDevices: []ExternalDevice{
+		{Name: "iPad renamed", Addr: ipad, Broadcast: true},
+		{Name: "Other", Addr: other, Broadcast: true},
+	}})
+
+	want := [][]extsend.Device{
+		{{Name: "iPad", Addr: ipad}},
+		{{Name: "iPad renamed", Addr: ipad}, {Name: "Other", Addr: other}},
+	}
+	if fmt.Sprint(fakeDesk.syncs) != fmt.Sprint(want) {
+		t.Fatalf("syncs = %v, want %v", fakeDesk.syncs, want)
 	}
 }

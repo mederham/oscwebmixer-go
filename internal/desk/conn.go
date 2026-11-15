@@ -30,8 +30,6 @@ type Conn struct {
 	sock  *net.UDPConn
 	raddr *net.UDPAddr
 
-	sendSocks map[string]*net.UDPConn
-
 	inbound chan InboundMessage
 }
 
@@ -51,10 +49,9 @@ func Listen(localPort int, deskIP string, deskPort int) (*Conn, error) {
 	}
 
 	return &Conn{
-		sock:      sock,
-		raddr:     raddr,
-		sendSocks: make(map[string]*net.UDPConn),
-		inbound:   make(chan InboundMessage, inboundBufferSize),
+		sock:    sock,
+		raddr:   raddr,
+		inbound: make(chan InboundMessage, inboundBufferSize),
 	}, nil
 }
 
@@ -134,34 +131,6 @@ func (c *Conn) SendEncoded(pkt []byte) error {
 	return err
 }
 
-// SendTo sends an already encoded OSC message (see Encode) to addr.
-func (c *Conn) SendTo(pkt []byte, addr *net.UDPAddr) error {
-	sock, err := c.sendSock(addr)
-	if err != nil {
-		return err
-	}
-	_, err = sock.Write(pkt)
-	return err
-}
-
-func (c *Conn) sendSock(addr *net.UDPAddr) (*net.UDPConn, error) {
-	key := addr.String()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if sock, ok := c.sendSocks[key]; ok {
-		return sock, nil
-	}
-
-	sock, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		return nil, fmt.Errorf("dial udp %s: %w", addr, err)
-	}
-	c.sendSocks[key] = sock
-	return sock, nil
-}
-
 func (c *Conn) SetRemote(ip string, port int) error {
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
@@ -202,11 +171,6 @@ func newListenSocket(localPort int) (*net.UDPConn, error) {
 func (c *Conn) Close() error {
 	c.mu.Lock()
 	sock := c.sock
-	sendSocks := c.sendSocks
-	c.sendSocks = make(map[string]*net.UDPConn)
 	c.mu.Unlock()
-	for _, s := range sendSocks {
-		s.Close()
-	}
 	return sock.Close()
 }

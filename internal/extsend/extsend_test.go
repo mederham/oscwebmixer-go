@@ -398,7 +398,7 @@ func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
 
 	var out syncBuffer
 	m := newTestManager(t, fn, &out)
-	m.backoff = 20 * time.Millisecond
+	m.backoff = 100 * time.Millisecond
 	m.Sync([]Device{{Name: "iPad 2", Addr: addr}})
 	s := m.senders[key(addr)]
 
@@ -406,6 +406,7 @@ func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
 		waitFor(t, "device up for next probe", func() bool { return !s.down.Load() })
 		m.Enqueue(addr, []byte("x"))
 		waitFor(t, fmt.Sprintf("probe %d", i), func() bool { n, _ := w.stats(); return n == i })
+		waitFor(t, "device down after failed probe", s.down.Load)
 	}
 
 	logs := out.String()
@@ -420,4 +421,40 @@ func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
 	waitFor(t, "device up for recovery probe", func() bool { return !s.down.Load() })
 	m.Enqueue(addr, []byte("x"))
 	waitFor(t, "recovery log", func() bool { return strings.Contains(out.String(), "reachable again") })
+}
+
+func TestRefusedLocalPortDoesNotAffectOtherDevices(t *testing.T) {
+	recv, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer recv.Close()
+	good := recv.LocalAddr().(*net.UDPAddr)
+
+	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	dead := deadSock.LocalAddr().(*net.UDPAddr)
+	deadSock.Close()
+
+	m := New(log.New(io.Discard, "", 0))
+	defer m.Close()
+	m.Sync([]Device{{Name: "dead", Addr: dead}, {Name: "good", Addr: good}})
+
+	for i := 0; i < 5; i++ {
+		m.Enqueue(dead, []byte("x"))
+	}
+	if !m.Enqueue(good, []byte("hello")) {
+		t.Fatal("Enqueue to the healthy device returned false")
+	}
+	recv.SetReadDeadline(time.Now().Add(time.Second))
+	buf := make([]byte, 64)
+	n, _, err := recv.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(buf[:n]) != "hello" {
+		t.Fatalf("got %q, want hello", buf[:n])
+	}
 }

@@ -164,38 +164,6 @@ func TestListenWithoutDeskIPThenSetRemote(t *testing.T) {
 	assertReceivesPing(t, recv)
 }
 
-func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
-	recv, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
-	if err != nil {
-		t.Fatalf("listen recv: %v", err)
-	}
-	defer recv.Close()
-	recvAddr := recv.LocalAddr().(*net.UDPAddr)
-
-	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen deadSock: %v", err)
-	}
-	deadAddr := deadSock.LocalAddr().(*net.UDPAddr)
-	deadSock.Close()
-
-	c, err := Listen(0, "", 0)
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer c.Close()
-
-	pkt := pingPayload(t)
-
-	for i := 0; i < 5; i++ {
-		c.SendTo(pkt, deadAddr)
-	}
-	if err := c.SendTo(pkt, recvAddr); err != nil {
-		t.Fatalf("SendTo healthy addr right after dead addr: %v", err)
-	}
-	assertReceivesPing(t, recv)
-}
-
 func TestSetRemoteRejectsInvalidIP(t *testing.T) {
 	c, err := Listen(0, "127.0.0.1", 1)
 	if err != nil {

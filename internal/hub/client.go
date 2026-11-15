@@ -130,10 +130,13 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 		if !encodeOK {
 			break
 		}
-		if err := h.desk.SendTo(pkt, ext.Addr); err != nil {
-			h.logSendErrThrottled(ext.Addr.String(), "broadcast to external %q: %v", ext.Name, err)
-		} else if h.debug {
-			h.debugf("  -> external %q at %s: sent", ext.Name, ext.Addr)
+		queued := h.external.Enqueue(ext.Addr, pkt)
+		if h.debug {
+			if queued {
+				h.debugf("  -> external %q at %s: queued", ext.Name, ext.Addr)
+			} else {
+				h.debugf("  -> external %q at %s: dropped (queue full or device down)", ext.Name, ext.Addr)
+			}
 		}
 	}
 

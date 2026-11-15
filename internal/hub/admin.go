@@ -63,6 +63,7 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.layouts = ev.Layouts
 		h.auxOverrides = ev.Auxes
 		h.externalDevices = ev.ExternalDevices
+		h.syncExternalSenders()
 		h.autoHideChannelPatterns = ev.AutoHideChannelPatterns
 		h.autoHideGroupPatterns = ev.AutoHideGroupPatterns
 		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns

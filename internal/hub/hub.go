@@ -12,16 +12,26 @@ import (
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
 type DeskSender interface {
 	Send(msg oscmsg.Message) error
 	SendEncoded(pkt []byte) error
-	SendTo(pkt []byte, addr *net.UDPAddr) error
 	SetRemote(ip string, port int) error
 	Rebind(localPort int) error
 }
+
+type ExternalSender interface {
+	Sync(devices []extsend.Device)
+	Enqueue(addr *net.UDPAddr, pkt []byte) bool
+}
+
+type noopExternalSender struct{}
+
+func (noopExternalSender) Sync([]extsend.Device)             {}
+func (noopExternalSender) Enqueue(*net.UDPAddr, []byte) bool { return false }
 
 type ExternalDevice struct {
 	Name      string
@@ -83,8 +93,9 @@ func adminSource() broadcastSource {
 }
 
 type Hub struct {
-	desk DeskSender
-	log  *log.Logger
+	desk     DeskSender
+	external ExternalSender
+	log      *log.Logger
 
 	deskIP         string
 	deskPort       int
@@ -159,6 +170,8 @@ type Options struct {
 	InitialAuxes   []config.Aux
 
 	ExternalDevices []ExternalDevice
+	// nil disables relaying to external devices.
+	ExternalSender ExternalSender
 
 	AutoHideChannelPatterns []string
 	AutoHideGroupPatterns   []string
@@ -176,8 +189,13 @@ func New(d DeskSender, logger *log.Logger, opts Options) *Hub {
 	for _, ip := range opts.TrustedDeskIPs {
 		trustedDeskIPs[ip] = true
 	}
-	return &Hub{
+	external := opts.ExternalSender
+	if external == nil {
+		external = noopExternalSender{}
+	}
+	h := &Hub{
 		desk:                    d,
+		external:                external,
 		log:                     logger,
 		deskIP:                  opts.DeskIP,
 		deskPort:                opts.DeskPort,
@@ -200,6 +218,18 @@ func New(d DeskSender, logger *log.Logger, opts Options) *Hub {
 		healthCheckInterval:     healthCheckInterval,
 		debug:                   opts.Debug,
 	}
+	h.syncExternalSenders()
+	return h
+}
+
+func (h *Hub) syncExternalSenders() {
+	devices := make([]extsend.Device, 0, len(h.externalDevices))
+	for _, d := range h.externalDevices {
+		if d.Broadcast && d.Addr != nil {
+			devices = append(devices, extsend.Device{Name: d.Name, Addr: d.Addr})
+		}
+	}
+	h.external.Sync(devices)
 }
 
 func (h *Hub) Ready() <-chan Snapshot { return h.ready }
