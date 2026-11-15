@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,6 +133,8 @@ func (d *scriptedDesk) Sync(devices []extsend.Device) {
 }
 
 func (d *scriptedDesk) Seen(*net.UDPAddr) {}
+
+func (d *scriptedDesk) SetDebug(bool) {}
 
 func (d *scriptedDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
 	msg, err := desk.Decode(pkt)
@@ -1577,6 +1580,8 @@ func (r *pktRecorder) Sync([]extsend.Device) {}
 
 func (r *pktRecorder) Seen(*net.UDPAddr) {}
 
+func (r *pktRecorder) SetDebug(bool) {}
+
 func (r *pktRecorder) Enqueue(_ *net.UDPAddr, pkt []byte) bool {
 	r.ptrs = append(r.ptrs, &pkt[0])
 	return true
@@ -1696,12 +1701,14 @@ func TestBroadcastThroughRealSendersReachesHealthyDeviceDespiteDeadOne(t *testin
 
 type seenRecorder struct {
 	noopDesk
-	seen []*net.UDPAddr
+	seen  []*net.UDPAddr
+	debug []bool
 }
 
 func (r *seenRecorder) Sync([]extsend.Device)             {}
 func (r *seenRecorder) Enqueue(*net.UDPAddr, []byte) bool { return true }
 func (r *seenRecorder) Seen(addr *net.UDPAddr)            { r.seen = append(r.seen, addr) }
+func (r *seenRecorder) SetDebug(on bool)                  { r.debug = append(r.debug, on) }
 
 func TestMessageFromExternalDeviceMarksItSeen(t *testing.T) {
 	rec := &seenRecorder{}
@@ -1756,5 +1763,15 @@ func TestExternalLastSeenIsReportedAsCopyAndPruned(t *testing.T) {
 	h.handleAdminEvent(AdminEvent{Kind: AdminApply})
 	if seen := query(); len(seen) != 0 {
 		t.Fatalf("last seen after removing the device = %v, want empty", seen)
+	}
+}
+
+func TestExternalSenderDebugFollowsHub(t *testing.T) {
+	rec := &seenRecorder{}
+	h := New(rec, log.New(io.Discard, "", 0), Options{ExternalSender: rec, Debug: true})
+	h.handleAdminEvent(AdminEvent{Kind: AdminApply, Debug: false})
+
+	if !slices.Equal(rec.debug, []bool{true, false}) {
+		t.Fatalf("SetDebug calls = %v, want [true false]", rec.debug)
 	}
 }

@@ -73,6 +73,7 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.autoHideGroupPatterns = ev.AutoHideGroupPatterns
 		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns
 		h.debug = ev.Debug
+		h.external.SetDebug(ev.Debug)
 
 		h.log.Printf("admin config applied: %d layout(s), %d aux override(s), %d external device(s)",
 			len(ev.Layouts), len(ev.Auxes), len(ev.ExternalDevices))

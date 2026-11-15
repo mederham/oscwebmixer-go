@@ -90,6 +90,8 @@ func (d *fakeDesk) Sync([]extsend.Device) {}
 
 func (d *fakeDesk) Seen(*net.UDPAddr) {}
 
+func (d *fakeDesk) SetDebug(bool) {}
+
 func (d *fakeDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
 	msg, err := desk.Decode(pkt)
 	if err != nil {

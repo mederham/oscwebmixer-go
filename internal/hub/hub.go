@@ -27,6 +27,7 @@ type ExternalSender interface {
 	Sync(devices []extsend.Device)
 	Enqueue(addr *net.UDPAddr, pkt []byte) bool
 	Seen(addr *net.UDPAddr)
+	SetDebug(on bool)
 }
 
 type noopExternalSender struct{}
@@ -34,6 +35,7 @@ type noopExternalSender struct{}
 func (noopExternalSender) Sync([]extsend.Device)             {}
 func (noopExternalSender) Enqueue(*net.UDPAddr, []byte) bool { return false }
 func (noopExternalSender) Seen(*net.UDPAddr)                 {}
+func (noopExternalSender) SetDebug(bool)                     {}
 
 type ExternalDevice struct {
 	ID        string
@@ -224,6 +226,7 @@ func New(d DeskSender, logger *log.Logger, opts Options) *Hub {
 		debug:                   opts.Debug,
 	}
 	h.syncExternalSenders()
+	h.external.SetDebug(h.debug)
 	return h
 }
 

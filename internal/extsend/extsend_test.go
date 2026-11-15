@@ -2,7 +2,6 @@ package extsend
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -292,9 +291,10 @@ func TestOtherWriteErrorsDoNotBackOff(t *testing.T) {
 	fn := newFakeNet()
 	addr := udpAddr("10.0.0.12", 9000)
 	w := fn.writer(addr.String())
-	w.setErr(errors.New("message too long"))
+	w.setErr(&net.OpError{Op: "write", Net: "udp", Err: os.NewSyscallError("write", syscall.EACCES)})
 
-	m := newTestManager(t, fn, io.Discard)
+	var out syncBuffer
+	m := newTestManager(t, fn, &out)
 	m.Sync([]Device{{Name: "iPad", Addr: addr}})
 
 	for i := 0; i < 3; i++ {
@@ -305,6 +305,10 @@ func TestOtherWriteErrorsDoNotBackOff(t *testing.T) {
 	waitFor(t, "all writes attempted", func() bool { n, _ := w.stats(); return n == 3 })
 	if m.senders[key(addr)].down.Load() {
 		t.Fatal("device backed off on a non-reachability error")
+	}
+	const want = `external device "iPad" (10.0.0.12:9000) send error: permission denied` + "\n"
+	if got := out.String(); got != want {
+		t.Fatalf("log = %q, want exactly %q", got, want)
 	}
 }
 
@@ -390,11 +394,12 @@ func TestSyncLifecycle(t *testing.T) {
 	m.Close()
 }
 
-func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
+func TestNotReachableIsLoggedOnceUntilRecovery(t *testing.T) {
 	fn := newFakeNet()
 	addr := udpAddr("10.0.0.12", 8001)
 	w := fn.writer(addr.String())
-	w.setErr(&net.OpError{Op: "write", Net: "udp", Err: os.ErrDeadlineExceeded})
+	timeout := &net.OpError{Op: "write", Net: "udp", Err: os.ErrDeadlineExceeded}
+	w.setErr(timeout)
 
 	var out syncBuffer
 	m := newTestManager(t, fn, &out)
@@ -402,30 +407,25 @@ func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
 	m.Sync([]Device{{Name: "iPad 2", Addr: addr}})
 	s := m.senders[key(addr)]
 
-	for i := 1; i <= 3; i++ {
+	probe := func(i int) {
+		t.Helper()
 		waitFor(t, "device up for next probe", func() bool { return !s.down.Load() })
 		m.Enqueue(addr, []byte("x"))
-		waitFor(t, fmt.Sprintf("probe %d", i), func() bool { n, _ := w.stats(); return n == i })
+		waitFor(t, fmt.Sprintf("write %d", i), func() bool { n, _ := w.stats(); return n == i })
+	}
+	for i := 1; i <= 3; i++ {
+		probe(i)
 		waitFor(t, "device down after failed probe", s.down.Load)
 	}
 
+	const down = `external device "iPad 2" (10.0.0.12:8001) not reachable` + "\n"
 	logs := out.String()
-	if got := strings.Count(logs, "unreachable"); got != 1 {
-		t.Fatalf("logged %d unreachable lines, want 1:\n%s", got, logs)
-	}
-	for _, want := range []string{
-		`external "iPad 2" (10.0.0.12:8001): unreachable (`,
-		`(backed off 0, queue full 0, send failed 1)`,
-	} {
-		if !strings.Contains(logs, want) {
-			t.Fatalf("log %q doesn't contain %q", logs, want)
-		}
+	if logs != down {
+		t.Fatalf("log after 3 failed probes = %q, want exactly %q", logs, down)
 	}
 
 	w.setErr(nil)
-	waitFor(t, "device up for next probe", func() bool { return !s.down.Load() })
-	m.Enqueue(addr, []byte("x"))
-	waitFor(t, "successful write", func() bool { n, _ := w.stats(); return n == 4 })
+	probe(4)
 	time.Sleep(10 * time.Millisecond)
 	if strings.Contains(out.String(), "reachable again") {
 		t.Fatal("logged recovery after a successful UDP write without hearing from the device")
@@ -433,7 +433,36 @@ func TestUnreachableIsLoggedOncePerInterval(t *testing.T) {
 
 	m.Seen(addr)
 	m.Enqueue(addr, []byte("x"))
-	waitFor(t, "recovery log", func() bool { return strings.Contains(out.String(), "reachable again") })
+	waitFor(t, "recovery log", func() bool {
+		return strings.Contains(out.String(), `external device "iPad 2" (10.0.0.12:8001) reachable again`)
+	})
+
+	w.setErr(timeout)
+	probe(6)
+	waitFor(t, "second not reachable log", func() bool { return strings.Count(out.String(), "not reachable") == 2 })
+}
+
+func TestDebugSummaryIncludesDropDetails(t *testing.T) {
+	fn := newFakeNet()
+	addr := udpAddr("10.0.0.12", 8001)
+	w := fn.writer(addr.String())
+	w.setErr(&net.OpError{Op: "write", Net: "udp", Err: os.ErrDeadlineExceeded})
+
+	var out syncBuffer
+	m := newTestManager(t, fn, &out)
+	m.SetDebug(true)
+	m.Sync([]Device{{Name: "iPad 2", Addr: addr}})
+
+	m.Enqueue(addr, []byte("x"))
+	waitFor(t, "debug summary", func() bool { return strings.Contains(out.String(), "[debug]") })
+	for _, want := range []string{
+		`[debug] external device "iPad 2" (10.0.0.12:8001): unreachable (`,
+		`(backed off 0, queue full 0, send failed 1)`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("log %q doesn't contain %q", out.String(), want)
+		}
+	}
 }
 
 func TestSeenEndsBackoffImmediately(t *testing.T) {

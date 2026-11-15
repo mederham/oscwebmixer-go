@@ -48,6 +48,8 @@ type Manager struct {
 	writeTimeout time.Duration
 	backoff      time.Duration
 
+	debug atomic.Bool
+
 	senders map[netip.AddrPort]*sender
 }
 
@@ -61,6 +63,8 @@ func New(logger *log.Logger) *Manager {
 		senders:      make(map[netip.AddrPort]*sender),
 	}
 }
+
+func (m *Manager) SetDebug(on bool) { m.debug.Store(on) }
 
 func key(addr *net.UDPAddr) netip.AddrPort {
 	ap := addr.AddrPort()
@@ -124,9 +128,10 @@ func (m *Manager) Close() {
 }
 
 type sender struct {
-	addr string
-	name atomic.Pointer[string]
-	log  *log.Logger
+	addr  string
+	name  atomic.Pointer[string]
+	log   *log.Logger
+	debug *atomic.Bool
 
 	dial         func(*net.UDPAddr) (writer, error)
 	udpAddr      *net.UDPAddr
@@ -148,7 +153,8 @@ type sender struct {
 	// Owned by the sender goroutine.
 	w            writer
 	deadline     time.Time
-	lastLogged   time.Time
+	lastWarned   time.Time
+	lastSummary  time.Time
 	windowStart  time.Time
 	reportedDown bool
 }
@@ -157,6 +163,7 @@ func (m *Manager) newSender(d Device) *sender {
 	s := &sender{
 		addr:         d.Addr.String(),
 		log:          m.log,
+		debug:        &m.debug,
 		dial:         m.dial,
 		udpAddr:      d.Addr,
 		writeTimeout: m.writeTimeout,
@@ -173,7 +180,9 @@ func (m *Manager) newSender(d Device) *sender {
 
 func (s *sender) setName(name string) { s.name.Store(&name) }
 
-func (s *sender) label() string { return fmt.Sprintf("external %q (%s)", *s.name.Load(), s.addr) }
+func (s *sender) label() string {
+	return fmt.Sprintf("external device %q (%s)", *s.name.Load(), s.addr)
+}
 
 func (s *sender) enqueue(pkt []byte) bool {
 	if s.down.Load() {
@@ -241,7 +250,7 @@ func (s *sender) send(pkt []byte) bool {
 		s.deadline = now.Add(s.writeTimeout)
 		if err := s.w.SetWriteDeadline(s.deadline); err != nil {
 			s.droppedFailed.Add(1)
-			s.logThrottled(now, fmt.Sprintf("set write deadline: %v", err))
+			s.warn(now, "send error: "+shortErr(err), fmt.Sprintf("set write deadline (%v)", err))
 			return true
 		}
 	}
@@ -252,7 +261,7 @@ func (s *sender) send(pkt []byte) bool {
 			s.recovered()
 		}
 		if s.droppedFull.Load() != 0 {
-			s.logThrottled(now, "queue full")
+			s.warn(now, "too slow, dropping messages", "queue full")
 		}
 		return true
 	}
@@ -261,8 +270,16 @@ func (s *sender) send(pkt []byte) bool {
 	if isUnreachable(err) {
 		return s.backOff(now, err)
 	}
-	s.logThrottled(now, fmt.Sprintf("send error: %v", err))
+	s.warn(now, "send error: "+shortErr(err), fmt.Sprintf("send error (%v)", err))
 	return true
+}
+
+func shortErr(err error) string {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errno.Error()
+	}
+	return err.Error()
 }
 
 func isUnreachable(err error) bool {
@@ -275,7 +292,7 @@ func isUnreachable(err error) bool {
 
 func (s *sender) recovered() {
 	s.reportedDown = false
-	s.log.Printf("%s: reachable again", s.label())
+	s.log.Printf("%s reachable again", s.label())
 }
 
 func (s *sender) backOff(now time.Time, cause error) bool {
@@ -294,7 +311,11 @@ func (s *sender) backOff(now time.Time, cause error) bool {
 		}
 	}
 
-	s.reportedDown = s.logThrottled(now, fmt.Sprintf("unreachable (%v)", cause)) || s.reportedDown
+	if !s.reportedDown {
+		s.reportedDown = true
+		s.log.Printf("%s not reachable", s.label())
+	}
+	s.debugSummary(now, fmt.Sprintf("unreachable (%v)", cause))
 
 	t := time.NewTimer(s.backoff)
 	defer t.Stop()
@@ -313,14 +334,24 @@ func (s *sender) backOff(now time.Time, cause error) bool {
 	}
 }
 
-func (s *sender) logThrottled(now time.Time, what string) bool {
-	if !s.lastLogged.IsZero() && now.Sub(s.lastLogged) < logInterval {
-		return false
+func (s *sender) warn(now time.Time, msg, detail string) {
+	if s.lastWarned.IsZero() || now.Sub(s.lastWarned) >= logInterval {
+		s.lastWarned = now
+		s.log.Printf("%s %s", s.label(), msg)
+	}
+	s.debugSummary(now, detail)
+}
+
+func (s *sender) debugSummary(now time.Time, what string) {
+	if !s.debug.Load() {
+		return
+	}
+	if !s.lastSummary.IsZero() && now.Sub(s.lastSummary) < logInterval {
+		return
 	}
 	backedOff, full, failed := s.droppedBackoff.Swap(0), s.droppedFull.Swap(0), s.droppedFailed.Swap(0)
 	window := now.Sub(s.windowStart).Round(time.Second)
-	s.lastLogged, s.windowStart = now, now
-	s.log.Printf("%s: %s, dropped %d msg(s) in last %s (backed off %d, queue full %d, send failed %d)",
+	s.lastSummary, s.windowStart = now, now
+	s.log.Printf("[debug] %s: %s, dropped %d msg(s) in last %s (backed off %d, queue full %d, send failed %d)",
 		s.label(), what, backedOff+full+failed, window, backedOff, full, failed)
-	return true
 }
