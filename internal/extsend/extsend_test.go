@@ -458,3 +458,17 @@ func TestRefusedLocalPortDoesNotAffectOtherDevices(t *testing.T) {
 		t.Fatalf("got %q, want hello", buf[:n])
 	}
 }
+
+func BenchmarkEnqueue(b *testing.B) {
+	fn := newFakeNet()
+	addr := udpAddr("10.0.0.12", 9000)
+	m := New(log.New(io.Discard, "", 0))
+	m.dial = fn.dial
+	defer m.Close()
+	m.Sync([]Device{{Name: "iPad", Addr: addr}})
+	pkt := []byte("/Input_Channels/24/Aux_Send/3/send_level\x00\x00\x00\x00,f\x00\x00\xc1\x48\x00\x00")
+	b.ReportAllocs()
+	for b.Loop() {
+		m.Enqueue(addr, pkt)
+	}
+}

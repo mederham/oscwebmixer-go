@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"net/netip"
 	"strings"
 	"time"
 
@@ -103,7 +104,9 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 	// goes to the desk and to every external device, so it must not be modified.
 	var pkt []byte
 	encodeOK := true
-	if !fromDesk || h.anyExternalTarget(source) {
+	srcIP, _ := netip.ParseAddr(source.ip)
+	srcIP = srcIP.Unmap()
+	if !fromDesk || h.anyExternalTarget(srcIP) {
 		var err error
 		if pkt, err = desk.Encode(msg); err != nil {
 			encodeOK = false
@@ -121,7 +124,7 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 
 	for i := range h.externalDevices {
 		ext := &h.externalDevices[i]
-		if reason := externalSkipReason(ext, source); reason != "" {
+		if reason := externalSkipReason(ext, srcIP); reason != "" {
 			if h.debug {
 				h.debugf("  -> external %q: skipped (%s)", ext.Name, reason)
 			}
@@ -158,21 +161,24 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 	}
 }
 
-// externalSkipReason returns why a message from source must not be relayed to
-// ext, or "" if it should be.
-func externalSkipReason(ext *ExternalDevice, source broadcastSource) string {
+// externalSkipReason returns why a message from srcIP must not be relayed to
+// ext, or "" if it should be. srcIP is unmapped, and invalid for non-network
+// sources. netip avoids an IP.String allocation per device and message.
+func externalSkipReason(ext *ExternalDevice, srcIP netip.Addr) string {
 	if !ext.Broadcast {
 		return "broadcast disabled"
 	}
-	if !ext.Loopback && source.ip != "" && ext.Addr.IP.String() == source.ip {
-		return "loopback source"
+	if !ext.Loopback && srcIP.IsValid() {
+		if ip, ok := netip.AddrFromSlice(ext.Addr.IP); ok && ip.Unmap() == srcIP {
+			return "loopback source"
+		}
 	}
 	return ""
 }
 
-func (h *Hub) anyExternalTarget(source broadcastSource) bool {
+func (h *Hub) anyExternalTarget(srcIP netip.Addr) bool {
 	for i := range h.externalDevices {
-		if externalSkipReason(&h.externalDevices[i], source) == "" {
+		if externalSkipReason(&h.externalDevices[i], srcIP) == "" {
 			return true
 		}
 	}

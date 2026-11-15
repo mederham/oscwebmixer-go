@@ -1,21 +1,27 @@
 package hub
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"testing"
 
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
 type noopDesk struct{}
 
-func (noopDesk) Send(oscmsg.Message) error         { return nil }
-func (noopDesk) SendEncoded([]byte) error          { return nil }
-func (noopDesk) SendTo([]byte, *net.UDPAddr) error { return nil }
-func (noopDesk) SetRemote(string, int) error       { return nil }
-func (noopDesk) Rebind(int) error                  { return nil }
+func (noopDesk) Send(oscmsg.Message) error   { return nil }
+func (noopDesk) SendEncoded([]byte) error    { return nil }
+func (noopDesk) SetRemote(string, int) error { return nil }
+func (noopDesk) Rebind(int) error            { return nil }
+
+type discardExternal struct{}
+
+func (discardExternal) Sync([]extsend.Device)             {}
+func (discardExternal) Enqueue(*net.UDPAddr, []byte) bool { return true }
 
 func benchHub(b *testing.B, clients int) *Hub {
 	b.Helper()
@@ -61,5 +67,27 @@ func BenchmarkMaybeCache_NonCacheable(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		h.maybeCache(msg)
+	}
+}
+
+func BenchmarkBroadcast(b *testing.B) {
+	for _, n := range []int{1, 3, 8} {
+		b.Run(fmt.Sprintf("devices=%d", n), func(b *testing.B) {
+			h := benchHub(b, 2)
+			h.external = discardExternal{}
+			for i := 0; i < n; i++ {
+				h.externalDevices = append(h.externalDevices, ExternalDevice{
+					Name:      fmt.Sprintf("dev%d", i),
+					Addr:      &net.UDPAddr{IP: net.IPv4(10, 0, 0, byte(50+i)), Port: 9000},
+					Broadcast: true,
+				})
+			}
+			msg := oscmsg.Message{Address: "/Input_Channels/24/Aux_Send/3/send_level", Args: []any{float32(-12.5)}}
+			src := deskSource("10.0.0.18")
+			b.ReportAllocs()
+			for b.Loop() {
+				h.broadcast(msg, src)
+			}
+		})
 	}
 }

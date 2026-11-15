@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1625,5 +1626,65 @@ func TestExternalSendersSyncedOnStartAndAdminApply(t *testing.T) {
 	}
 	if fmt.Sprint(fakeDesk.syncs) != fmt.Sprint(want) {
 		t.Fatalf("syncs = %v, want %v", fakeDesk.syncs, want)
+	}
+}
+
+func TestBroadcastThroughRealSendersReachesHealthyDeviceDespiteDeadOne(t *testing.T) {
+	recv, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer recv.Close()
+	recv.SetReadBuffer(4 << 20)
+	var received atomic.Int64
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			if _, _, err := recv.ReadFromUDP(buf); err != nil {
+				return
+			}
+			received.Add(1)
+		}
+	}()
+
+	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	dead := deadSock.LocalAddr().(*net.UDPAddr)
+	deadSock.Close()
+
+	senders := extsend.New(log.New(io.Discard, "", 0))
+	defer senders.Close()
+	h := New(noopDesk{}, log.New(io.Discard, "", 0), Options{
+		DeskIP:         "10.0.0.18",
+		ExternalSender: senders,
+		ExternalDevices: []ExternalDevice{
+			{Name: "dead", Addr: dead, Broadcast: true},
+			{Name: "good", Addr: recv.LocalAddr().(*net.UDPAddr), Broadcast: true},
+		},
+	})
+	h.status = StatusHealthy
+
+	const rounds, perRound = 10, 500
+	msg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
+	var inBroadcast time.Duration
+	for r := 1; r <= rounds; r++ {
+		start := time.Now()
+		for i := 0; i < perRound; i++ {
+			h.broadcast(msg, deskSource("10.0.0.18"))
+		}
+		inBroadcast += time.Since(start)
+
+		deadline := time.Now().Add(2 * time.Second)
+		for received.Load() < int64(r*perRound) {
+			if time.Now().After(deadline) {
+				t.Fatalf("round %d: healthy device received %d of %d", r, received.Load(), r*perRound)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if inBroadcast > time.Second {
+		t.Fatalf("spent %s in broadcast for %d msgs, want < 1s", inBroadcast, rounds*perRound)
 	}
 }
