@@ -103,18 +103,16 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 	// Encode once, and only if someone needs the wire format. The same slice
 	// goes to the desk and to every external device, so it must not be modified.
 	var pkt []byte
-	encodeOK := true
 	srcIP, _ := netip.ParseAddr(source.ip)
 	srcIP = srcIP.Unmap()
 	if !fromDesk || h.anyExternalTarget(srcIP) {
 		var err error
 		if pkt, err = desk.Encode(msg); err != nil {
-			encodeOK = false
 			h.logSendErrThrottled("encode", "broadcast %s: encode: %v", msg.Address, err)
 		}
 	}
 
-	if !fromDesk && encodeOK {
+	if !fromDesk && pkt != nil {
 		if err := h.desk.SendEncoded(pkt); err != nil {
 			h.logSendErrThrottled("desk", "broadcast to desk: %v", err)
 		} else if h.debug {
@@ -130,7 +128,7 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 			}
 			continue
 		}
-		if !encodeOK {
+		if pkt == nil {
 			break
 		}
 		queued := h.external.Enqueue(ext.Addr, pkt)

@@ -92,8 +92,10 @@ func (m *Manager) Sync(devices []Device) {
 
 	for k, d := range want {
 		if s, ok := m.senders[k]; ok {
-			s.setName(d.Name)
-			continue
+			if s.name == d.Name {
+				continue
+			}
+			s.stop()
 		}
 		s := m.newSender(d)
 		m.senders[k] = s
@@ -116,20 +118,17 @@ func (m *Manager) Seen(addr *net.UDPAddr) {
 }
 
 func (m *Manager) Close() {
-	stopped := make([]*sender, 0, len(m.senders))
-	for k, s := range m.senders {
+	for _, s := range m.senders {
 		s.stop()
-		stopped = append(stopped, s)
-		delete(m.senders, k)
 	}
-	for _, s := range stopped {
+	for _, s := range m.senders {
 		<-s.exited
 	}
+	clear(m.senders)
 }
 
 type sender struct {
-	addr  string
-	name  atomic.Pointer[string]
+	name  string
 	log   *log.Logger
 	debug *atomic.Bool
 
@@ -161,7 +160,7 @@ type sender struct {
 
 func (m *Manager) newSender(d Device) *sender {
 	s := &sender{
-		addr:         d.Addr.String(),
+		name:         d.Name,
 		log:          m.log,
 		debug:        &m.debug,
 		dial:         m.dial,
@@ -174,14 +173,11 @@ func (m *Manager) newSender(d Device) *sender {
 		exited:       make(chan struct{}),
 		windowStart:  time.Now(),
 	}
-	s.setName(d.Name)
 	return s
 }
 
-func (s *sender) setName(name string) { s.name.Store(&name) }
-
 func (s *sender) label() string {
-	return fmt.Sprintf("external device %q (%s)", *s.name.Load(), s.addr)
+	return fmt.Sprintf("external device %q (%s)", s.name, s.udpAddr)
 }
 
 func (s *sender) enqueue(pkt []byte) bool {
@@ -199,9 +195,7 @@ func (s *sender) enqueue(pkt []byte) bool {
 }
 
 func (s *sender) seen() {
-	if !s.alive.Load() {
-		s.alive.Store(true)
-	}
+	s.alive.Store(true)
 	if s.down.Load() {
 		select {
 		case s.wake <- struct{}{}:

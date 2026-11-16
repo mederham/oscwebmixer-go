@@ -3,7 +3,6 @@ package hub
 import (
 	"fmt"
 	"maps"
-	"slices"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
@@ -68,7 +67,6 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.auxOverrides = ev.Auxes
 		h.externalDevices = ev.ExternalDevices
 		h.syncExternalSenders()
-		h.pruneExternalLastSeen()
 		h.autoHideChannelPatterns = ev.AutoHideChannelPatterns
 		h.autoHideGroupPatterns = ev.AutoHideGroupPatterns
 		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns
@@ -100,14 +98,6 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 	case AdminSendAuxOn:
 		for _, msg := range ev.Messages {
 			h.broadcast(msg, adminSource())
-		}
-	}
-}
-
-func (h *Hub) pruneExternalLastSeen() {
-	for id := range h.externalLastSeen {
-		if !slices.ContainsFunc(h.externalDevices, func(d ExternalDevice) bool { return d.ID == id }) {
-			delete(h.externalLastSeen, id)
 		}
 	}
 }

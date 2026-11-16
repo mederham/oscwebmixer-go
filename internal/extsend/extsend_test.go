@@ -346,13 +346,10 @@ func TestSyncLifecycle(t *testing.T) {
 	}
 	senderA, senderB := m.senders[key(a)], m.senders[key(b)]
 
-	m.Sync([]Device{{Name: "A renamed", Addr: a}, {Name: "C", Addr: c}})
+	m.Sync([]Device{{Name: "A", Addr: a}, {Name: "C", Addr: c}})
 
 	if m.senders[key(a)] != senderA {
 		t.Fatal("unchanged device got a new sender")
-	}
-	if got := *senderA.name.Load(); got != "A renamed" {
-		t.Fatalf("name after rename = %q, want %q", got, "A renamed")
 	}
 	if _, ok := m.senders[key(b)]; ok {
 		t.Fatal("removed device still has a sender")
@@ -377,9 +374,19 @@ func TestSyncLifecycle(t *testing.T) {
 		t.Fatalf("A dialled %d times, want 1 (no reconnect on sync)", got)
 	}
 
-	senderC := m.senders[key(c)]
+	m.Sync([]Device{{Name: "A renamed", Addr: a}, {Name: "C", Addr: c}})
+	if got := m.senders[key(a)]; got == senderA || got.name != "A renamed" {
+		t.Fatal("renamed device kept its old sender")
+	}
+	select {
+	case <-senderA.exited:
+	case <-time.After(time.Second):
+		t.Fatal("renamed device's old goroutine didn't exit")
+	}
+
+	senderA2, senderC := m.senders[key(a)], m.senders[key(c)]
 	m.Close()
-	for name, s := range map[string]*sender{"A": senderA, "C": senderC} {
+	for name, s := range map[string]*sender{"A": senderA2, "C": senderC} {
 		select {
 		case <-s.exited:
 		default:

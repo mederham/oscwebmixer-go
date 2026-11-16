@@ -1728,7 +1728,7 @@ func TestMessageFromExternalDeviceMarksItSeen(t *testing.T) {
 	}
 }
 
-func TestExternalLastSeenIsReportedAsCopyAndPruned(t *testing.T) {
+func TestExternalLastSeenIsReportedAsCopy(t *testing.T) {
 	rec := &seenRecorder{}
 	ipad := ExternalDevice{ID: "ipad", Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}, Broadcast: true}
 	h := New(rec, log.New(io.Discard, "", 0), Options{
@@ -1758,11 +1758,6 @@ func TestExternalLastSeenIsReportedAsCopyAndPruned(t *testing.T) {
 	delete(seen, "ipad")
 	if _, ok := query()["ipad"]; !ok {
 		t.Fatal("status reply shares the hub's map instead of a copy")
-	}
-
-	h.handleAdminEvent(AdminEvent{Kind: AdminApply})
-	if seen := query(); len(seen) != 0 {
-		t.Fatalf("last seen after removing the device = %v, want empty", seen)
 	}
 }
 
