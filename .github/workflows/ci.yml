@@ -32,7 +32,11 @@ jobs:
           IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             VERSION="${{ github.ref_name }}"
-            TAGS="$IMAGE:$VERSION"$'\n'"$IMAGE:latest"
+            case "$VERSION" in
+              *-*) CHANNEL=beta ;;    # pre-releases: 0.8.0-beta.1, 0.8.0-rc.1
+              *)   CHANNEL=latest ;;
+            esac
+            TAGS="$IMAGE:$VERSION"$'\n'"$IMAGE:$CHANNEL"
           else
             VERSION="$(cat VERSION)-${GITHUB_SHA:0:7}"
             TAGS="$IMAGE:$VERSION"
