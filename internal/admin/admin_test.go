@@ -22,6 +22,7 @@ import (
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/hub"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 	"github.com/mederham/oscwebmixer-go/web"
@@ -77,11 +78,29 @@ func (d *fakeDesk) Send(msg oscmsg.Message) error {
 	return nil
 }
 
-func (d *fakeDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
+func (d *fakeDesk) SendEncoded(pkt []byte) error {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return err
+	}
+	return d.Send(msg)
+}
+
+func (d *fakeDesk) Sync([]extsend.Device) {}
+
+func (d *fakeDesk) Seen(*net.UDPAddr) {}
+
+func (d *fakeDesk) SetDebug(bool) {}
+
+func (d *fakeDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return false
+	}
 	d.mu.Lock()
 	d.sentTo = append(d.sentTo, sentToCall{msg: msg, addr: addr})
 	d.mu.Unlock()
-	return nil
+	return true
 }
 
 func (d *fakeDesk) SetRemote(ip string, port int) error {
@@ -131,7 +150,7 @@ func newTestHandler(t *testing.T) *Handler {
 func newTestHandlerWithDesk(t *testing.T) (*Handler, *fakeDesk) {
 	t.Helper()
 	fd := &fakeDesk{inbound: make(chan desk.InboundMessage, 64)}
-	h := hub.New(fd, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond})
+	h := hub.New(fd, log.New(io.Discard, "", 0), hub.Options{StartupRetryInterval: 50 * time.Millisecond, ExternalSender: fd})
 	adminEvents := make(chan hub.AdminEvent, 16)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1241,5 +1260,60 @@ func TestAuxesTabRendersLayoutSelect(t *testing.T) {
 
 	if !strings.Contains(body, id+`" selected`) {
 		t.Errorf("aux 1's layout select doesn't preselect %q: %s", id, body)
+	}
+}
+
+func TestOnlineByIDUsesOnlineWindow(t *testing.T) {
+	now := time.Now()
+	devices := []config.ExternalDevice{{ID: "recent"}, {ID: "stale"}, {ID: "never"}}
+	lastSeen := map[string]time.Time{
+		"recent": now.Add(-2 * time.Second),
+		"stale":  now.Add(-externalOnlineWindow - time.Second),
+	}
+
+	got := onlineByID(devices, lastSeen, now)
+	if !got["recent"] || got["stale"] || got["never"] {
+		t.Fatalf("onlineByID = %v, want only recent online", got)
+	}
+}
+
+func TestExternalDeviceStatusRenderedInSectionAndStatusPoll(t *testing.T) {
+	h, fd := newTestHandlerWithDesk(t)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := postForm(t, mux, "/admin/external-devices", "name=iPad&ip=10.0.0.50&port=8000&broadcast=on")
+	if !strings.Contains(rec.Body.String(), `class="device-status offline"`) {
+		t.Fatalf("new device card isn't marked offline: %s", rec.Body.String())
+	}
+
+	status := func() string {
+		r := httptest.NewRecorder()
+		mux.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/admin/network/status", nil))
+		return r.Body.String()
+	}
+	if body := status(); !strings.Contains(body, `class="device-status offline" hx-swap-oob="true"`) {
+		t.Fatalf("status poll missing offline marker: %s", body)
+	}
+
+	fd.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: "/Console/Name/?", Args: []any{}},
+		From:    &net.UDPAddr{IP: net.ParseIP("10.0.0.50"), Port: 8000},
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(status(), `class="device-status online" hx-swap-oob="true"`) {
+		if time.Now().After(deadline) {
+			t.Fatal("status poll never reported the device online after it sent a message")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	global, err := h.cfg.LoadGlobalOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalOrDefault: %v", err)
+	}
+	rec = postForm(t, mux, "/admin/external-devices/"+global.ExternalDevices[0].ID, "name=iPad&ip=10.0.0.50&port=8000")
+	if !strings.Contains(rec.Body.String(), `class="device-status online"`) {
+		t.Fatalf("re-rendered section lost the online status: %s", rec.Body.String())
 	}
 }

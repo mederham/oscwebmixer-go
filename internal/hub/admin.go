@@ -2,6 +2,7 @@ package hub
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
@@ -23,6 +24,8 @@ type DeskStatusInfo struct {
 	Status   string
 	LastSeen time.Time
 	Locked   bool
+
+	ExternalLastSeen map[string]time.Time
 }
 
 type AdminEvent struct {
@@ -63,10 +66,12 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 		h.layouts = ev.Layouts
 		h.auxOverrides = ev.Auxes
 		h.externalDevices = ev.ExternalDevices
+		h.syncExternalSenders()
 		h.autoHideChannelPatterns = ev.AutoHideChannelPatterns
 		h.autoHideGroupPatterns = ev.AutoHideGroupPatterns
 		h.autoHideAuxPatterns = ev.AutoHideAuxPatterns
 		h.debug = ev.Debug
+		h.external.SetDebug(ev.Debug)
 
 		h.log.Printf("admin config applied: %d layout(s), %d aux override(s), %d external device(s)",
 			len(ev.Layouts), len(ev.Auxes), len(ev.ExternalDevices))
@@ -78,7 +83,7 @@ func (h *Hub) handleAdminEvent(ev AdminEvent) {
 
 	case AdminStatusQuery:
 		select {
-		case ev.StatusReply <- DeskStatusInfo{Status: string(h.status), LastSeen: h.lastDeskSeen, Locked: h.locked}:
+		case ev.StatusReply <- DeskStatusInfo{Status: string(h.status), LastSeen: h.lastDeskSeen, Locked: h.locked, ExternalLastSeen: maps.Clone(h.externalLastSeen)}:
 		default:
 		}
 

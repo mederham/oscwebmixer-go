@@ -8,14 +8,17 @@ import (
 	"log"
 	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
@@ -35,6 +38,7 @@ type scriptedDesk struct {
 
 	remoteCalls  []remoteCall
 	rebindCalls  []int
+	syncs        [][]extsend.Device
 	setRemoteErr error
 	rebindErr    error
 }
@@ -114,14 +118,36 @@ type externalSend struct {
 	Addr    *net.UDPAddr
 }
 
-func (d *scriptedDesk) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
+func (d *scriptedDesk) SendEncoded(pkt []byte) error {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return err
+	}
+	return d.Send(msg)
+}
+
+func (d *scriptedDesk) Sync(devices []extsend.Device) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.syncs = append(d.syncs, devices)
+}
+
+func (d *scriptedDesk) Seen(*net.UDPAddr) {}
+
+func (d *scriptedDesk) SetDebug(bool) {}
+
+func (d *scriptedDesk) Enqueue(addr *net.UDPAddr, pkt []byte) bool {
+	msg, err := desk.Decode(pkt)
+	if err != nil {
+		return false
+	}
 	if d.sentExternal != nil {
 		select {
 		case d.sentExternal <- externalSend{Message: msg, Addr: addr}:
 		default:
 		}
 	}
-	return nil
+	return true
 }
 
 func (d *scriptedDesk) SetRemote(ip string, port int) error {
@@ -757,6 +783,7 @@ func TestExternalDeviceLoopbackExclusion(t *testing.T) {
 	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP:               deskIP,
 		StartupRetryInterval: 50 * time.Millisecond,
+		ExternalSender:       fakeDesk,
 		ExternalDevices: []ExternalDevice{
 			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: true, Loopback: false},
 			{Name: "Other", Addr: &net.UDPAddr{IP: net.ParseIP(otherIP), Port: 9000}, Broadcast: true, Loopback: false},
@@ -884,6 +911,7 @@ func TestExternalDeviceGetsReplyEvenWhenValueMatchesCache(t *testing.T) {
 	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		DeskIP:               deskIP,
 		StartupRetryInterval: 50 * time.Millisecond,
+		ExternalSender:       fakeDesk,
 		ExternalDevices: []ExternalDevice{
 			{Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP(ipadIP), Port: 9000}, Broadcast: true, Loopback: false},
 		},
@@ -1105,7 +1133,6 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "c1", Outbound: out}
 	drainN(t, out, 2)
 	drainQuiet(out)
-	drainAllSent(fakeDesk)
 
 	var degradedEnv oscmsg.Envelope
 	select {
@@ -1117,13 +1144,15 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 		t.Fatalf("envelope after silence = %+v, want status:degraded", degradedEnv)
 	}
 
-	select {
-	case sent := <-fakeDesk.sent:
-		if sent.Address != healthProbeAddress {
-			t.Fatalf("query sent during silence = %q, want %q", sent.Address, healthProbeAddress)
+	// Waiting for the desk sends to go quiet can't work: the probe interval equals the quiet window.
+	probeDeadline := time.After(time.Second)
+	for probed := false; !probed; {
+		select {
+		case sent := <-fakeDesk.sent:
+			probed = sent.Address == healthProbeAddress
+		case <-probeDeadline:
+			t.Fatal("health ticker never probed the desk during silence")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("health ticker never probed the desk during silence")
 	}
 
 	fakeDesk.inbound <- desk.InboundMessage{
@@ -1532,5 +1561,212 @@ func TestBuildConfigPerLayoutIndependence(t *testing.T) {
 
 	if len(cfg.Auxes) != 1 || cfg.Auxes[0].LayoutID != "mon-1" {
 		t.Fatalf("auxes = %+v, want aux 1 layoutId=mon-1", cfg.Auxes)
+	}
+}
+
+// pktRecorder records the first byte's address of every packet it is given,
+// so tests can check that one encoded slice is shared by all recipients.
+type pktRecorder struct {
+	noopDesk
+	ptrs []*byte
+}
+
+func (r *pktRecorder) SendEncoded(pkt []byte) error {
+	r.ptrs = append(r.ptrs, &pkt[0])
+	return nil
+}
+
+func (r *pktRecorder) Sync([]extsend.Device) {}
+
+func (r *pktRecorder) Seen(*net.UDPAddr) {}
+
+func (r *pktRecorder) SetDebug(bool) {}
+
+func (r *pktRecorder) Enqueue(_ *net.UDPAddr, pkt []byte) bool {
+	r.ptrs = append(r.ptrs, &pkt[0])
+	return true
+}
+
+func TestBroadcastEncodesOncePerMessage(t *testing.T) {
+	rec := &pktRecorder{}
+	var devices []ExternalDevice
+	for i := 0; i < 3; i++ {
+		devices = append(devices, ExternalDevice{
+			Name:      fmt.Sprintf("dev%d", i),
+			Addr:      &net.UDPAddr{IP: net.IPv4(10, 0, 0, byte(50+i)), Port: 9000},
+			Broadcast: true,
+		})
+	}
+	h := New(rec, log.New(io.Discard, "", 0), Options{DeskIP: "10.0.0.18", ExternalDevices: devices, ExternalSender: rec})
+	h.status = StatusHealthy
+
+	msg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
+	h.broadcast(msg, clientSource("c1"))
+
+	if len(rec.ptrs) != 4 {
+		t.Fatalf("got %d sends, want 4 (desk + 3 external devices)", len(rec.ptrs))
+	}
+	for i, p := range rec.ptrs[1:] {
+		if p != rec.ptrs[0] {
+			t.Fatalf("send %d got a different slice than the desk: message was encoded more than once", i+1)
+		}
+	}
+}
+
+func TestExternalSendersSyncedOnStartAndAdminApply(t *testing.T) {
+	fakeDesk := &scriptedDesk{}
+	ipad := &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}
+	other := &net.UDPAddr{IP: net.ParseIP("10.0.0.13"), Port: 9000}
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
+		ExternalSender: fakeDesk,
+		ExternalDevices: []ExternalDevice{
+			{Name: "iPad", Addr: ipad, Broadcast: true},
+			{Name: "Other", Addr: other, Broadcast: false},
+		},
+	})
+
+	h.handleAdminEvent(AdminEvent{Kind: AdminApply, ExternalDevices: []ExternalDevice{
+		{Name: "iPad renamed", Addr: ipad, Broadcast: true},
+		{Name: "Other", Addr: other, Broadcast: true},
+	}})
+
+	want := [][]extsend.Device{
+		{{Name: "iPad", Addr: ipad}},
+		{{Name: "iPad renamed", Addr: ipad}, {Name: "Other", Addr: other}},
+	}
+	if fmt.Sprint(fakeDesk.syncs) != fmt.Sprint(want) {
+		t.Fatalf("syncs = %v, want %v", fakeDesk.syncs, want)
+	}
+}
+
+func TestBroadcastThroughRealSendersReachesHealthyDeviceDespiteDeadOne(t *testing.T) {
+	recv, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer recv.Close()
+	recv.SetReadBuffer(4 << 20)
+	var received atomic.Int64
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			if _, _, err := recv.ReadFromUDP(buf); err != nil {
+				return
+			}
+			received.Add(1)
+		}
+	}()
+
+	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	dead := deadSock.LocalAddr().(*net.UDPAddr)
+	deadSock.Close()
+
+	senders := extsend.New(log.New(io.Discard, "", 0))
+	defer senders.Close()
+	h := New(noopDesk{}, log.New(io.Discard, "", 0), Options{
+		DeskIP:         "10.0.0.18",
+		ExternalSender: senders,
+		ExternalDevices: []ExternalDevice{
+			{Name: "dead", Addr: dead, Broadcast: true},
+			{Name: "good", Addr: recv.LocalAddr().(*net.UDPAddr), Broadcast: true},
+		},
+	})
+	h.status = StatusHealthy
+
+	const rounds, perRound = 10, 500
+	msg := oscmsg.Message{Address: "/Input_Channels/1/Aux_Send/1/send_level", Args: []any{float32(-6)}}
+	var inBroadcast time.Duration
+	for r := 1; r <= rounds; r++ {
+		start := time.Now()
+		for i := 0; i < perRound; i++ {
+			h.broadcast(msg, deskSource("10.0.0.18"))
+		}
+		inBroadcast += time.Since(start)
+
+		deadline := time.Now().Add(2 * time.Second)
+		for received.Load() < int64(r*perRound) {
+			if time.Now().After(deadline) {
+				t.Fatalf("round %d: healthy device received %d of %d", r, received.Load(), r*perRound)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if inBroadcast > time.Second {
+		t.Fatalf("spent %s in broadcast for %d msgs, want < 1s", inBroadcast, rounds*perRound)
+	}
+}
+
+type seenRecorder struct {
+	noopDesk
+	seen  []*net.UDPAddr
+	debug []bool
+}
+
+func (r *seenRecorder) Sync([]extsend.Device)             {}
+func (r *seenRecorder) Enqueue(*net.UDPAddr, []byte) bool { return true }
+func (r *seenRecorder) Seen(addr *net.UDPAddr)            { r.seen = append(r.seen, addr) }
+func (r *seenRecorder) SetDebug(on bool)                  { r.debug = append(r.debug, on) }
+
+func TestMessageFromExternalDeviceMarksItSeen(t *testing.T) {
+	rec := &seenRecorder{}
+	ipad := &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}
+	h := New(rec, log.New(io.Discard, "", 0), Options{
+		DeskIP:          "10.0.0.18",
+		ExternalSender:  rec,
+		ExternalDevices: []ExternalDevice{{Name: "iPad", Addr: ipad, Broadcast: true}},
+	})
+	h.status = StatusHealthy
+
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Channels/?", Args: []any{}}, "10.0.0.99")
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Channels/?", Args: []any{}}, "10.0.0.12")
+
+	if len(rec.seen) != 1 || rec.seen[0] != ipad {
+		t.Fatalf("seen = %v, want only %v", rec.seen, ipad)
+	}
+}
+
+func TestExternalLastSeenIsReportedAsCopy(t *testing.T) {
+	rec := &seenRecorder{}
+	ipad := ExternalDevice{ID: "ipad", Name: "iPad", Addr: &net.UDPAddr{IP: net.ParseIP("10.0.0.12"), Port: 9000}, Broadcast: true}
+	h := New(rec, log.New(io.Discard, "", 0), Options{
+		DeskIP:          "10.0.0.18",
+		ExternalSender:  rec,
+		ExternalDevices: []ExternalDevice{ipad},
+	})
+	h.status = StatusHealthy
+
+	query := func() map[string]time.Time {
+		reply := make(chan DeskStatusInfo, 1)
+		h.handleAdminEvent(AdminEvent{Kind: AdminStatusQuery, StatusReply: reply})
+		return (<-reply).ExternalLastSeen
+	}
+
+	if seen := query(); len(seen) != 0 {
+		t.Fatalf("last seen before any message = %v, want empty", seen)
+	}
+
+	before := time.Now()
+	h.handleDeskMessage(oscmsg.Message{Address: "/Console/Name/?", Args: []any{}}, "10.0.0.12")
+	seen := query()
+	if seen["ipad"].Before(before) {
+		t.Fatalf("last seen = %v, want at or after %v", seen["ipad"], before)
+	}
+
+	delete(seen, "ipad")
+	if _, ok := query()["ipad"]; !ok {
+		t.Fatal("status reply shares the hub's map instead of a copy")
+	}
+}
+
+func TestExternalSenderDebugFollowsHub(t *testing.T) {
+	rec := &seenRecorder{}
+	h := New(rec, log.New(io.Discard, "", 0), Options{ExternalSender: rec, Debug: true})
+	h.handleAdminEvent(AdminEvent{Kind: AdminApply, Debug: false})
+
+	if !slices.Equal(rec.debug, []bool{true, false}) {
+		t.Fatalf("SetDebug calls = %v, want [true false]", rec.debug)
 	}
 }

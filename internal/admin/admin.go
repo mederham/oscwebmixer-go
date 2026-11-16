@@ -280,7 +280,7 @@ func ResolveExternalDevices(devices []config.ExternalDevice, logger *log.Logger,
 			continue
 		}
 		out = append(out, hub.ExternalDevice{
-			Name: d.Name, Addr: &net.UDPAddr{IP: ip, Port: d.Port},
+			ID: d.ID, Name: d.Name, Addr: &net.UDPAddr{IP: ip, Port: d.Port},
 			Broadcast: d.Broadcast, Loopback: d.Loopback,
 		})
 		if debug {

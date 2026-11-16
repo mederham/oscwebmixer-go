@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/mederham/osc"
 
@@ -16,9 +18,18 @@ import (
 
 var ErrNoDesk = errors.New("desk: no desk configured")
 
+var ErrDeskUnreachable = errors.New("desk: unreachable, backing off")
+
 const recvBufferBytes = 4 << 20
 
 const inboundBufferSize = 4096
+
+// Without a deadline, a write to an unanswered IP on the local subnet blocks
+// the hub for seconds once the socket's send buffer fills during ARP resolution.
+const deskWriteTimeout = 20 * time.Millisecond
+
+// After a timeout, sends fail fast for this long instead of each waiting out the deadline.
+const deskBackoff = time.Second
 
 type InboundMessage struct {
 	Message oscmsg.Message
@@ -30,7 +41,7 @@ type Conn struct {
 	sock  *net.UDPConn
 	raddr *net.UDPAddr
 
-	sendSocks map[string]*net.UDPConn
+	downUntil time.Time
 
 	inbound chan InboundMessage
 }
@@ -51,10 +62,9 @@ func Listen(localPort int, deskIP string, deskPort int) (*Conn, error) {
 	}
 
 	return &Conn{
-		sock:      sock,
-		raddr:     raddr,
-		sendSocks: make(map[string]*net.UDPConn),
-		inbound:   make(chan InboundMessage, inboundBufferSize),
+		sock:    sock,
+		raddr:   raddr,
+		inbound: make(chan InboundMessage, inboundBufferSize),
 	}, nil
 }
 
@@ -115,50 +125,39 @@ func (c *Conn) Run(ctx context.Context) error {
 }
 
 func (c *Conn) Send(msg oscmsg.Message) error {
+	pkt, err := Encode(msg)
+	if err != nil {
+		return err
+	}
+	return c.SendEncoded(pkt)
+}
+
+func (c *Conn) SendEncoded(pkt []byte) error {
+	now := time.Now()
 	c.mu.Lock()
-	raddr := c.raddr
-	sock := c.sock
+	raddr, sock, downUntil := c.raddr, c.sock, c.downUntil
 	c.mu.Unlock()
 	if raddr == nil {
 		return ErrNoDesk
 	}
-	oscMsg, err := toOSC(msg)
-	if err != nil {
+	if now.Before(downUntil) {
+		return ErrDeskUnreachable
+	}
+	if err := sock.SetWriteDeadline(now.Add(deskWriteTimeout)); err != nil {
 		return err
 	}
-	_, err = sock.WriteToUDP(oscMsg.Bytes(), raddr)
+	_, err := sock.WriteToUDP(pkt, raddr)
+	c.noteWriteErr(err)
 	return err
 }
 
-func (c *Conn) SendTo(msg oscmsg.Message, addr *net.UDPAddr) error {
-	oscMsg, err := toOSC(msg)
-	if err != nil {
-		return err
+func (c *Conn) noteWriteErr(err error) {
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		return
 	}
-	sock, err := c.sendSock(addr)
-	if err != nil {
-		return err
-	}
-	_, err = sock.Write(oscMsg.Bytes())
-	return err
-}
-
-func (c *Conn) sendSock(addr *net.UDPAddr) (*net.UDPConn, error) {
-	key := addr.String()
-
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if sock, ok := c.sendSocks[key]; ok {
-		return sock, nil
-	}
-
-	sock, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		return nil, fmt.Errorf("dial udp %s: %w", addr, err)
-	}
-	c.sendSocks[key] = sock
-	return sock, nil
+	c.downUntil = time.Now().Add(deskBackoff)
+	c.mu.Unlock()
 }
 
 func (c *Conn) SetRemote(ip string, port int) error {
@@ -168,6 +167,7 @@ func (c *Conn) SetRemote(ip string, port int) error {
 	}
 	c.mu.Lock()
 	c.raddr = &net.UDPAddr{IP: parsed, Port: port}
+	c.downUntil = time.Time{}
 	c.mu.Unlock()
 	return nil
 }
@@ -201,11 +201,6 @@ func newListenSocket(localPort int) (*net.UDPConn, error) {
 func (c *Conn) Close() error {
 	c.mu.Lock()
 	sock := c.sock
-	sendSocks := c.sendSocks
-	c.sendSocks = make(map[string]*net.UDPConn)
 	c.mu.Unlock()
-	for _, s := range sendSocks {
-		s.Close()
-	}
 	return sock.Close()
 }

@@ -1,9 +1,11 @@
 package hub
 
 import (
+	"net/netip"
 	"strings"
 	"time"
 
+	"github.com/mederham/oscwebmixer-go/internal/desk"
 	"github.com/mederham/oscwebmixer-go/internal/oscmsg"
 )
 
@@ -96,30 +98,46 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 	}
 	if !fromDesk {
 		h.lastClientDriven[msg.Address] = time.Now()
-		if err := h.desk.Send(msg); err != nil {
+	}
+
+	// Encode once, and only if someone needs the wire format. The same slice
+	// goes to the desk and to every external device, so it must not be modified.
+	var pkt []byte
+	srcIP, _ := netip.ParseAddr(source.ip)
+	srcIP = srcIP.Unmap()
+	if !fromDesk || h.anyExternalTarget(srcIP) {
+		var err error
+		if pkt, err = desk.Encode(msg); err != nil {
+			h.logSendErrThrottled("encode", "broadcast %s: encode: %v", msg.Address, err)
+		}
+	}
+
+	if !fromDesk && pkt != nil {
+		if err := h.desk.SendEncoded(pkt); err != nil {
 			h.logSendErrThrottled("desk", "broadcast to desk: %v", err)
 		} else if h.debug {
 			h.debugf("  -> desk: sent")
 		}
 	}
 
-	for _, ext := range h.externalDevices {
-		if !ext.Broadcast {
+	for i := range h.externalDevices {
+		ext := &h.externalDevices[i]
+		if reason := externalSkipReason(ext, srcIP); reason != "" {
 			if h.debug {
-				h.debugf("  -> external %q: skipped (broadcast disabled)", ext.Name)
+				h.debugf("  -> external %q: skipped (%s)", ext.Name, reason)
 			}
 			continue
 		}
-		if !ext.Loopback && source.ip != "" && ext.Addr.IP.String() == source.ip {
-			if h.debug {
-				h.debugf("  -> external %q: skipped (loopback source)", ext.Name)
-			}
-			continue
+		if pkt == nil {
+			break
 		}
-		if err := h.desk.SendTo(msg, ext.Addr); err != nil {
-			h.logSendErrThrottled(ext.Addr.String(), "broadcast to external %q: %v", ext.Name, err)
-		} else if h.debug {
-			h.debugf("  -> external %q at %s: sent", ext.Name, ext.Addr)
+		queued := h.external.Enqueue(ext.Addr, pkt)
+		if h.debug {
+			if queued {
+				h.debugf("  -> external %q at %s: queued", ext.Name, ext.Addr)
+			} else {
+				h.debugf("  -> external %q at %s: dropped (queue full or device down)", ext.Name, ext.Addr)
+			}
 		}
 	}
 
@@ -139,6 +157,30 @@ func (h *Hub) broadcast(msg oscmsg.Message, source broadcastSource) {
 		}
 		h.sendTo(id, out, env)
 	}
+}
+
+// externalSkipReason returns why a message from srcIP must not be relayed to
+// ext, or "" if it should be. srcIP is unmapped, and invalid for non-network
+// sources. netip avoids an IP.String allocation per device and message.
+func externalSkipReason(ext *ExternalDevice, srcIP netip.Addr) string {
+	if !ext.Broadcast {
+		return "broadcast disabled"
+	}
+	if !ext.Loopback && srcIP.IsValid() {
+		if ip, ok := netip.AddrFromSlice(ext.Addr.IP); ok && ip.Unmap() == srcIP {
+			return "loopback source"
+		}
+	}
+	return ""
+}
+
+func (h *Hub) anyExternalTarget(srcIP netip.Addr) bool {
+	for i := range h.externalDevices {
+		if externalSkipReason(&h.externalDevices[i], srcIP) == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Hub) logSendErrThrottled(key, format string, args ...any) {

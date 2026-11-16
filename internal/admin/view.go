@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/hub"
@@ -10,14 +11,15 @@ import (
 )
 
 type ViewData struct {
-	Global      config.Global
-	Network     NetworkSectionData
-	SourcesData SourcesSectionData
-	AuxesData   AuxesSectionData
-	Presets     []PresetRow
-	Message     string
-	Version     string
-	Password    PasswordSectionData
+	Global          config.Global
+	Network         NetworkSectionData
+	ExternalDevices ExternalDevicesSectionData
+	SourcesData     SourcesSectionData
+	AuxesData       AuxesSectionData
+	Presets         []PresetRow
+	Message         string
+	Version         string
+	Password        PasswordSectionData
 }
 
 type PasswordSectionData struct {
@@ -28,6 +30,29 @@ type PasswordSectionData struct {
 type NetworkSectionData struct {
 	Global     config.Global
 	DeskStatus hub.DeskStatusInfo
+}
+
+const externalOnlineWindow = 10 * time.Second
+
+type NetworkStatusData struct {
+	DeskStatus hub.DeskStatusInfo
+	Devices    []config.ExternalDevice
+	Online     map[string]bool
+}
+
+type ExternalDevicesSectionData struct {
+	config.Global
+	Online map[string]bool
+}
+
+func onlineByID(devices []config.ExternalDevice, lastSeen map[string]time.Time, now time.Time) map[string]bool {
+	online := make(map[string]bool, len(devices))
+	for _, d := range devices {
+		if seen, ok := lastSeen[d.ID]; ok && now.Sub(seen) < externalOnlineWindow {
+			online[d.ID] = true
+		}
+	}
+	return online
 }
 
 type LayoutOption struct {

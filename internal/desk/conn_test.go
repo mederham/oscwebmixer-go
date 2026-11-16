@@ -2,7 +2,10 @@ package desk
 
 import (
 	"context"
+	"errors"
 	"net"
+	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -164,36 +167,82 @@ func TestListenWithoutDeskIPThenSetRemote(t *testing.T) {
 	assertReceivesPing(t, recv)
 }
 
-func TestSendToUnreachableAddrDoesNotBreakOtherSends(t *testing.T) {
+func TestSendRefreshesWriteDeadline(t *testing.T) {
 	recv, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
 	if err != nil {
 		t.Fatalf("listen recv: %v", err)
 	}
 	defer recv.Close()
-	recvAddr := recv.LocalAddr().(*net.UDPAddr)
 
-	deadSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen deadSock: %v", err)
-	}
-	deadAddr := deadSock.LocalAddr().(*net.UDPAddr)
-	deadSock.Close()
-
-	c, err := Listen(0, "", 0)
+	c, err := Listen(0, "127.0.0.1", recv.LocalAddr().(*net.UDPAddr).Port)
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
 	}
 	defer c.Close()
 
 	msg := oscmsg.Message{Address: "/ping", Args: []any{}}
-
-	for i := 0; i < 5; i++ {
-		c.SendTo(msg, deadAddr)
-	}
-	if err := c.SendTo(msg, recvAddr); err != nil {
-		t.Fatalf("SendTo healthy addr right after dead addr: %v", err)
+	if err := c.Send(msg); err != nil {
+		t.Fatalf("first Send: %v", err)
 	}
 	assertReceivesPing(t, recv)
+
+	time.Sleep(2 * deskWriteTimeout)
+	if err := c.Send(msg); err != nil {
+		t.Fatalf("Send after the first deadline passed: %v", err)
+	}
+	assertReceivesPing(t, recv)
+}
+
+func TestSendFailsFastWhileBackedOff(t *testing.T) {
+	recv, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
+	if err != nil {
+		t.Fatalf("listen recv: %v", err)
+	}
+	defer recv.Close()
+	recvPort := recv.LocalAddr().(*net.UDPAddr).Port
+
+	c, err := Listen(0, "127.0.0.1", recvPort)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer c.Close()
+
+	c.downUntil = time.Now().Add(time.Hour)
+	msg := oscmsg.Message{Address: "/ping", Args: []any{}}
+	if err := c.Send(msg); !errors.Is(err, ErrDeskUnreachable) {
+		t.Fatalf("Send while backed off = %v, want ErrDeskUnreachable", err)
+	}
+	recv.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+	if _, _, err := recv.ReadFromUDP(make([]byte, 64)); err == nil {
+		t.Fatal("desk received a packet while backed off")
+	}
+
+	if err := c.SetRemote("127.0.0.1", recvPort); err != nil {
+		t.Fatalf("SetRemote: %v", err)
+	}
+	if err := c.Send(msg); err != nil {
+		t.Fatalf("Send after SetRemote: %v", err)
+	}
+	assertReceivesPing(t, recv)
+}
+
+func TestOnlyWriteTimeoutStartsBackoff(t *testing.T) {
+	c, err := Listen(0, "127.0.0.1", 1)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer c.Close()
+
+	c.noteWriteErr(nil)
+	c.noteWriteErr(&net.OpError{Op: "write", Net: "udp", Err: os.NewSyscallError("sendto", syscall.ECONNREFUSED)})
+	if !c.downUntil.IsZero() {
+		t.Fatalf("backoff started on a non-timeout error (downUntil = %v)", c.downUntil)
+	}
+
+	c.noteWriteErr(&net.OpError{Op: "write", Net: "udp", Err: os.ErrDeadlineExceeded})
+	if !c.downUntil.After(time.Now()) {
+		t.Fatal("write timeout didn't start a backoff")
+	}
 }
 
 func TestSetRemoteRejectsInvalidIP(t *testing.T) {

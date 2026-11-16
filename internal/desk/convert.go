@@ -67,3 +67,19 @@ func anyToArg(v any) (osc.Argument, error) {
 		return nil, fmt.Errorf("unsupported arg type %T", v)
 	}
 }
+
+func Encode(msg oscmsg.Message) ([]byte, error) {
+	oscMsg, err := toOSC(msg)
+	if err != nil {
+		return nil, err
+	}
+	return oscMsg.Bytes(), nil
+}
+
+func Decode(pkt []byte) (oscmsg.Message, error) {
+	oscMsg, err := osc.ParseMessage(pkt, nil)
+	if err != nil {
+		return oscmsg.Message{}, err
+	}
+	return fromOSC(oscMsg)
+}

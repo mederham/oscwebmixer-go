@@ -35,6 +35,12 @@
 </section>
 {{end}}
 
+{{define "network-status"}}
+{{template "status-dot" .DeskStatus}}
+{{range .Devices}}<span id="device-status-{{.ID}}" class="device-status {{if index $.Online .ID}}online{{else}}offline{{end}}" hx-swap-oob="true"></span>
+{{end}}
+{{end}}
+
 {{define "status-dot"}}
 <span class="status-dot {{.Status | dotClass}}" data-status="{{.Status}}"></span>
 <span class="status-label">{{.Status | dotLabel}}</span>

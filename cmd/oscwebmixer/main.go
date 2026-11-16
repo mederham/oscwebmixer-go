@@ -18,6 +18,7 @@ import (
 	"github.com/mederham/oscwebmixer-go/internal/admin"
 	"github.com/mederham/oscwebmixer-go/internal/config"
 	"github.com/mederham/oscwebmixer-go/internal/desk"
+	"github.com/mederham/oscwebmixer-go/internal/extsend"
 	"github.com/mederham/oscwebmixer-go/internal/hub"
 	"github.com/mederham/oscwebmixer-go/internal/wsserver"
 	"github.com/mederham/oscwebmixer-go/web"
@@ -106,6 +107,10 @@ func main() {
 		defer cancel()
 	}
 
+	// Closed after h.Run returns, on the goroutine that ran the hub.
+	external := extsend.New(logger)
+	defer external.Close()
+
 	h := hub.New(conn, logger, hub.Options{
 		DeskIP:                  global.Desk.IP,
 		DeskPort:                global.Desk.Port,
@@ -116,6 +121,7 @@ func main() {
 		InitialLayouts:          state.MixerLayouts,
 		InitialAuxes:            state.Auxes,
 		ExternalDevices:         admin.ResolveExternalDevices(global.ExternalDevices, logger, global.Debug),
+		ExternalSender:          external,
 		AutoHideChannelPatterns: global.AutoHideChannelPatterns,
 		AutoHideGroupPatterns:   global.AutoHideGroupPatterns,
 		AutoHideAuxPatterns:     global.AutoHideAuxPatterns,
