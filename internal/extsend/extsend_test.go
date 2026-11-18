@@ -490,12 +490,42 @@ func TestSeenEndsBackoffImmediately(t *testing.T) {
 	w.setErr(nil)
 	m.Seen(addr)
 	waitFor(t, "Seen to end the backoff", func() bool { return !s.down.Load() })
-	waitFor(t, "recovery log", func() bool { return strings.Contains(out.String(), "reachable again") })
 
 	if !m.Enqueue(addr, []byte("y")) {
 		t.Fatal("Enqueue after Seen returned false")
 	}
 	waitFor(t, "write after recovery", func() bool { n, _ := w.stats(); return n == 2 })
+	if strings.Contains(out.String(), "reachable again") {
+		t.Fatal("logged recovery before a clean backoff period")
+	}
+}
+
+// Another app on the device's IP (e.g. the stress tool) keeps sending while
+// nothing listens on the device's port.
+func TestInboundWhileWritesFailDoesNotFlapLog(t *testing.T) {
+	fn := newFakeNet()
+	addr := udpAddr("10.0.0.12", 8001)
+	w := fn.writer(addr.String())
+	w.setErr(&net.OpError{Op: "write", Net: "udp", Err: os.NewSyscallError("write", syscall.ECONNREFUSED)})
+
+	var out syncBuffer
+	m := newTestManager(t, fn, &out)
+	m.backoff = time.Hour
+	m.Sync([]Device{{Name: "iPad", Addr: addr}})
+	s := m.senders[key(addr)]
+
+	for i := 1; i <= 5; i++ {
+		m.Seen(addr)
+		waitFor(t, "device up", func() bool { return !s.down.Load() })
+		m.Enqueue(addr, []byte("x"))
+		waitFor(t, fmt.Sprintf("write %d", i), func() bool { n, _ := w.stats(); return n == i })
+		waitFor(t, "device down", s.down.Load)
+	}
+
+	const want = `external device "iPad" (10.0.0.12:8001) not reachable` + "\n"
+	if got := out.String(); got != want {
+		t.Fatalf("log = %q, want exactly %q", got, want)
+	}
 }
 
 func TestRefusedLocalPortDoesNotAffectOtherDevices(t *testing.T) {

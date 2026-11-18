@@ -155,6 +155,7 @@ type sender struct {
 	lastWarned   time.Time
 	lastSummary  time.Time
 	windowStart  time.Time
+	lastFailed   time.Time
 	reportedDown bool
 }
 
@@ -251,8 +252,9 @@ func (s *sender) send(pkt []byte) bool {
 
 	_, err := s.w.Write(pkt)
 	if err == nil {
-		if s.reportedDown && s.alive.Load() {
-			s.recovered()
+		if s.reportedDown && s.alive.Load() && now.Sub(s.lastFailed) >= s.backoff {
+			s.reportedDown = false
+			s.log.Printf("%s reachable again", s.label())
 		}
 		if s.droppedFull.Load() != 0 {
 			s.warn(now, "too slow, dropping messages", "queue full")
@@ -284,12 +286,8 @@ func isUnreachable(err error) bool {
 		errors.Is(err, syscall.ECONNREFUSED)
 }
 
-func (s *sender) recovered() {
-	s.reportedDown = false
-	s.log.Printf("%s reachable again", s.label())
-}
-
 func (s *sender) backOff(now time.Time, cause error) bool {
+	s.lastFailed = now
 	s.down.Store(true)
 	s.alive.Store(false)
 	select {
@@ -318,9 +316,6 @@ func (s *sender) backOff(now time.Time, cause error) bool {
 		return false
 	case <-s.wake:
 		s.down.Store(false)
-		if s.reportedDown {
-			s.recovered()
-		}
 		return true
 	case <-t.C:
 		s.down.Store(false)
