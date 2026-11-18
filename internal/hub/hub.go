@@ -140,6 +140,7 @@ type Hub struct {
 	pendingQuerySince time.Time
 
 	lastDeskSeen        time.Time
+	loadStarted         time.Time
 	healthCheckInterval time.Duration
 
 	ready     chan Snapshot
@@ -209,6 +210,7 @@ func New(d DeskSender, logger *log.Logger, opts Options) *Hub {
 		trustedDeskIPs:          trustedDeskIPs,
 		cache:                   make(map[string]oscmsg.Message),
 		status:                  StatusStarting,
+		loadStarted:             time.Now(),
 		ready:                   make(chan Snapshot, 1),
 		clients:                 make(map[string]chan<- oscmsg.Envelope),
 		dropStreak:              make(map[string]int),
@@ -285,12 +287,16 @@ func (h *Hub) Run(ctx context.Context, deskInbound <-chan desk.InboundMessage, c
 }
 
 func (h *Hub) checkDeskHealth() {
+	silentFor := time.Since(h.lastDeskSeen)
+	if h.status == StatusStarting || h.status == StatusReloading {
+		silentFor = min(silentFor, time.Since(h.loadStarted))
+	}
+	if h.status != StatusDegraded && silentFor > h.healthCheckInterval*degradedAfterMisses {
+		h.status = StatusDegraded
+		h.log.Printf("desk health: degraded (no traffic for %s)", silentFor.Round(time.Second))
+		h.pushStatus()
+	}
 	if h.status == StatusHealthy || h.status == StatusDegraded {
-		if h.status == StatusHealthy && time.Since(h.lastDeskSeen) > h.healthCheckInterval*degradedAfterMisses {
-			h.status = StatusDegraded
-			h.log.Printf("desk health: degraded (no traffic for %s)", time.Since(h.lastDeskSeen).Round(time.Second))
-			h.pushStatus()
-		}
 		h.query(healthProbeAddress)
 	}
 }
@@ -343,14 +349,12 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 	if h.isDeskSource(fromIP) {
 		h.lastDeskSeen = time.Now()
 		if h.status == StatusDegraded {
-			h.status = StatusHealthy
-			h.log.Printf("desk health: recovered")
-			h.pushStatusAndConfig()
+			h.reload("desk health: recovered")
 		}
 	}
 
 	if msg.Address == sessionChangeAddress {
-		h.handleSessionChange()
+		h.reload("session change")
 	}
 
 	h.handleSnapshotMessage(msg)
@@ -370,8 +374,8 @@ func (h *Hub) handleDeskMessage(msg oscmsg.Message, fromIP string) {
 	h.broadcast(msg, deskSource(fromIP))
 }
 
-func (h *Hub) handleSessionChange() {
-	h.log.Printf("session change: reloading")
+func (h *Hub) reload(reason string) {
+	h.log.Printf("%s: reloading", reason)
 
 	h.cache = make(map[string]oscmsg.Message)
 	h.channelCount, h.auxCount, h.groupCount = 0, 0, 0
@@ -379,6 +383,7 @@ func (h *Hub) handleSessionChange() {
 	h.snapshotName = ""
 	h.pendingQuery = ""
 	h.status = StatusReloading
+	h.loadStarted = time.Now()
 	h.pushStatus()
 }
 

@@ -1116,6 +1116,7 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
 		StartupRetryInterval: 50 * time.Millisecond,
 		HealthCheckInterval:  20 * time.Millisecond,
+		InitialLayouts:       map[string]config.NamedLayout{config.DefaultLayoutID: {Name: "Default"}},
 	})
 	clientEvents := make(chan ClientEvent, 8)
 
@@ -1155,15 +1156,24 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 		}
 	}
 
+	fakeDesk.channelNames = map[int]string{1: "Renamed while away"}
 	fakeDesk.inbound <- desk.InboundMessage{
 		Message: oscmsg.Message{Address: "/Console/Name", Args: []any{"Console"}},
 	}
 
-	var healthyEnv, configEnv oscmsg.Envelope
+	var reloadingEnv, healthyEnv, configEnv oscmsg.Envelope
+	select {
+	case reloadingEnv = <-out:
+	case <-time.After(time.Second):
+		t.Fatal("did not receive status:reloading after desk traffic resumed")
+	}
+	if reloadingEnv.Kind != oscmsg.KindStatus || reloadingEnv.Status == nil || reloadingEnv.Status.Desk != string(StatusReloading) {
+		t.Fatalf("envelope after recovery = %+v, want status:reloading", reloadingEnv)
+	}
 	select {
 	case healthyEnv = <-out:
-	case <-time.After(time.Second):
-		t.Fatal("did not receive status:healthy after desk traffic resumed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive status:healthy after the reload")
 	}
 	select {
 	case configEnv = <-out:
@@ -1175,6 +1185,9 @@ func TestDeskTimeoutDeclaresDegradedAndRecovers(t *testing.T) {
 	}
 	if configEnv.Kind != oscmsg.KindConfig || configEnv.Config == nil {
 		t.Fatalf("post-recovery envelope = %+v, want config", configEnv)
+	}
+	if items := configEnv.Config.MixerLayouts["default"].Items; len(items) == 0 || items[0].Label != "Renamed while away" {
+		t.Fatalf("mixer layout = %+v, want channel 1 re-queried as %q", items, "Renamed while away")
 	}
 }
 
@@ -1399,6 +1412,124 @@ func TestAdminStatusQueryReportsNeverSeenBeforeAnyDeskTraffic(t *testing.T) {
 	if info := <-reply2; info.LastSeen.IsZero() {
 		t.Fatal("LastSeen is still zero after real desk traffic arrived")
 	}
+}
+
+func TestAdminNetworkApplyNewDeskAddressReloads(t *testing.T) {
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		deskIP:       "10.0.0.10",
+		channelCount: 1, auxCount: 1, groupCount: 0,
+		channelNames: map[int]string{1: "Kick"},
+		auxNames:     map[int]string{1: "Mon 1"},
+	}
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
+		StartupRetryInterval: 50 * time.Millisecond,
+		DeskIP:               "10.0.0.10",
+		DeskPort:             8000,
+		OSCPort:              9000,
+		InitialLayouts:       map[string]config.NamedLayout{config.DefaultLayoutID: {Name: "Default"}},
+	})
+	clientEvents := make(chan ClientEvent, 8)
+	adminEvents := make(chan AdminEvent, 4)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, clientEvents, adminEvents)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	out := make(chan oscmsg.Envelope, 16)
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "c1", Outbound: out}
+	drainN(t, out, 2)
+	drainQuiet(out)
+
+	fakeDesk.deskIP = "10.0.0.20"
+	fakeDesk.channelCount = 2
+	fakeDesk.channelNames = map[int]string{1: "Other", 2: "Console"}
+	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.20", DeskPort: 8000, OSCPort: 9000}
+
+	envs := make([]oscmsg.Envelope, 3)
+	for i := range envs {
+		select {
+		case envs[i] = <-out:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for envelope %d after the address change", i+1)
+		}
+	}
+	if envs[0].Status == nil || envs[0].Status.Desk != string(StatusReloading) {
+		t.Fatalf("first envelope = %+v, want status:reloading", envs[0])
+	}
+	if envs[1].Status == nil || envs[1].Status.Desk != string(StatusHealthy) {
+		t.Fatalf("second envelope = %+v, want status:healthy", envs[1])
+	}
+	if envs[2].Config == nil || len(envs[2].Config.MixerLayouts["default"].Items) != 2 {
+		t.Fatalf("third envelope = %+v, want config with the new desk's 2 channels", envs[2])
+	}
+}
+
+func TestAdminNetworkApplyUnreachableDeskGoesDegraded(t *testing.T) {
+	fakeDesk := &scriptedDesk{
+		inbound:      make(chan desk.InboundMessage, 64),
+		deskIP:       "10.0.0.10",
+		channelCount: 1, auxCount: 1, groupCount: 0,
+		channelNames: map[int]string{1: "Kick"},
+		auxNames:     map[int]string{1: "Mon 1"},
+	}
+	h := New(fakeDesk, log.New(io.Discard, "", 0), Options{
+		StartupRetryInterval: 20 * time.Millisecond,
+		HealthCheckInterval:  20 * time.Millisecond,
+		DeskIP:               "10.0.0.10",
+		DeskPort:             8000,
+		OSCPort:              9000,
+	})
+	clientEvents := make(chan ClientEvent, 8)
+	adminEvents := make(chan AdminEvent, 4)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go h.Run(ctx, fakeDesk.inbound, clientEvents, adminEvents)
+
+	select {
+	case <-h.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("startup did not complete")
+	}
+
+	out := make(chan oscmsg.Envelope, 16)
+	clientEvents <- ClientEvent{Kind: ClientConnected, ClientID: "c1", Outbound: out}
+	drainN(t, out, 2)
+
+	// fakeDesk keeps replying from 10.0.0.10, so nothing answers from the new address.
+	adminEvents <- AdminEvent{Kind: AdminNetworkApply, DeskIP: "10.0.0.99", DeskPort: 8000, OSCPort: 9000}
+
+	waitForStatus := func(want Status) {
+		t.Helper()
+		deadline := time.After(2 * time.Second)
+		for {
+			select {
+			case env := <-out:
+				if env.Status != nil && env.Status.Desk == string(want) {
+					return
+				}
+			case <-deadline:
+				t.Fatalf("never received status:%s", want)
+			}
+		}
+	}
+	waitForStatus(StatusReloading)
+	waitForStatus(StatusDegraded)
+
+	fakeDesk.deskIP = "10.0.0.99"
+	fakeDesk.inbound <- desk.InboundMessage{
+		Message: oscmsg.Message{Address: "/Console/Name", Args: []any{"Console"}},
+		From:    &net.UDPAddr{IP: net.ParseIP("10.0.0.99"), Port: 9000},
+	}
+	waitForStatus(StatusReloading)
+	waitForStatus(StatusHealthy)
 }
 
 func TestAdminNetworkApplyChangesDeskAddressOnlyWhenChanged(t *testing.T) {

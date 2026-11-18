@@ -109,6 +109,8 @@ func (h *Hub) applyNetworkChange(ev AdminEvent) {
 		} else {
 			h.deskIP, h.deskPort = ev.DeskIP, ev.DeskPort
 			h.log.Printf("admin apply: desk address now %s:%d", ev.DeskIP, ev.DeskPort)
+			h.reload("desk address changed")
+			h.advanceStartup()
 		}
 	}
 	if ev.OSCPort != h.oscPort {
